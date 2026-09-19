@@ -397,6 +397,11 @@ console.error = function(...args) {
     <button id="photo-exit">Exit</button>
   </div>
 
+  <!-- Screen Condensation / Cloud Exit Mist Overlay -->
+  <div id="cloud-mist-overlay" style="position:fixed;inset:0;pointer-events:none;z-index:99;opacity:0;transition:opacity 0.25s ease-out;background:radial-gradient(ellipse at center, rgba(255,255,255,0) 30%, rgba(245,250,255,0.40) 75%, rgba(255,255,255,0.75) 100%);mix-blend-mode:screen;"></div>
+  <canvas id="cloud-fog-canvas" width="1" height="1" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:98;opacity:0;"></canvas>
+  <canvas id="cloud-debug-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:25;display:none;"></canvas>
+
 
 
   <!-- Crystal Editor UI -->
@@ -462,6 +467,7 @@ import terrainMtn2 from './terrain-mountains2.js';
 import { WorldLayout, BIOME_CATALOG } from './world-layout.js';
 
     import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { initTerrainEditor } from './TerrainEditor.js';
     import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -495,6 +501,10 @@ import { WorldLayout, BIOME_CATALOG } from './world-layout.js';
     let isBloomOn = !LOW_GFX;
     let isHD = !LOW_GFX;
     let photoControls = null;
+    let godCamera = null;
+    let godControls = null;
+    let isGodMode = false;
+    const _prevGodPlayerPos = new THREE.Vector3();
     let cameraZoomDist = 12.0;
     let currentFrame = 0;
     let logicTimer = 0;
@@ -1001,6 +1011,12 @@ let isInitializingGui = true;
         wind: isWindOn,
         rain: isRainOn,
         fogPlane: true,
+        fogPreset: 'Gentle Sea Mist',
+        fogMistOpacity: 0.18,
+        fogMistHeight: 5.5,
+        fogMistLayers: 1,
+        fogFarDist: 1400.0,
+        fogNearDist: 220.0,
         godRays: !LOW_GFX,
         godRayIntensity: 0.60,
         godRayDensity: 0.50,
@@ -1020,36 +1036,77 @@ let isInitializingGui = true;
         showWater: true,
         showTrees: true,
         showClouds: true,
+        domeClouds: true,
+        domeCloudCoverage: 0.45,
+        domeCloudEdge: 0.08,
+        domeCloudSpeed: 0.015,
+        domeCloudOpacity: 0.95,
         cloudsLow: true,
         cloudsHigh: true,
+        cloudsLowTower: true,
         cloudsGiant: true,
+        cloudsLowBank: false,
+        cloudsBillboard: true,
         cloudsLowCount: LOW_GFX ? 40 : 150,
         cloudsHighCount: LOW_GFX ? 0 : 28,
+        cloudsLowTowerCount: LOW_GFX ? 0 : 12,
         cloudsGiantCount: LOW_GFX ? 0 : 28,
+        cloudsLowBankCount: 0,
+        cloudsLowBankDensity: 1.0,
+        cloudsBillboardCount: 26,
         cloudsLowSize: 1.0,
-        cloudsHighSize: 1.8,
-        cloudsGiantSize: 2.2,
-        cloudsLowOpacity: 0.65,
+        cloudsHighSize: 3.0,
+        cloudsLowTowerSize: 1.1,
+        cloudsGiantSize: 3.0,
+        cloudsLowBankSize: 1.1,
+        cloudsBillboardSize: 1.0,
+        cloudsLowOpacity: 1.0,
         cloudsHighOpacity: 0.98,
-        cloudsGiantOpacity: 0.98,
-        cloudsNearSolid: 500,
-        cloudsFarHaze: 3000,
-        cloudsLowBottomBlur: 0.20,
+        cloudsLowTowerOpacity: 1.0,
+        cloudsGiantOpacity: 1.0,
+        cloudsLowBankOpacity: 1.0,
+        cloudsBillboardOpacity: 1.0,
+        cloudsNearSolid: 2000,
+        cloudsFarHaze: 14000,
+        cloudsLowBottomBlur: 0.45,
         cloudsHighBottomBlur: 0.55,
+        cloudsLowTowerBottomBlur: 0.35,
         cloudsGiantBottomBlur: 0.64,
+        cloudsLowBankBottomBlur: 0.40,
         cloudsLowAltitude: 150,
         cloudsLowDistance: 1200,
-        cloudsHighAltitude: 150,
-        cloudsHighDistance: 3600,
-        cloudsGiantAltitude: 300,
-        cloudsGiantDistance: 4500,
+        cloudsHighAltitude: 250,
+        cloudsHighDistance: 8000,
+        cloudsLowTowerAltitude: -35,
+        cloudsLowTowerDistance: 3200,
+        cloudsGiantAltitude: 500,
+        cloudsGiantDistance: 8975,
+        cloudsLowBankAltitude: -5,
+        cloudsLowBankDistance: 4400,
+        cloudsBillboardAltitude: 1400,
+        cloudsBillboardDistance: 5200,
         cloudsLowColor: '#ffffff',
         cloudsHighColor: '#ffffff',
+        cloudsLowTowerColor: '#ffffff',
         cloudsGiantColor: '#ffffff',
+        cloudsLowBankColor: '#ffffff',
+        cloudsBillboardColor: '#ffffff',
+        cloudsMinDistance: 0,
+        normalizeSun: false,
+        showCloudDebug: false,
+        cloudDebugTargetMode: 'visible',
+        debugCloudTint: false,
+        showFog: true,
+        godMode: false,
+        cameraFov: 60,
+        waterColor: '#1a4075',
         cloudsDayLitColor: '#fffdf6',
         cloudsDayShadowColor: '#9cb8db',
         cloudsNightLitColor: '#9ec7eb',
         cloudsNightShadowColor: '#1a3055',
+        cloudsBillowSpeed: 0.35,
+        cloudsBillowAmount: 1.0,
+        cloudMistEffect: true,
         showBirds: true,
         showFogPlanes: true,
         showCrystals: true,
@@ -1147,7 +1204,7 @@ let isInitializingGui = true;
             if (typeof playerGrp !== 'undefined') {
                 const sp = worldLayout.spawnPosition;
                 const groundY = getWorldHeight(sp.x, sp.z);
-                playerGrp.position.set(sp.x, Math.max(90, groundY + 50), sp.z);
+                playerGrp.position.set(sp.x, groundY + 640, sp.z);
             }
             if (typeof lastTerrainGridX !== 'undefined') lastTerrainGridX = -9999;
             if (typeof lastTerrainGridZ !== 'undefined') lastTerrainGridZ = -9999;
@@ -1215,7 +1272,106 @@ let isInitializingGui = true;
     const envFolder = gui.addFolder('Weather');
     envFolder.add(params, 'wind').name('Wind').onChange(v => { if(isWindOn !== v) document.getElementById('wind-toggle').click(); });
     envFolder.add(params, 'rain').name('Rain').onChange(v => { isRainOn = v; if(typeof rainSystem !== 'undefined') rainSystem.visible = v; });
-    envFolder.add(params, 'fogPlane').name('Ground Fog').onChange(v => { if(typeof window.fogGroup !== 'undefined') window.fogGroup.visible = v; });
+
+    let fogPresetCtrl, fogPlaneCtrl, fogOpacityCtrl, fogHeightCtrl, fogLayersCtrl, fogFarCtrl, fogNearCtrl;
+
+    function applyFogPreset(name) {
+        if (name === 'Gentle Sea Mist') {
+            params.fogPlane = true;
+            params.fogMistOpacity = 0.18;
+            params.fogMistHeight = 5.5;
+            params.fogMistLayers = 1;
+            params.fogFarDist = 1400.0;
+            params.fogNearDist = 220.0;
+            if (typeof scene !== 'undefined' && typeof defaultFog !== 'undefined' && defaultFog) scene.fog = defaultFog;
+        } else if (name === 'Clean & Crisp') {
+            params.fogPlane = false;
+            params.fogMistOpacity = 0.0;
+            params.fogMistHeight = 5.5;
+            params.fogMistLayers = 1;
+            params.fogFarDist = 1800.0;
+            params.fogNearDist = 400.0;
+            if (typeof scene !== 'undefined' && typeof defaultFog !== 'undefined' && defaultFog) scene.fog = defaultFog;
+        } else if (name === 'Atmospheric') {
+            params.fogPlane = true;
+            params.fogMistOpacity = 0.32;
+            params.fogMistHeight = 12.0;
+            params.fogMistLayers = 2;
+            params.fogFarDist = 950.0;
+            params.fogNearDist = 120.0;
+            if (typeof scene !== 'undefined' && typeof defaultFog !== 'undefined' && defaultFog) scene.fog = defaultFog;
+        } else if (name === 'Off') {
+            params.fogPlane = false;
+            params.fogMistOpacity = 0.0;
+            params.fogFarDist = 9000.0;
+            params.fogNearDist = 7000.0;
+            if (typeof scene !== 'undefined') scene.fog = null;
+        } else if (name === 'Custom') {
+            if (typeof scene !== 'undefined' && typeof defaultFog !== 'undefined' && defaultFog && !scene.fog) {
+                scene.fog = defaultFog;
+            }
+        }
+        params.fogPreset = name;
+        params.showFogPlanes = params.fogPlane;
+        if (typeof window.updateFogPlanes === 'function') window.updateFogPlanes();
+        if (fogPlaneCtrl) fogPlaneCtrl.updateDisplay();
+        if (fogOpacityCtrl) fogOpacityCtrl.updateDisplay();
+        if (fogHeightCtrl) fogHeightCtrl.updateDisplay();
+        if (fogLayersCtrl) fogLayersCtrl.updateDisplay();
+        if (fogFarCtrl) fogFarCtrl.updateDisplay();
+        if (fogNearCtrl) fogNearCtrl.updateDisplay();
+        if (fogPresetCtrl) fogPresetCtrl.updateDisplay();
+    }
+    window.applyFogPreset = applyFogPreset;
+
+    function setCustomFogPreset() {
+        if (params.fogPreset !== 'Custom') {
+            params.fogPreset = 'Custom';
+            if (typeof scene !== 'undefined' && typeof defaultFog !== 'undefined' && defaultFog && !scene.fog) {
+                scene.fog = defaultFog;
+            }
+            if (fogPresetCtrl) fogPresetCtrl.updateDisplay();
+        }
+    }
+
+    fogPresetCtrl = envFolder.add(params, 'fogPreset', [
+        'Gentle Sea Mist',
+        'Clean & Crisp',
+        'Atmospheric',
+        'Off',
+        'Custom'
+    ]).name('Fog Look').onChange(applyFogPreset);
+
+    fogPlaneCtrl = envFolder.add(params, 'fogPlane').name('Ground Mist').onChange(v => {
+        setCustomFogPreset();
+        params.showFogPlanes = v;
+        if (typeof window.updateFogPlanes === 'function') window.updateFogPlanes();
+    });
+
+    fogOpacityCtrl = envFolder.add(params, 'fogMistOpacity', 0.0, 0.8, 0.02).name('Mist Opacity').onChange(v => {
+        setCustomFogPreset();
+        if (typeof window.updateFogPlanes === 'function') window.updateFogPlanes();
+    });
+
+    fogHeightCtrl = envFolder.add(params, 'fogMistHeight', 3.0, 35.0, 0.5).name('Mist Height').onChange(v => {
+        setCustomFogPreset();
+        if (typeof window.updateFogPlanes === 'function') window.updateFogPlanes();
+    });
+
+    fogLayersCtrl = envFolder.add(params, 'fogMistLayers', [1, 2, 3]).name('Mist Layers').onChange(v => {
+        params.fogMistLayers = parseInt(v);
+        setCustomFogPreset();
+        if (typeof window.updateFogPlanes === 'function') window.updateFogPlanes();
+    });
+
+    fogFarCtrl = envFolder.add(params, 'fogFarDist', 400.0, 3000.0, 50.0).name('View Distance').onChange(v => {
+        setCustomFogPreset();
+    });
+
+    fogNearCtrl = envFolder.add(params, 'fogNearDist', 20.0, 800.0, 20.0).name('Fog Start').onChange(v => {
+        setCustomFogPreset();
+    });
+
     envFolder.add(params, 'trails').name('Wind Trails').onChange(v => isWindTrailsOn = v);
 
     // Cloud controls have been consolidated into the unified "Clouds" section below
@@ -1242,6 +1398,12 @@ let isInitializingGui = true;
     window.addEventListener('keydown', (e) => {
         if ((e.key === 'h' || e.key === 'H') && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
             toggleGUI();
+        }
+        if ((e.key === 'g' || e.key === 'G') && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+            if (typeof setGodMode === 'function') setGodMode();
+        }
+        if ((e.key === 'u' || e.key === 'U') && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+            if (typeof setCloudDebugMode === 'function') setCloudDebugMode(!params.showCloudDebug);
         }
     });
 
@@ -1330,8 +1492,7 @@ let isInitializingGui = true;
 
     document.getElementById('photo-exit').addEventListener('click', () => {
         isPhotoMode = false;
-        const settingsControls = document.getElementById('settings-controls');
-        if (settingsControls) settingsControls.style.display = 'flex';
+        document.getElementById('settings-controls').style.display = 'flex';
         document.getElementById('touch-controls').style.display = '';
         document.getElementById('time-toggle').style.display = 'block';
         document.getElementById('photo-mode-ui').style.display = 'none';
@@ -1372,6 +1533,28 @@ let isInitializingGui = true;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x8cbce6);
     scene.fog = new THREE.Fog(0x8cbce6, 100, 1800);
+    const defaultFog = scene.fog;
+
+    function setAllFogEnabled(enabled) {
+        params.showFog = enabled;
+        params.showFogPlanes = enabled;
+        params.fogPlane = enabled;
+        scene.fog = enabled ? defaultFog : null;
+        if (typeof window.updateFogPlanes === 'function') {
+            window.updateFogPlanes();
+        } else if (typeof window.fogGroup !== 'undefined') {
+            window.fogGroup.visible = enabled;
+        }
+        if (typeof gui !== 'undefined' && gui && typeof gui.controllersRecursive === 'function') {
+            gui.controllersRecursive().forEach(c => {
+                if (c.property === 'showFog' || c.property === 'showFogPlanes' || c.property === 'fogPlane') {
+                    c.updateDisplay();
+                }
+            });
+        }
+    }
+    window.setAllFogEnabled = setAllFogEnabled;
+    window.setFogVisibility = setAllFogEnabled;
 
 
 
@@ -1399,6 +1582,161 @@ let isInitializingGui = true;
     const bloomPass = new UnrealBloomPass(_bloomRes, 0.8, 0.4, 1.5);
     bloomPass.enabled = !LOW_GFX;
     composer.addPass(bloomPass); // Enable Selective Bloom
+
+    function setupGodMode() {
+        if (godCamera && godControls) return;
+        godCamera = new THREE.PerspectiveCamera(params.cameraFov || 60, window.innerWidth / window.innerHeight, 0.01, 10000000);
+        godCamera.position.set(0, 150, 400);
+        scene.add(godCamera);
+
+        godControls = new OrbitControls(godCamera, renderer.domElement);
+        godControls.minDistance = 0.001;
+        godControls.maxDistance = 10000000;
+        godControls.minPolarAngle = 0.0001;
+        godControls.maxPolarAngle = Math.PI - 0.0001;
+        godControls.zoomSpeed = 1.6;
+        godControls.panSpeed = 1.6;
+        godControls.rotateSpeed = 1.0;
+        godControls.enableDamping = true;
+        godControls.dampingFactor = 0.08;
+        godControls.screenSpacePanning = true;
+        godControls.zoomToCursor = true;
+        godControls.enabled = false;
+
+        godControls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN
+        };
+
+        godControls.touches = {
+            ONE: THREE.TOUCH.ROTATE,
+            TWO: THREE.TOUCH.DOLLY_PAN
+        };
+
+        const domElem = renderer.domElement;
+        if (domElem) {
+            domElem.addEventListener('wheel', (e) => {
+                if (!godControls || !godControls.enabled) return;
+                if (e.shiftKey) {
+                    godControls.zoomSpeed = 4.5;
+                } else if (e.altKey || e.ctrlKey) {
+                    godControls.zoomSpeed = 0.4;
+                } else {
+                    godControls.zoomSpeed = 1.6;
+                }
+            }, { passive: true, capture: true });
+
+            const _raycaster = new THREE.Raycaster();
+            const _mouseVec = new THREE.Vector2();
+            domElem.addEventListener('dblclick', (e) => {
+                if (!godControls || !godControls.enabled) return;
+                const rect = domElem.getBoundingClientRect();
+                _mouseVec.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                _mouseVec.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                _raycaster.setFromCamera(_mouseVec, godCamera);
+
+                const curDist = godCamera.position.distanceTo(godControls.target);
+                const zoomInStep = Math.max(2.0, curDist * 0.5);
+                godCamera.position.addScaledVector(_raycaster.ray.direction, zoomInStep);
+                godControls.target.addScaledVector(_raycaster.ray.direction, zoomInStep * 0.5);
+                godControls.update();
+            });
+        }
+
+        if (typeof playerGrp !== 'undefined' && playerGrp) {
+            godControls.target.copy(playerGrp.position);
+        }
+        godControls.update();
+    }
+
+    function clampGodCameraAboveTerrainAndWater(controls, gCam, waterLevel = 2.4) {
+        const effWaterY = (waterLevel !== undefined && waterLevel !== null) ? waterLevel : 2.4;
+        const minWaterClearance = 0.05;
+        const minTerrainClearance = 0.05;
+
+        if (controls && controls.target) {
+            const targetTerrainH = getWorldHeight(controls.target.x, controls.target.z);
+            const minTargetY = Math.max(targetTerrainH + 0.02, effWaterY + 0.02);
+            if (controls.target.y < minTargetY) {
+                controls.target.y = minTargetY;
+            }
+        }
+
+        if (gCam) {
+            const camTerrainH = getWorldHeight(gCam.position.x, gCam.position.z);
+            const minCamY = Math.max(camTerrainH + minTerrainClearance, effWaterY + minWaterClearance);
+            if (gCam.position.y < minCamY) {
+                gCam.position.y = minCamY;
+            }
+            gCam.updateMatrixWorld(true);
+        }
+    }
+
+    function setGodMode(enabled) {
+        if (typeof enabled === 'boolean') {
+            isGodMode = enabled;
+        } else {
+            isGodMode = !isGodMode;
+        }
+        params.godMode = isGodMode;
+
+        if (!godCamera || !godControls) {
+            setupGodMode();
+        }
+
+        if (isGodMode) {
+            camera.getWorldPosition(godCamera.position);
+            camera.getWorldQuaternion(godCamera.quaternion);
+
+            godCamera.near = 0.01;
+            godCamera.far = 10000000;
+            godCamera.fov = params.cameraFov || 60;
+            godCamera.updateProjectionMatrix();
+
+            godControls.enabled = true;
+            if (typeof playerGrp !== 'undefined' && playerGrp) {
+                godControls.target.copy(playerGrp.position);
+                _prevGodPlayerPos.copy(playerGrp.position);
+            }
+            clampGodCameraAboveTerrainAndWater(godControls, godCamera, 2.4);
+            godControls.update();
+
+            renderPass.camera = godCamera;
+            window.camera = godCamera;
+        } else {
+            godControls.enabled = false;
+            if (typeof playerGrp !== 'undefined' && playerGrp && typeof cameraBase !== 'undefined') {
+                cameraBase.position.copy(playerGrp.position);
+            }
+            renderPass.camera = camera;
+            window.camera = camera;
+        }
+
+        if (typeof gui !== 'undefined' && gui && typeof gui.controllersRecursive === 'function') {
+            gui.controllersRecursive().forEach(c => {
+                if (c.property === 'godMode') c.updateDisplay();
+            });
+        }
+    }
+    window.setGodMode = setGodMode;
+
+    function updateGodMode(dt) {
+        if (!godControls || !godControls.enabled) return;
+        if (typeof playerGrp !== 'undefined' && playerGrp) {
+            const dx = playerGrp.position.x - _prevGodPlayerPos.x;
+            const dy = playerGrp.position.y - _prevGodPlayerPos.y;
+            const dz = playerGrp.position.z - _prevGodPlayerPos.z;
+            godCamera.position.x += dx;
+            godCamera.position.y += dy;
+            godCamera.position.z += dz;
+            godControls.target.copy(playerGrp.position);
+            _prevGodPlayerPos.copy(playerGrp.position);
+        }
+        clampGodCameraAboveTerrainAndWater(godControls, godCamera, 2.4);
+        godControls.update();
+    }
+
 
     // ==========================================
     // TOON GRADIENT MAP & GLTF LOADERS SETUP
@@ -1430,7 +1768,7 @@ let isInitializingGui = true;
     const spawnX = worldLayout.spawnPosition.x;
     const spawnZ = worldLayout.spawnPosition.z;
     const spawnGroundY = getWorldHeight(spawnX, spawnZ);
-    playerGrp.position.set(spawnX, Math.max(90, spawnGroundY + 50), spawnZ);
+    playerGrp.position.set(spawnX, spawnGroundY + 640, spawnZ);
     scene.add(playerGrp);
 
     const playerVisuals = new THREE.Group();
@@ -2284,6 +2622,51 @@ let isInitializingGui = true;
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
     staticSun.add(sunMesh);
 
+    let _savedSunDiscScale = params.sunDiscScale;
+    let _savedGodRayIntensity = params.godRayIntensity;
+    let _savedGodRayWeight = params.godRayWeight;
+
+    function setNormalizeSun(enabled) {
+        params.normalizeSun = !!enabled;
+        if (typeof lensflare !== 'undefined' && lensflare) {
+            lensflare.visible = (typeof timePhase !== 'undefined' ? timePhase !== 2 : true) && !params.normalizeSun;
+        }
+        if (params.normalizeSun) {
+            if (params.sunDiscScale > 1.0) {
+                _savedSunDiscScale = params.sunDiscScale;
+                params.sunDiscScale = 1.0;
+            }
+            if (params.godRayIntensity > 0.30) {
+                _savedGodRayIntensity = params.godRayIntensity;
+                params.godRayIntensity = 0.20;
+            }
+            if (params.godRayWeight > 0.45) {
+                _savedGodRayWeight = params.godRayWeight;
+                params.godRayWeight = 0.35;
+            }
+        } else {
+            params.sunDiscScale = _savedSunDiscScale || 1.8;
+            params.godRayIntensity = _savedGodRayIntensity || 0.60;
+            params.godRayWeight = _savedGodRayWeight || 0.85;
+        }
+
+        if (typeof staticSun !== 'undefined' && staticSun) {
+            staticSun.scale.setScalar(params.sunDiscScale);
+        }
+        if (typeof godRaysPass !== 'undefined' && godRaysPass && godRaysPass.uniforms) {
+            if (godRaysPass.uniforms.uIntensity) godRaysPass.uniforms.uIntensity.value = params.godRayIntensity;
+            if (godRaysPass.uniforms.uWeight) godRaysPass.uniforms.uWeight.value = params.godRayWeight;
+        }
+        if (typeof gui !== 'undefined' && gui && gui.controllersRecursive) {
+            gui.controllersRecursive().forEach(c => {
+                if (c.property === 'sunDiscScale' || c.property === 'godRayIntensity' || c.property === 'godRayWeight' || c.property === 'normalizeSun') {
+                    c.updateDisplay();
+                }
+            });
+        }
+    }
+    window.setNormalizeSun = setNormalizeSun;
+
     // Glowing 3D Moon Sphere & Atmospheric Halo
     const staticMoon = new THREE.Group();
     scene.add(staticMoon);
@@ -2304,7 +2687,14 @@ let isInitializingGui = true;
     // ==========================================
     const matRock = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap, dithering: true });
     const matBush = new THREE.MeshToonMaterial({ color: 0x48a868, gradientMap, dithering: true });
-    const matCloud = new THREE.MeshToonMaterial({ color: 0xfffaec, transparent: true, opacity: params.cloudsLowOpacity, depthWrite: true, side: THREE.FrontSide });
+    const matCloud = new THREE.MeshToonMaterial({
+        color: 0xffffff,
+        transparent: false,
+        opacity: params.cloudsLowOpacity,
+        depthWrite: true,
+        depthTest: true,
+        side: THREE.FrontSide
+    });
     setupToonCloudShader(matCloud, params.cloudsLowBottomBlur);
     const matWispyCloud = new THREE.MeshToonMaterial({ color: 0xffffff, transparent: true, opacity: 0.42, gradientMap, dithering: true });
     const matFlower = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap, dithering: true });
@@ -2851,7 +3241,7 @@ let isInitializingGui = true;
     const fogMat = new THREE.MeshLambertMaterial({
         color: 0xffffff,
         transparent: true,
-        opacity: 0.5,
+        opacity: (typeof params.fogMistOpacity === 'number') ? params.fogMistOpacity : 0.18,
         depthWrite: false,
     });
 
@@ -2890,31 +3280,56 @@ let isInitializingGui = true;
         shader.fragmentShader = shader.fragmentShader.replace(
             `#include <dithering_fragment>`,
             `#include <dithering_fragment>
-             vec2 uv = vWorldPos.xz * 0.0025;
+             vec2 uv = vWorldPos.xz * 0.002;
              float yOffset = vWorldPos.y * 0.2;
-             float n1 = snoise(uv + vec2(uTime * 0.03 + yOffset, uTime * 0.02));
-             float n2 = snoise(uv * 2.0 - vec2(uTime * 0.02 - yOffset, -uTime * 0.03));
+             float n1 = snoise(uv + vec2(uTime * 0.02 + yOffset, uTime * 0.015));
+             float n2 = snoise(uv * 2.0 - vec2(uTime * 0.015 - yOffset, -uTime * 0.02));
 
              float noiseAlpha = smoothstep(-0.2, 0.8, n1 + n2 * 0.5);
 
              float dist = length(vWorldPos.xz - cameraPosition.xz);
-             float edgeFade = 1.0 - smoothstep(1200.0, 1700.0, dist);
+             float edgeFade = 1.0 - smoothstep(1000.0, 1600.0, dist);
 
-             gl_FragColor.a *= noiseAlpha * edgeFade;
+             // Soft camera proximity dissolve so mist never clips abruptly into view
+             float camProximity = length(vWorldPos - cameraPosition);
+             float camNearFade = smoothstep(6.0, 24.0, camProximity);
+
+             gl_FragColor.a *= noiseAlpha * edgeFade * camNearFade;
             `
         );
     };
 
-    // Stack 3 planes for cheap 3D parallax volumetric effect
+    const fogPlanes = [];
     for(let i = 0; i < 3; i++) {
         const p = new THREE.Mesh(fogGeo, fogMat);
-        p.position.y = 12 + i * 15; // 12, 27, 42
-        p.receiveShadow = true;
+        p.receiveShadow = false; // High FPS: Disable shadow map lookups on full-screen transparent planes
         fogGroup.add(p);
+        fogPlanes.push(p);
     }
     scene.add(fogGroup);
     window.fogGroup = fogGroup;
+    window.fogPlanes = fogPlanes;
     window.fogUniforms = fogUniforms;
+    window.fogMat = fogMat;
+
+    window.updateFogPlanes = function() {
+        if (!window.fogGroup || !window.fogPlanes) return;
+        window.fogGroup.visible = !!params.fogPlane;
+        if (!params.fogPlane) return;
+
+        const count = params.fogMistLayers || 1;
+        for (let i = 0; i < window.fogPlanes.length; i++) {
+            const p = window.fogPlanes[i];
+            if (i < count) {
+                p.visible = true;
+                p.position.y = (params.fogMistHeight || 5.5) + i * 10.0;
+            } else {
+                p.visible = false;
+            }
+        }
+        fogMat.opacity = (typeof params.fogMistOpacity === 'number') ? params.fogMistOpacity : 0.18;
+    };
+    window.updateFogPlanes();
 
     treeMeshes.forEach(mesh => {
         mesh.castShadow = false; // MASSIVE FPS GAIN: Stop rendering 9,000+ complex trees into the shadow depth map
@@ -2931,6 +3346,7 @@ let isInitializingGui = true;
 
     instClouds.castShadow = true;
     instClouds.frustumCulled = false;
+    instClouds.visible = params.cloudsLow;
     scene.add(instClouds);
 
     // =========================================================================
@@ -2950,7 +3366,7 @@ let isInitializingGui = true;
 
     // One puff. The surface is pushed in and out at three different sizes of bump, so the
     // outline never reads as a plain ball: big billows, cauliflower lumps, then a fine crinkle.
-    function createFluffyLobe(radius, segW = 36, segH = 26, squashY = 0.85, noiseAmp = 0.13, seed = 1) {
+    function createFluffyLobe(radius, segW = 36, segH = 26, squashY = 0.85, noiseAmp = 0.13, seed = 1, sx = 1.0, sz = 1.0) {
         const geo = new THREE.SphereGeometry(radius, segW, segH);
         const pos = geo.attributes.position;
         const rnd = cloudRand(seed);
@@ -2973,7 +3389,7 @@ let isInitializingGui = true;
             bump *= 0.32 + 0.68 * Math.max(0.0, ny * 0.5 + 0.5);
 
             const r = radius * (1.0 + bump);
-            pos.setXYZ(i, nx * r, ny * r * squashY, nz * r);
+            pos.setXYZ(i, nx * r * sx, ny * r * squashY, nz * r * sz);
         }
         geo.computeVertexNormals();
         return geo;
@@ -2987,22 +3403,36 @@ let isInitializingGui = true;
         for (let i = 0; i < parents.length; i++) {
             const p = parents[i];
             const n = countMin + Math.floor(rnd() * (countMax - countMin + 1));
+            const psx = p.sx || 1.0;
+            const psy = p.sy || 0.85;
+            const psz = p.sz || 1.0;
             for (let k = 0; k < n; k++) {
                 const ang = rnd() * 6.2832;
-                const up = -0.20 + rnd() * 1.10;                       // mostly upper half, never straight down
+                const up = -0.15 + rnd() * 1.05;                       // mostly upper/lateral surface
                 const horiz = Math.sqrt(Math.max(0.0, 1.0 - up * up));
                 const cr = p.r * (sizeMin + rnd() * (sizeMax - sizeMin));
-                let d = p.r * (0.72 + rnd() * 0.22);                     // sit on the parent's shoulder
-                d = Math.max(d, p.r * 1.20 - cr);                        // ...but always poke clearly out of it
-                d = Math.min(d, p.r * 0.96);                             // ...while staying attached
-                const psy = p.sy || 0.85;
+                let d = p.r * (0.70 + rnd() * 0.22);                     // sit on the parent's shoulder
+                d = Math.max(d, p.r * 1.15 - cr);                        // poke clearly out
+                d = Math.min(d, p.r * 0.94);                             // stay attached
+
+                // Varied bud squash: rounded cauliflower billows, NOT tall vertical cylinders!
+                const budSy = 0.68 + rnd() * 0.28; // 0.68 to 0.96
+                const budSx = 0.92 + rnd() * 0.28; // 0.92 to 1.20
+                const budSz = 0.92 + rnd() * 0.24;
+                const rotZ = (p.rotZ || 0) * 0.6 + (rnd() - 0.5) * 0.3;
+                const rotX = (p.rotX || 0) * 0.6 + (rnd() - 0.5) * 0.2;
+
                 buds.push({
                     r: cr,
-                    x: p.x + Math.cos(ang) * horiz * d,
+                    x: p.x + Math.cos(ang) * horiz * d * psx,
                     y: p.y + up * d * psy,
-                    z: p.z + Math.sin(ang) * horiz * d,
-                    sy: Math.min(1.12, psy + 0.10),
-                    noise: 0.030
+                    z: p.z + Math.sin(ang) * horiz * d * psz,
+                    sx: budSx,
+                    sy: budSy,
+                    sz: budSz,
+                    rotZ: rotZ,
+                    rotX: rotX,
+                    noise: 0.028
                 });
             }
         }
@@ -3021,14 +3451,26 @@ let isInitializingGui = true;
 
         let s = seed;
         puffs.forEach(p => {
-            const g = createFluffyLobe(p.r, segParent[0], segParent[1], p.sy, (p.noise || 0.025) * 5.4, s++);
+            const sx = p.sx || 1.0;
+            const sy = p.sy || 0.85;
+            const sz = p.sz || 1.0;
+            const g = createFluffyLobe(p.r, segParent[0], segParent[1], sy, (p.noise || 0.025) * 5.4, s++, sx, sz);
+            if (p.rotZ) g.rotateZ(p.rotZ);
+            if (p.rotX) g.rotateX(p.rotX);
+            if (p.rotY) g.rotateY(p.rotY);
             g.translate(p.x, p.y, p.z);
             lobes.push(g);
         });
 
         const buds = growPuffBuds(puffs, seed + 101, budMin, budMax, 0.30, 0.54);
         buds.forEach(p => {
-            const g = createFluffyLobe(p.r, segBud[0], segBud[1], p.sy, p.noise * 5.4, s++);
+            const sx = p.sx || 1.0;
+            const sy = p.sy || 0.85;
+            const sz = p.sz || 1.0;
+            const g = createFluffyLobe(p.r, segBud[0], segBud[1], sy, p.noise * 5.4, s++, sx, sz);
+            if (p.rotZ) g.rotateZ(p.rotZ);
+            if (p.rotX) g.rotateX(p.rotX);
+            if (p.rotY) g.rotateY(p.rotY);
             g.translate(p.x, p.y, p.z);
             lobes.push(g);
         });
@@ -3037,7 +3479,13 @@ let isInitializingGui = true;
         const bigBuds = buds.filter(b => b.r > 60);
         const subBuds = growPuffBuds(bigBuds, seed + 977, 1, 1, 0.34, 0.52);
         subBuds.forEach(p => {
-            const g = createFluffyLobe(p.r, segSub[0], segSub[1], p.sy, p.noise * 5.4, s++);
+            const sx = p.sx || 1.0;
+            const sy = p.sy || 0.85;
+            const sz = p.sz || 1.0;
+            const g = createFluffyLobe(p.r, segSub[0], segSub[1], sy, p.noise * 5.4, s++, sx, sz);
+            if (p.rotZ) g.rotateZ(p.rotZ);
+            if (p.rotX) g.rotateX(p.rotX);
+            if (p.rotY) g.rotateY(p.rotY);
             g.translate(p.x, p.y, p.z);
             lobes.push(g);
         });
@@ -3076,140 +3524,167 @@ let isInitializingGui = true;
     function buildProceduralCloud(archetype = 'tower') {
         const lobes = [];
 
-        if (archetype === false || archetype === 'tower') {
-            // Majestic Marine Cumulus Bank (Voluminous, natural horizon cumulus like reference photo)
+        if (archetype === false || archetype === 'tower' || archetype === 'tower_sovereign') {
+            // Archetype 1: Sovereign Cumulonimbus / Castle
             const towerPuffs = [
-                // Deep, wide foundation resting in horizon mist (staggered depths and heights)
-                { r: 180, x: -180, y: 18,  z: 20,   sy: 0.65, noise: 0.02 },
-                { r: 210, x: 0,    y: 32,  z: -10,  sy: 0.68, noise: 0.02 },
-                { r: 180, x: 180,  y: 16,  z: 15,   sy: 0.65, noise: 0.02 },
-                { r: 145, x: -330, y: -2,  z: 10,   sy: 0.58, noise: 0.02 },
-                { r: 145, x: 330,  y: -5,  z: -10,  sy: 0.58, noise: 0.02 },
-
-                // Mid-tier billowing cumulus body (deeply overlapping, pillowy volume)
-                { r: 175, x: -110, y: 130, z: 15,   sy: 0.84, noise: 0.025 },
-                { r: 185, x: 80,   y: 140, z: -10,  sy: 0.86, noise: 0.025 },
-                { r: 145, x: -240, y: 95,  z: -15,  sy: 0.78, noise: 0.02 },
-                { r: 145, x: 250,  y: 100, z: 20,   sy: 0.78, noise: 0.02 },
-
-                // Grand ascending crowns (multi-peaked natural cumulus towers)
-                { r: 160, x: -50,  y: 240, z: 5,    sy: 0.94, noise: 0.03 },
-                { r: 150, x: 90,   y: 230, z: -5,   sy: 0.92, noise: 0.03 },
-
-                // Majestic summits (broad, soft, rounded cumulus peaks)
-                { r: 130, x: -25,  y: 320, z: 0,    sy: 1.00, noise: 0.03 },
-                { r: 110, x: 55,   y: 305, z: -5,   sy: 0.96, noise: 0.03 }
+                { r: 200, x: -160, y: 22,  z: 20,   sx: 1.25, sy: 0.58, sz: 1.05, noise: 0.02 },
+                { r: 215, x: 70,   y: 28,  z: -15,  sx: 1.30, sy: 0.62, sz: 1.10, noise: 0.02 },
+                { r: 155, x: -340, y: 5,   z: -10,  sx: 1.20, sy: 0.50, sz: 1.00, noise: 0.02 },
+                { r: 150, x: 290,  y: 8,   z: 25,   sx: 1.20, sy: 0.52, sz: 1.00, noise: 0.02 },
+                { r: 190, x: -110, y: 130, z: 20,   sx: 1.15, sy: 0.80, sz: 1.05, rotZ: 0.10, noise: 0.025 },
+                { r: 130, x: 35,   y: 110, z: -25,  sx: 1.25, sy: 0.65, sz: 0.95, noise: 0.02 },
+                { r: 165, x: 205,  y: 125, z: 15,   sx: 1.25, sy: 0.72, sz: 1.05, rotZ: -0.15, noise: 0.025 },
+                { r: 130, x: -250, y: 90,  z: -15,  sx: 1.15, sy: 0.68, sz: 1.00, noise: 0.02 },
+                { r: 185, x: -80,  y: 240, z: 10,   sx: 1.10, sy: 0.90, sz: 1.05, rotZ: 0.08, noise: 0.03 },
+                { r: 135, x: 180,  y: 210, z: 5,    sx: 1.20, sy: 0.75, sz: 1.00, rotZ: -0.10, noise: 0.025 },
+                { r: 115, x: -185, y: 185, z: -10,  sx: 1.05, sy: 0.80, sz: 0.95, rotZ: 0.18, noise: 0.025 },
+                { r: 150, x: -65,  y: 335, z: 0,    sx: 1.05, sy: 0.95, sz: 1.00, rotZ: 0.05, noise: 0.03 },
+                { r: 98,  x: -35,  y: 400, z: -8,   sx: 0.98, sy: 0.90, sz: 0.95, noise: 0.03 }
             ];
             addPuffLobes(towerPuffs, lobes, cloudSeedFor(archetype));
+        } else if (archetype === 'tower_twin') {
+            // Archetype 1b: Twin Cathedral Peaks
+            const twinPuffs = [
+                { r: 195, x: -170, y: 22,  z: 15,   sx: 1.30, sy: 0.55, sz: 1.05, noise: 0.02 },
+                { r: 205, x: 160,  y: 26,  z: -15,  sx: 1.30, sy: 0.55, sz: 1.05, noise: 0.02 },
+                { r: 150, x: -330, y: 8,   z: -10,  sx: 1.20, sy: 0.48, sz: 1.00, noise: 0.02 },
+                { r: 150, x: 330,  y: 6,   z: 15,   sx: 1.20, sy: 0.48, sz: 1.00, noise: 0.02 },
+                { r: 140, x: 0,    y: 12,  z: 0,    sx: 1.25, sy: 0.45, sz: 0.95, noise: 0.02 },
+                { r: 180, x: -160, y: 130, z: 15,   sx: 1.15, sy: 0.85, sz: 1.05, rotZ: 0.08, noise: 0.025 },
+                { r: 175, x: 165,  y: 135, z: -15,  sx: 1.15, sy: 0.82, sz: 1.05, rotZ: -0.08, noise: 0.025 },
+                { r: 110, x: 0,    y: 95,  z: 10,   sx: 1.20, sy: 0.55, sz: 0.90, noise: 0.02 },
+                { r: 165, x: -140, y: 245, z: 8,    sx: 1.10, sy: 0.92, sz: 1.00, rotZ: 0.06, noise: 0.03 },
+                { r: 155, x: 145,  y: 235, z: -8,   sx: 1.10, sy: 0.90, sz: 1.00, rotZ: -0.06, noise: 0.03 },
+                { r: 110, x: -220, y: 195, z: -10,  sx: 1.05, sy: 0.75, sz: 0.95, rotZ: 0.15, noise: 0.025 },
+                { r: 115, x: 225,  y: 185, z: 12,   sx: 1.05, sy: 0.75, sz: 0.95, rotZ: -0.15, noise: 0.025 },
+                { r: 135, x: -125, y: 340, z: 0,    sx: 1.00, sy: 0.95, sz: 1.00, noise: 0.03 },
+                { r: 85,  x: -110, y: 405, z: -5,   sx: 0.95, sy: 0.90, sz: 0.95, noise: 0.03 },
+                { r: 125, x: 135,  y: 320, z: 0,    sx: 1.00, sy: 0.92, sz: 1.00, noise: 0.03 },
+                { r: 78,  x: 125,  y: 375, z: 4,    sx: 0.92, sy: 0.88, sz: 0.95, noise: 0.03 }
+            ];
+            addPuffLobes(twinPuffs, lobes, cloudSeedFor(archetype));
+        } else if (archetype === 'tower_anvil') {
+            // Archetype 1c: Wind-Sheared Anvil Tower
+            const anvilPuffs = [
+                { r: 190, x: -120, y: 20,  z: 15,   sx: 1.30, sy: 0.54, sz: 1.05, noise: 0.02 },
+                { r: 180, x: 90,   y: 24,  z: -15,  sx: 1.25, sy: 0.52, sz: 1.05, noise: 0.02 },
+                { r: 140, x: -270, y: 6,   z: -10,  sx: 1.20, sy: 0.48, sz: 1.00, noise: 0.02 },
+                { r: 175, x: -70,  y: 120, z: 10,   sx: 1.15, sy: 0.82, sz: 1.05, rotZ: -0.18, noise: 0.025 },
+                { r: 155, x: 30,   y: 135, z: -10,  sx: 1.15, sy: 0.80, sz: 1.00, rotZ: -0.20, noise: 0.025 },
+                { r: 120, x: -180, y: 95,  z: 5,    sx: 1.10, sy: 0.70, sz: 0.95, rotZ: -0.12, noise: 0.025 },
+                { r: 185, x: 20,   y: 235, z: 5,    sx: 1.35, sy: 0.75, sz: 1.10, rotZ: -0.15, noise: 0.03 },
+                { r: 160, x: -90,  y: 215, z: -5,   sx: 1.20, sy: 0.75, sz: 1.00, rotZ: -0.12, noise: 0.025 },
+                { r: 170, x: 160,  y: 250, z: 12,   sx: 1.45, sy: 0.65, sz: 1.15, rotZ: -0.22, noise: 0.03 },
+                { r: 195, x: 75,   y: 325, z: 0,    sx: 1.70, sy: 0.58, sz: 1.25, noise: 0.03 },
+                { r: 160, x: 220,  y: 335, z: -8,   sx: 1.55, sy: 0.50, sz: 1.15, rotZ: -0.10, noise: 0.03 },
+                { r: 140, x: -80,  y: 310, z: 8,    sx: 1.40, sy: 0.55, sz: 1.10, rotZ: 0.05, noise: 0.03 },
+                { r: 95,  x: 95,   y: 370, z: 0,    sx: 1.35, sy: 0.52, sz: 1.10, noise: 0.03 }
+            ];
+            addPuffLobes(anvilPuffs, lobes, cloudSeedFor(archetype));
+        } else if (archetype === 'tower_spire') {
+            // Archetype 1d: Columnar Cumulus Congestus Spire
+            const spirePuffs = [
+                { r: 180, x: 0,    y: 20,  z: 0,    sx: 1.25, sy: 0.55, sz: 1.25, noise: 0.02 },
+                { r: 140, x: -140, y: 14,  z: 15,   sx: 1.15, sy: 0.50, sz: 1.05, noise: 0.02 },
+                { r: 135, x: 135,  y: 12,  z: -15,  sx: 1.15, sy: 0.50, sz: 1.05, noise: 0.02 },
+                { r: 170, x: 0,    y: 125, z: 5,    sx: 1.10, sy: 0.88, sz: 1.10, noise: 0.025 },
+                { r: 125, x: -95,  y: 110, z: -10,  sx: 1.05, sy: 0.75, sz: 0.95, rotZ: 0.12, noise: 0.025 },
+                { r: 120, x: 90,   y: 115, z: 10,   sx: 1.05, sy: 0.75, sz: 0.95, rotZ: -0.12, noise: 0.025 },
+                { r: 165, x: 5,    y: 235, z: 0,    sx: 1.05, sy: 0.92, sz: 1.05, noise: 0.03 },
+                { r: 110, x: -70,  y: 215, z: 10,   sx: 1.00, sy: 0.80, sz: 0.95, rotZ: 0.10, noise: 0.025 },
+                { r: 105, x: 75,   y: 220, z: -8,   sx: 1.00, sy: 0.80, sz: 0.95, rotZ: -0.10, noise: 0.025 },
+                { r: 150, x: 0,    y: 335, z: 0,    sx: 1.00, sy: 0.95, sz: 1.00, noise: 0.03 },
+                { r: 115, x: 0,    y: 415, z: 0,    sx: 0.95, sy: 0.95, sz: 0.95, noise: 0.03 },
+                { r: 70,  x: 0,    y: 470, z: 0,    sx: 0.90, sy: 0.90, sz: 0.90, noise: 0.03 }
+            ];
+            addPuffLobes(spirePuffs, lobes, cloudSeedFor(archetype));
+        } else if (archetype === 'cirro_shelf') {
+            // High altitude sprawling cirrocumulus shelf
+            const cirroPuffs = [
+                { r: 240, x: -350, y: 15, z: 0,    sx: 1.80, sy: 0.32, sz: 1.10, noise: 0.02 },
+                { r: 260, x: 0,    y: 20, z: 10,   sx: 1.90, sy: 0.35, sz: 1.15, noise: 0.02 },
+                { r: 240, x: 350,  y: 18, z: -10,  sx: 1.80, sy: 0.32, sz: 1.10, noise: 0.02 },
+                { r: 180, x: -180, y: 55, z: 5,    sx: 1.60, sy: 0.40, sz: 1.05, noise: 0.025 },
+                { r: 190, x: 180,  y: 58, z: -5,   sx: 1.60, sy: 0.40, sz: 1.05, noise: 0.025 },
+                { r: 140, x: 0,    y: 85, z: 0,    sx: 1.50, sy: 0.42, sz: 1.00, noise: 0.025 }
+            ];
+            addPuffLobes(cirroPuffs, lobes, cloudSeedFor(archetype));
+        } else if (archetype === 'cirro_cluster') {
+            // High altitude clustered billowing anvil feather
+            const clusterPuffs = [
+                { r: 210, x: -200, y: 18, z: 20,   sx: 1.50, sy: 0.36, sz: 1.10, noise: 0.02 },
+                { r: 220, x: 150,  y: 22, z: -20,  sx: 1.55, sy: 0.36, sz: 1.10, noise: 0.02 },
+                { r: 170, x: -70,  y: 52, z: 0,    sx: 1.40, sy: 0.42, sz: 1.05, noise: 0.025 },
+                { r: 180, x: 80,   y: 56, z: 10,   sx: 1.40, sy: 0.42, sz: 1.05, noise: 0.025 },
+                { r: 130, x: 0,    y: 88, z: -5,   sx: 1.30, sy: 0.45, sz: 1.00, noise: 0.025 }
+            ];
+            addPuffLobes(clusterPuffs, lobes, cloudSeedFor(archetype));
         } else if (archetype === 'fortress') {
-            // Archetype B: Grand Cumulus Massif Bank (~900m wide, stepped cascading shoulders, summit y ~ 360)
+            // Archetype 2: Grand Tiered Mountain Massif
             const fortressPuffs = [
-                // Staggered base
-                { r: 175, x: 0,    y: 22,  z: 0,   sy: 0.55, noise: 0.02 },
-                { r: 150, x: -160, y: 12,  z: 18,  sy: 0.50, noise: 0.02 },
-                { r: 150, x: 160,  y: 14,  z: -18, sy: 0.50, noise: 0.02 },
-                { r: 110, x: -290, y: -4,  z: 12,  sy: 0.45, noise: 0.02 },
-                { r: 110, x: 290,  y: -6,  z: -12, sy: 0.45, noise: 0.02 },
-                // Tier 2 shoulders
-                { r: 155, x: -80,  y: 85,  z: 12,  sy: 0.84, noise: 0.025 },
-                { r: 160, x: 75,   y: 88,  z: -12, sy: 0.84, noise: 0.025 },
-                { r: 120, x: -190, y: 72,  z: -15, sy: 0.78, noise: 0.025 },
-                { r: 120, x: 190,  y: 72,  z: 15,  sy: 0.78, noise: 0.025 },
-                { r: 95,  x: -280, y: 52,  z: 10,  sy: 0.70, noise: 0.02 },
-                { r: 95,  x: 280,  y: 52,  z: -10, sy: 0.70, noise: 0.02 },
-                // Tier 3 central massif
-                { r: 148, x: 0,    y: 160, z: 10,  sy: 0.95, noise: 0.03 },
-                { r: 128, x: -90,  y: 155, z: -10, sy: 0.90, noise: 0.03 },
-                { r: 128, x: 85,   y: 158, z: 12,  sy: 0.90, noise: 0.03 },
-                { r: 112, x: -35,  y: 215, z: -6,  sy: 1.00, noise: 0.03 },
-                { r: 112, x: 35,   y: 212, z: 8,   sy: 1.00, noise: 0.03 },
-                // Tier 4 summit peaks
-                { r: 95,  x: 0,    y: 275, z: 0,   sy: 1.08, noise: 0.03 },
-                { r: 75,  x: -25,  y: 315, z: 6,   sy: 1.12, noise: 0.03 },
-                { r: 72,  x: 20,   y: 320, z: -6,  sy: 1.12, noise: 0.03 },
-                { r: 52,  x: 0,    y: 350, z: 0,   sy: 1.15, noise: 0.03 }
+                { r: 190, x: -180, y: 22,  z: 15,   sx: 1.35, sy: 0.52, sz: 1.10, noise: 0.02 },
+                { r: 200, x: 80,   y: 26,  z: -10,  sx: 1.30, sy: 0.55, sz: 1.10, noise: 0.02 },
+                { r: 140, x: -350, y: 2,   z: -10,  sx: 1.25, sy: 0.46, sz: 1.00, noise: 0.02 },
+                { r: 135, x: 295,  y: 5,   z: 20,   sx: 1.20, sy: 0.48, sz: 1.00, noise: 0.02 },
+                { r: 170, x: -215, y: 95,  z: 10,   sx: 1.35, sy: 0.60, sz: 1.10, noise: 0.025 },
+                { r: 155, x: -80,  y: 110, z: -18,  sx: 1.20, sy: 0.65, sz: 1.00, noise: 0.025 },
+                { r: 185, x: 125,  y: 120, z: 15,   sx: 1.15, sy: 0.80, sz: 1.05, rotZ: -0.15, noise: 0.025 },
+                { r: 135, x: -185, y: 165, z: 5,    sx: 1.25, sy: 0.65, sz: 1.00, noise: 0.025 },
+                { r: 160, x: 40,   y: 195, z: -10,  sx: 1.10, sy: 0.85, sz: 1.00, rotZ: -0.12, noise: 0.03 },
+                { r: 170, x: 165,  y: 230, z: 12,   sx: 1.10, sy: 0.88, sz: 1.05, rotZ: -0.18, noise: 0.03 },
+                { r: 130, x: 145,  y: 315, z: 0,    sx: 1.05, sy: 0.92, sz: 1.00, rotZ: -0.10, noise: 0.03 },
+                { r: 90,  x: 170,  y: 375, z: -6,   sx: 0.95, sy: 0.88, sz: 0.95, noise: 0.03 }
             ];
             addPuffLobes(fortressPuffs, lobes, cloudSeedFor(archetype));
         } else if (archetype === 'asymmetric') {
-            // Archetype C: Asymmetric Wind-Swept Bank (y ~ 350)
+            // Archetype 3: Wind-Sheared Anvil / Slanted Prow
             const asymPuffs = [
-                // Staggered base
-                { r: 165, x: -130, y: 18,  z: 10,  sy: 0.55, noise: 0.02 },
-                { r: 145, x: 0,    y: 14,  z: -10, sy: 0.50, noise: 0.02 },
-                { r: 130, x: 120,  y: 10,  z: 12,  sy: 0.48, noise: 0.02 },
-                { r: 105, x: 225,  y: -2,  z: -10, sy: 0.45, noise: 0.02 },
-                { r: 85,  x: 310,  y: -6,  z: 6,   sy: 0.42, noise: 0.02 },
-                // Tier 2 rising windward body
-                { r: 155, x: -120, y: 92,  z: 15,  sy: 0.88, noise: 0.025 },
-                { r: 135, x: -20,  y: 84,  z: 6,   sy: 0.82, noise: 0.025 },
-                { r: 110, x: 75,   y: 72,  z: -10, sy: 0.75, noise: 0.025 },
-                { r: 90,  x: 165,  y: 58,  z: 10,  sy: 0.68, noise: 0.02 },
-                // Tier 3 upper head
-                { r: 140, x: -110, y: 165, z: 10,  sy: 0.98, noise: 0.03 },
-                { r: 115, x: -25,  y: 145, z: -6,  sy: 0.88, noise: 0.03 },
-                { r: 105, x: 35,   y: 122, z: 10,  sy: 0.82, noise: 0.03 },
-                { r: 115, x: -95,  y: 228, z: -4,  sy: 1.05, noise: 0.03 },
-                // Tier 4 windward crown
-                { r: 95,  x: -90,  y: 282, z: 6,   sy: 1.10, noise: 0.03 },
-                { r: 72,  x: -80,  y: 324, z: -4,  sy: 1.14, noise: 0.03 },
-                { r: 52,  x: -75,  y: 355, z: 4,   sy: 1.15, noise: 0.03 }
+                { r: 130, x: -390, y: 10,  z: 5,    sx: 1.45, sy: 0.44, sz: 1.05, noise: 0.02 },
+                { r: 150, x: -270, y: 28,  z: -15,  sx: 1.40, sy: 0.48, sz: 1.05, noise: 0.02 },
+                { r: 145, x: -225, y: 88,  z: 12,   sx: 1.30, sy: 0.58, sz: 1.00, rotZ: -0.18, noise: 0.025 },
+                { r: 180, x: -95,  y: 60,  z: 0,    sx: 1.30, sy: 0.62, sz: 1.10, noise: 0.02 },
+                { r: 165, x: -65,  y: 145, z: -10,  sx: 1.20, sy: 0.72, sz: 1.05, rotZ: -0.22, noise: 0.025 },
+                { r: 160, x: 30,   y: 180, z: 15,   sx: 1.15, sy: 0.80, sz: 1.05, rotZ: -0.20, noise: 0.03 },
+                { r: 200, x: 145,  y: 75,  z: -5,   sx: 1.25, sy: 0.70, sz: 1.10, noise: 0.025 },
+                { r: 180, x: 160,  y: 220, z: 10,   sx: 1.10, sy: 0.88, sz: 1.05, rotZ: -0.15, noise: 0.03 },
+                { r: 145, x: 195,  y: 300, z: -8,   sx: 1.05, sy: 0.94, sz: 1.00, rotZ: -0.12, noise: 0.03 },
+                { r: 95,  x: 215,  y: 370, z: 4,    sx: 0.98, sy: 0.90, sz: 0.95, noise: 0.03 },
+                { r: 115, x: 285,  y: 125, z: 12,   sx: 1.15, sy: 0.60, sz: 0.95, rotZ: -0.30, noise: 0.025 }
             ];
             addPuffLobes(asymPuffs, lobes, cloudSeedFor(archetype));
         } else if (archetype === 'undulating') {
-            // Archetype D: Undulating Double-Dome Ridge (Twin towering peaks with central saddle, y ~ 340)
+            // Archetype 4: Twin Giants with Deep Canyon Saddle
             const undPuffs = [
-                // Staggered base
-                { r: 165, x: -120, y: 16,  z: 18,  sy: 0.55, noise: 0.02 },
-                { r: 170, x: 120,  y: 18,  z: -18, sy: 0.55, noise: 0.02 },
-                { r: 130, x: 0,    y: 8,   z: 0,   sy: 0.48, noise: 0.02 },
-                { r: 100, x: -250, y: -4,  z: 12,  sy: 0.45, noise: 0.02 },
-                { r: 105, x: 250,  y: -6,  z: -12, sy: 0.45, noise: 0.02 },
-                // Tier 2 twin bodies
-                { r: 145, x: -125, y: 90,  z: 15,  sy: 0.88, noise: 0.025 },
-                { r: 150, x: 125,  y: 92,  z: -15, sy: 0.88, noise: 0.025 },
-                { r: 110, x: 0,    y: 65,  z: -6,  sy: 0.72, noise: 0.025 },
-                { r: 100, x: -220, y: 62,  z: 10,  sy: 0.68, noise: 0.02 },
-                { r: 100, x: 220,  y: 62,  z: -10, sy: 0.68, noise: 0.02 },
-                // Tier 3 ascending domes
-                { r: 128, x: -115, y: 160, z: 10,  sy: 1.00, noise: 0.03 },
-                { r: 134, x: 115,  y: 164, z: -10, sy: 1.00, noise: 0.03 },
-                { r: 98,  x: 0,    y: 120, z: 6,   sy: 0.80, noise: 0.025 },
-                { r: 108, x: -105, y: 220, z: 12,  sy: 1.06, noise: 0.03 },
-                { r: 114, x: 105,  y: 224, z: -12, sy: 1.06, noise: 0.03 },
-                // Tier 4 twin peaks
-                { r: 86,  x: -95,  y: 274, z: 6,   sy: 1.12, noise: 0.03 },
-                { r: 90,  x: 95,   y: 278, z: -6,  sy: 1.12, noise: 0.03 },
-                { r: 60,  x: -90,  y: 316, z: 4,   sy: 1.15, noise: 0.03 },
-                { r: 62,  x: 90,   y: 320, z: -4,  sy: 1.15, noise: 0.03 }
+                { r: 175, x: -205, y: 20,  z: 15,   sx: 1.30, sy: 0.54, sz: 1.05, noise: 0.02 },
+                { r: 185, x: 205,  y: 22,  z: -15,  sx: 1.30, sy: 0.54, sz: 1.05, noise: 0.02 },
+                { r: 145, x: 0,    y: 15,  z: 0,    sx: 1.35, sy: 0.48, sz: 1.00, noise: 0.02 },
+                { r: 130, x: -365, y: -2,  z: -10,  sx: 1.20, sy: 0.46, sz: 1.00, noise: 0.02 },
+                { r: 130, x: 365,  y: -4,  z: 10,   sx: 1.20, sy: 0.46, sz: 1.00, noise: 0.02 },
+                { r: 170, x: -180, y: 118, z: 20,   sx: 1.15, sy: 0.82, sz: 1.05, rotZ: 0.12, noise: 0.025 },
+                { r: 180, x: 190,  y: 124, z: -18,  sx: 1.25, sy: 0.75, sz: 1.05, rotZ: -0.10, noise: 0.025 },
+                { r: 105, x: 5,    y: 80,  z: 5,    sx: 1.25, sy: 0.55, sz: 0.90, noise: 0.02 },
+                { r: 150, x: -165, y: 230, z: 10,   sx: 1.05, sy: 0.90, sz: 1.00, rotZ: 0.10, noise: 0.03 },
+                { r: 115, x: -150, y: 315, z: -5,   sx: 0.98, sy: 0.92, sz: 0.95, rotZ: 0.06, noise: 0.03 },
+                { r: 170, x: 200,  y: 210, z: 0,    sx: 1.30, sy: 0.72, sz: 1.10, rotZ: -0.08, noise: 0.025 },
+                { r: 130, x: 220,  y: 285, z: 8,    sx: 1.20, sy: 0.74, sz: 1.00, noise: 0.03 }
             ];
             addPuffLobes(undPuffs, lobes, cloudSeedFor(archetype));
         } else {
-            // Archetype A / Default Horizon: Wide Terraced Horizon Shelf (~900m wide, y ~ 290)
+            // Archetype 5: Expansive Rolling Horizon Terrace (Shelf)
             const megaPuffs = [
-                // Staggered continuous base
-                { r: 175, x: -95,  y: 18,  z: 12,  sy: 0.55, noise: 0.02 },
-                { r: 180, x: 95,   y: 20,  z: -12, sy: 0.55, noise: 0.02 },
-                { r: 140, x: -225, y: 10,  z: 15,  sy: 0.48, noise: 0.02 },
-                { r: 145, x: 225,  y: 12,  z: -15, sy: 0.48, noise: 0.02 },
-                { r: 95,  x: -330, y: -4,  z: 10,  sy: 0.45, noise: 0.02 },
-                { r: 100, x: 330,  y: -6,  z: -10, sy: 0.45, noise: 0.02 },
-                // Tier 2 terraces
-                { r: 150, x: -60,  y: 90,  z: 15,  sy: 0.85, noise: 0.025 },
-                { r: 152, x: 65,   y: 92,  z: -15, sy: 0.85, noise: 0.025 },
-                { r: 125, x: -165, y: 78,  z: -10, sy: 0.78, noise: 0.025 },
-                { r: 128, x: 170,  y: 80,  z: 10,  sy: 0.78, noise: 0.025 },
-                { r: 90,  x: -275, y: 57,  z: 6,   sy: 0.65, noise: 0.02 },
-                { r: 92,  x: 275,  y: 59,  z: -6,  sy: 0.65, noise: 0.02 },
-                // Tier 3 mid-shelf
-                { r: 130, x: 0,    y: 155, z: 0,   sy: 0.95, noise: 0.03 },
-                { r: 114, x: -90,  y: 150, z: 10,  sy: 0.90, noise: 0.03 },
-                { r: 116, x: 90,   y: 152, z: -10, sy: 0.90, noise: 0.03 },
-                { r: 96,  x: -24,  y: 206, z: -6,  sy: 1.02, noise: 0.03 },
-                { r: 98,  x: 24,   y: 209, z: 6,   sy: 1.02, noise: 0.03 },
-                // Tier 4 shelf crown
-                { r: 75,  x: 0,    y: 252, z: 0,   sy: 1.08, noise: 0.03 },
-                { r: 54,  x: -15,  y: 278, z: 4,   sy: 1.12, noise: 0.03 },
-                { r: 54,  x: 15,   y: 281, z: -4,  sy: 1.12, noise: 0.03 }
+                { r: 190, x: -165, y: 20,  z: 15,   sx: 1.40, sy: 0.50, sz: 1.10, noise: 0.02 },
+                { r: 195, x: 145,  y: 22,  z: -15,  sx: 1.40, sy: 0.50, sz: 1.10, noise: 0.02 },
+                { r: 145, x: -330, y: 8,   z: 10,   sx: 1.25, sy: 0.44, sz: 1.00, noise: 0.02 },
+                { r: 150, x: 320,  y: 6,   z: -10,  sx: 1.25, sy: 0.44, sz: 1.00, noise: 0.02 },
+                { r: 140, x: 0,    y: 16,  z: 0,    sx: 1.35, sy: 0.48, sz: 1.00, noise: 0.02 },
+                { r: 165, x: -130, y: 92,  z: 15,   sx: 1.25, sy: 0.75, sz: 1.05, rotZ: 0.08, noise: 0.025 },
+                { r: 170, x: 125,  y: 96,  z: -15,  sx: 1.25, sy: 0.75, sz: 1.05, rotZ: -0.08, noise: 0.025 },
+                { r: 125, x: -270, y: 65,  z: 5,    sx: 1.20, sy: 0.65, sz: 1.00, noise: 0.025 },
+                { r: 130, x: 265,  y: 68,  z: -5,   sx: 1.20, sy: 0.65, sz: 1.00, noise: 0.025 },
+                { r: 145, x: 0,    y: 110, z: 0,    sx: 1.30, sy: 0.70, sz: 1.00, noise: 0.025 },
+                { r: 135, x: -75,  y: 175, z: 10,   sx: 1.20, sy: 0.78, sz: 1.00, noise: 0.03 },
+                { r: 140, x: 70,   y: 180, z: -10,  sx: 1.20, sy: 0.78, sz: 1.00, noise: 0.03 },
+                { r: 110, x: 0,    y: 220, z: 0,    sx: 1.15, sy: 0.80, sz: 0.95, noise: 0.03 }
             ];
             addPuffLobes(megaPuffs, lobes, cloudSeedFor(archetype));
         }
@@ -3269,7 +3744,7 @@ let isInitializingGui = true;
         return merged;
     }
 
-    function setupToonCloudShader(mat, defaultBlur = 0.45) {
+    function setupToonCloudShader(mat, defaultBlur = 0.45, nearSolid = null, farHaze = null) {
         mat.fog = false; // Distant clouds handle their own atmospheric haze to blend seamlessly with horizon!
         mat.onBeforeCompile = (shader) => {
             shader.uniforms.uSunDir = { value: new THREE.Vector3(0.4, 0.8, 0.3).normalize() };
@@ -3280,14 +3755,33 @@ let isInitializingGui = true;
             shader.uniforms.uCloudTint = { value: new THREE.Color(0xffffff) };
             shader.uniforms.uCloudOpacity = { value: mat.opacity !== undefined ? mat.opacity : 0.98 };
             shader.uniforms.uBottomBlur = { value: defaultBlur };
-            shader.uniforms.uNearSolid = { value: params.cloudsNearSolid };   // inside this distance clouds are solid fluff
-            shader.uniforms.uFarHaze = { value: params.cloudsFarHaze };       // past this they melt into horizon haze
+            shader.uniforms.uNearSolid = { value: nearSolid !== null ? nearSolid : (params.cloudsNearSolid !== undefined ? params.cloudsNearSolid : 2000) };   // inside this distance clouds are solid fluff
+            shader.uniforms.uFarHaze = { value: farHaze !== null ? farHaze : (params.cloudsFarHaze !== undefined ? params.cloudsFarHaze : 6000) };       // past this they melt into horizon haze
+            shader.uniforms.uTime = { value: 0.0 };
+            shader.uniforms.uBillowSpeed = { value: params.cloudsBillowSpeed || 0.35 };
+            shader.uniforms.uBillowAmount = { value: params.cloudsBillowAmount || 1.0 };
 
             if (!window.cloudShaderUniformsList) window.cloudShaderUniformsList = [];
             window.cloudShaderUniformsList.push(shader.uniforms);
             mat.userData.shader = shader;
 
-            shader.vertexShader = 'attribute float aLocalY;\nvarying float vLocalY;\nvarying vec3 vWorldNormal;\nvarying vec3 vWorldPos;\n' + shader.vertexShader;
+            shader.vertexShader = 'uniform float uTime;\nuniform float uBillowSpeed;\nuniform float uBillowAmount;\nattribute float aLocalY;\nvarying float vLocalY;\nvarying vec3 vWorldNormal;\nvarying vec3 vWorldPos;\n' + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                [
+                    '#include <begin_vertex>',
+                    'if (uBillowAmount > 0.001) {',
+                    '    float bTime = uTime * uBillowSpeed;',
+                    '    float b1 = sin(position.x * 0.012 + bTime) * cos(position.z * 0.012 + bTime * 0.73);',
+                    '    float b2 = sin(position.y * 0.022 - bTime * 0.48 + position.x * 0.018);',
+                    '    float b3 = cos(position.z * 0.028 + position.y * 0.015 + bTime * 0.25);',
+                    '    float bSum = (b1 * 0.52 + b2 * 0.34 + b3 * 0.14);',
+                    '    float heightScale = smoothstep(0.08, 0.90, aLocalY);',
+                    '    float bDisp = bSum * (3.5 + aLocalY * 5.5) * heightScale * uBillowAmount;',
+                    '    transformed += normal * bDisp;',
+                    '}'
+                ].join('\n')
+            );
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <worldpos_vertex>',
                 [
@@ -3332,22 +3826,24 @@ let isInitializingGui = true;
                     'col = mix(hazed, col, nearness);',
                     'col *= uCloudTint;',
 
-                    // Organic Bottom Feathering & Blur (Dissolves softly into the sky/horizon with ZERO harsh cutoffs!)
-                    'float bottomWave = sin(vWorldPos.x * 0.0016 + vWorldPos.z * 0.0013) * 0.10',
-                    '                 + sin(vWorldPos.x * 0.0051 - vWorldPos.z * 0.0044) * 0.055',
-                    '                 + sin(vWorldPos.x * 0.0123 + vWorldPos.z * 0.0109) * 0.025;',
-                    'float fadeProgress = clamp((vLocalY + bottomWave) / max(uBottomBlur, 0.05), 0.0, 1.0);',
-                    'float bottomDissolve = smoothstep(0.0, 1.0, fadeProgress);',
+                    // Organic Bottom Feathering & Horizon Wash (Soft blend into horizon with ZERO see-through lines!)
+                    'float blurHeight = max(uBottomBlur, 0.02);',
+                    'float bottomWave = sin(vWorldPos.x * 0.0016 + vWorldPos.z * 0.0013) * 0.06',
+                    '                 + sin(vWorldPos.x * 0.0051 - vWorldPos.z * 0.0044) * 0.03;',
+                    'float baseHaze = smoothstep(0.0, blurHeight, vLocalY + bottomWave);',
+                    'col = mix(uHorizonColor, col, baseHaze);',
 
-                    'float nearDissolve = mix(bottomDissolve, 1.0, nearness * 0.88);',
-                    'float alpha = mix(uCloudOpacity, 1.0, nearness) * nearDissolve;',
-                    'if (alpha < 0.003) discard;',
+                    'col *= uCloudTint;',
 
                     'outgoingLight = col;',
                     '#ifdef OPAQUE',
                     'diffuseColor.a = 1.0;',
-                    '#endif',
-                    'gl_FragColor = vec4(outgoingLight, alpha);'
+                    'gl_FragColor = vec4(outgoingLight, 1.0);',
+                    '#else',
+                    'float finalAlpha = clamp(uCloudOpacity, 0.0, 1.0);',
+                    'if (finalAlpha < 0.01) discard;',
+                    'gl_FragColor = vec4(outgoingLight, finalAlpha);',
+                    '#endif'
                 ].join('\n')
             );
         };
@@ -3355,12 +3851,19 @@ let isInitializingGui = true;
 
     // Super High Cumulonimbus Clouds & Distant Mega Painted Clouds
     const HIGH_CLOUD_COUNT = LOW_GFX ? 0 : 48;
-    const BASE_HIGH_CLOUD_COUNT = LOW_GFX ? 0 : 28;
-    const highCloudGeo = buildProceduralCloud('tower');
+    const BASE_HIGH_CLOUD_COUNT = LOW_GFX ? 0 : 14;
+    const towerGeos = [
+        buildProceduralCloud('tower_sovereign'),
+        buildProceduralCloud('tower_twin'),
+        buildProceduralCloud('tower_anvil'),
+        buildProceduralCloud('tower_spire')
+    ];
+    const TOWER_VARIANTS = towerGeos.length;
+    const HIGH_PER_VARIANT = Math.ceil(HIGH_CLOUD_COUNT / TOWER_VARIANTS);
 
     const highCloudMat = new THREE.MeshToonMaterial({
         color: 0xffffff,
-        transparent: true,
+        transparent: false,
         opacity: params.cloudsHighOpacity,
         depthWrite: true,
         depthTest: true,
@@ -3368,10 +3871,19 @@ let isInitializingGui = true;
     });
     setupToonCloudShader(highCloudMat, params.cloudsHighBottomBlur);
 
-    const instHighClouds = new THREE.InstancedMesh(highCloudGeo, highCloudMat, HIGH_CLOUD_COUNT);
-    instHighClouds.count = BASE_HIGH_CLOUD_COUNT;
-    instHighClouds.frustumCulled = false;
+    const highMeshes = [];
+    const instHighClouds = new THREE.Group();
+    instHighClouds.name = 'DistantCumulusTowersGroup';
+    instHighClouds.visible = params.cloudsHigh;
     scene.add(instHighClouds);
+
+    towerGeos.forEach((geo, idx) => {
+        const m = new THREE.InstancedMesh(geo, highCloudMat, HIGH_PER_VARIANT);
+        m.frustumCulled = false;
+        m.name = `HighCloudVariant_${idx}`;
+        highMeshes.push(m);
+        instHighClouds.add(m);
+    });
 
     const WISPY_CLOUD_COUNT = 0;
     const instWispyClouds = new THREE.InstancedMesh(geoCloud, matWispyCloud, WISPY_CLOUD_COUNT);
@@ -3380,10 +3892,10 @@ let isInitializingGui = true;
 
     // Far-Distance Mega Painted Clouds (Horizon Cloud Banks)
     const MEGA_CLOUD_COUNT = LOW_GFX ? 0 : 48;
-    const BASE_MEGA_CLOUD_COUNT = LOW_GFX ? 0 : 28;
+    const BASE_MEGA_CLOUD_COUNT = LOW_GFX ? 0 : 14;
     const megaCloudMat = new THREE.MeshToonMaterial({
         color: 0xffffff,
-        transparent: true,
+        transparent: false,
         opacity: params.cloudsGiantOpacity,
         depthWrite: true,
         depthTest: true,
@@ -3416,6 +3928,74 @@ let isInitializingGui = true;
         instMegaClouds.add(m);
     });
 
+    // Low Horizon Towers (Towering cumulus at horizon waterline level)
+    const LOW_TOWER_CLOUD_COUNT = LOW_GFX ? 0 : 48;
+    const BASE_LOW_TOWER_CLOUD_COUNT = LOW_GFX ? 0 : 12;
+    const LOW_TOWER_PER_VARIANT = Math.ceil(LOW_TOWER_CLOUD_COUNT / TOWER_VARIANTS);
+    const lowTowerCloudMat = new THREE.MeshToonMaterial({
+        color: 0xffffff,
+        transparent: false,
+        opacity: params.cloudsLowTowerOpacity !== undefined ? params.cloudsLowTowerOpacity : 1.0,
+        depthWrite: true,
+        depthTest: true,
+        side: THREE.FrontSide
+    });
+    setupToonCloudShader(lowTowerCloudMat, params.cloudsLowTowerBottomBlur);
+
+    const lowTowerMeshes = [];
+    const instLowTowerClouds = new THREE.Group();
+    instLowTowerClouds.name = 'LowHorizonTowersGroup';
+    instLowTowerClouds.visible = params.cloudsLowTower;
+    scene.add(instLowTowerClouds);
+
+    towerGeos.forEach((geo, idx) => {
+        const m = new THREE.InstancedMesh(geo, lowTowerCloudMat, LOW_TOWER_PER_VARIANT);
+        m.frustumCulled = false;
+        m.name = `LowTowerCloudVariant_${idx}`;
+        lowTowerMeshes.push(m);
+        instLowTowerClouds.add(m);
+    });
+
+    function setupTowerGroupAdapter(grp, meshes, totalCount, variants, paramCountKey) {
+        grp.maxCount = totalCount;
+        grp.getMatrixAt = function(i, m) {
+            const vIdx = i % variants;
+            const sIdx = Math.floor(i / variants);
+            if (meshes[vIdx]) meshes[vIdx].getMatrixAt(sIdx, m);
+        };
+        grp.setMatrixAt = function(i, m) {
+            const vIdx = i % variants;
+            const sIdx = Math.floor(i / variants);
+            if (meshes[vIdx]) meshes[vIdx].setMatrixAt(sIdx, m);
+        };
+        grp.setColorAt = function(i, c) {
+            const vIdx = i % variants;
+            const sIdx = Math.floor(i / variants);
+            if (meshes[vIdx]) meshes[vIdx].setColorAt(sIdx, c);
+        };
+        grp.instanceMatrix = {
+            get count() { return totalCount; },
+            set needsUpdate(v) { meshes.forEach(m => { if (m.instanceMatrix) m.instanceMatrix.needsUpdate = v; }); },
+            get needsUpdate() { return true; }
+        };
+        grp.instanceColor = {
+            set needsUpdate(v) { meshes.forEach(m => { if (m.instanceColor) m.instanceColor.needsUpdate = v; }); },
+            get needsUpdate() { return true; }
+        };
+        Object.defineProperty(grp, 'count', {
+            get() { return params[paramCountKey] !== undefined ? params[paramCountKey] : (LOW_GFX ? 0 : 14); },
+            set(v) { setCloudCount(grp, v); }
+        });
+    }
+    setupTowerGroupAdapter(instHighClouds, highMeshes, HIGH_CLOUD_COUNT, TOWER_VARIANTS, 'cloudsHighCount');
+    setupTowerGroupAdapter(instLowTowerClouds, lowTowerMeshes, LOW_TOWER_CLOUD_COUNT, TOWER_VARIANTS, 'cloudsLowTowerCount');
+
+    // Low Horizon Banks (Deleted per user request)
+    const lowBankCloudMat = null;
+    const lowBankMeshes = [];
+    const instLowBankClouds = new THREE.Group();
+    instLowBankClouds.visible = false;
+
     // Altitude offsets (in meters) for gentle horizon immersion (-12m to +5m around horizon waterline)
     const cloudAltitudeOffsets = [
         -5, 0, -10, 5, -8, 0, -12, 4,
@@ -3429,17 +4009,70 @@ let isInitializingGui = true;
         -8, 4, -12, 0, -6, 5, -10, 0,
         -7, 3, -11, 2
     ];
+    const lowTowerAltitudeOffsets = [
+        -4, 2, -6, 0, -3, 3, -5, 0,
+        -4, 2, -6, 0, -3, 3, -5, 0,
+        -4, 2, -6, 0, -3, 3, -5, 0,
+        -4, 2, -5, 1
+    ];
     const lowAltitudeOffsets = new Float32Array(CLOUD_COUNT);
     for (let i = 0; i < CLOUD_COUNT; i++) {
-        lowAltitudeOffsets[i] = Math.random() * 100;
+        // Vertical dispersion strictly in 30m - 90m band (offset 0 to 45m from base 45m)
+        lowAltitudeOffsets[i] = (i / CLOUD_COUNT) * 45.0 + (Math.random() - 0.5) * 8.0;
+        if (lowAltitudeOffsets[i] < 0) lowAltitudeOffsets[i] = 0;
+        if (lowAltitudeOffsets[i] > 45) lowAltitudeOffsets[i] = 45;
     }
 
     // Base scale tracking for instances to prevent decomposition drift and matrix flips
     const cloudBaseScale = new Float32Array(CLOUD_COUNT * 3);
     const highCloudBaseScale = new Float32Array(HIGH_CLOUD_COUNT * 3);
+    const lowTowerCloudBaseScale = new Float32Array(LOW_TOWER_CLOUD_COUNT * 3);
     const megaCloudBaseScale = [];
+    const lowBankCloudBaseScale = [];
     for (let v = 0; v < MEGA_VARIANTS; v++) {
         megaCloudBaseScale.push(new Float32Array(MEGA_PER_VARIANT * 3));
+        lowBankCloudBaseScale.push(new Float32Array(MEGA_PER_VARIANT * 3));
+    }
+
+    // -------------------------------------------------------------
+    // 6. Distant High Clouds (Non-Billboard 3D Procedural Meshes)
+    // -------------------------------------------------------------
+    const cirroGeos = [
+        buildProceduralCloud('cirro_shelf'),
+        buildProceduralCloud('cirro_cluster'),
+        buildProceduralCloud('shelf')
+    ];
+    const CIRRO_VARIANTS = cirroGeos.length;
+    const CIRRO_CLOUD_COUNT = 0; // Disabled — dark disc artifacts at night
+    const CIRRO_PER_VARIANT = Math.ceil(CIRRO_CLOUD_COUNT / CIRRO_VARIANTS);
+
+    const cirroCloudMat = new THREE.MeshToonMaterial({
+        color: new THREE.Color(params.cloudsBillboardColor || 0xffffff),
+        transparent: false,
+        opacity: params.cloudsBillboardOpacity !== undefined ? params.cloudsBillboardOpacity : 1.0,
+        depthWrite: true,
+        depthTest: true,
+        side: THREE.FrontSide
+    });
+    setupToonCloudShader(cirroCloudMat, 0.35, 3000, 9000);
+
+    const cirroMeshes = [];
+    const instBillboardClouds = new THREE.Group();
+    instBillboardClouds.name = 'DistantHighCloudsGroup';
+    instBillboardClouds.visible = params.cloudsBillboard !== false;
+    scene.add(instBillboardClouds);
+
+    cirroGeos.forEach((geo, idx) => {
+        const m = new THREE.InstancedMesh(geo, cirroCloudMat, CIRRO_PER_VARIANT);
+        m.frustumCulled = false;
+        m.name = `CirroCloudVariant_${idx}`;
+        cirroMeshes.push(m);
+        instBillboardClouds.add(m);
+    });
+
+    const cirroBaseScale = [];
+    for (let v = 0; v < CIRRO_VARIANTS; v++) {
+        cirroBaseScale.push(new Float32Array(CIRRO_PER_VARIANT * 3));
     }
 
     function setCloudSize(target, v) {
@@ -3465,9 +4098,45 @@ let isInitializingGui = true;
                 instHighClouds.setMatrixAt(i, m);
             }
             instHighClouds.instanceMatrix.needsUpdate = true;
-        } else if (target === instMegaClouds || target.isGroup) {
+        } else if (target === instLowTowerClouds) {
+            const count = instLowTowerClouds.instanceMatrix ? instLowTowerClouds.instanceMatrix.count : instLowTowerClouds.count;
+            for (let i = 0; i < count; i++) {
+                instLowTowerClouds.getMatrixAt(i, m);
+                m.decompose(p, q, sc);
+                sc.set(lowTowerCloudBaseScale[i * 3], lowTowerCloudBaseScale[i * 3 + 1], lowTowerCloudBaseScale[i * 3 + 2]).multiplyScalar(v);
+                m.compose(p, q, sc);
+                instLowTowerClouds.setMatrixAt(i, m);
+            }
+            instLowTowerClouds.instanceMatrix.needsUpdate = true;
+        } else if (target === instMegaClouds) {
             megaMeshes.forEach((mesh, vIdx) => {
                 const arr = megaCloudBaseScale[vIdx];
+                const count = mesh.instanceMatrix ? mesh.instanceMatrix.count : mesh.count;
+                for (let i = 0; i < count; i++) {
+                    mesh.getMatrixAt(i, m);
+                    m.decompose(p, q, sc);
+                    sc.set(arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]).multiplyScalar(v);
+                    m.compose(p, q, sc);
+                    mesh.setMatrixAt(i, m);
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+            });
+        } else if (target === instBillboardClouds) {
+            cirroMeshes.forEach((mesh, vIdx) => {
+                const arr = cirroBaseScale[vIdx];
+                const count = mesh.instanceMatrix ? mesh.instanceMatrix.count : mesh.count;
+                for (let i = 0; i < count; i++) {
+                    mesh.getMatrixAt(i, m);
+                    m.decompose(p, q, sc);
+                    sc.set(arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]).multiplyScalar(v);
+                    m.compose(p, q, sc);
+                    mesh.setMatrixAt(i, m);
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+            });
+        } else if (target === instLowBankClouds || target.isGroup) {
+            lowBankMeshes.forEach((mesh, vIdx) => {
+                const arr = lowBankCloudBaseScale[vIdx];
                 const count = mesh.instanceMatrix ? mesh.instanceMatrix.count : mesh.count;
                 for (let i = 0; i < count; i++) {
                     mesh.getMatrixAt(i, m);
@@ -3500,24 +4169,48 @@ let isInitializingGui = true;
         }
     }
 
+    function setMaterialOpacity(mat, v) {
+        if (!mat) return;
+        mat.opacity = v;
+        const shouldBeTransparent = v < 0.98;
+        if (mat.transparent !== shouldBeTransparent) {
+            mat.transparent = shouldBeTransparent;
+            mat.depthWrite = true;
+            mat.needsUpdate = true;
+        }
+        if (mat.userData && mat.userData.shader && mat.userData.shader.uniforms.uCloudOpacity) {
+            mat.userData.shader.uniforms.uCloudOpacity.value = v;
+        }
+    }
+
     // Initialize cloud instances distributed in an authentic 360-degree horizon panorama
     const dummyInit = new THREE.Object3D();
     for (let i = 0; i < CLOUD_COUNT; i++) {
-        dummyInit.position.set(0, -9999, 0);
-        dummyInit.scale.set(0, 0, 0);
-        dummyInit.updateMatrix();
-        instClouds.setMatrixAt(i, dummyInit.matrix);
+        const ang = i * 2.399963;
+        const rNorm = Math.sqrt((i + 0.5) / CLOUD_COUNT);
+        const r = 520 + rNorm * 1430;
+        const initX = spawnX + Math.sin(ang) * r;
+        const initZ = spawnZ + Math.cos(ang) * r;
+
+        const baseAlt = (params.cloudsLowAltitude !== undefined) ? params.cloudsLowAltitude : 130;
+        const altOffset = lowAltitudeOffsets[i] || 0;
+        dummyInit.position.set(initX, baseAlt + altOffset, initZ);
+
+        dummyInit.rotation.set(0, Math.random() * Math.PI * 2, 0);
         const s = 1.3 + Math.random() * 2.2;
         cloudBaseScale[i * 3 + 0] = s * (0.8 + Math.random() * 0.8);
         cloudBaseScale[i * 3 + 1] = s * (0.5 + Math.random() * 0.6);
         cloudBaseScale[i * 3 + 2] = s * (0.8 + Math.random() * 0.8);
+        dummyInit.scale.set(cloudBaseScale[i * 3], cloudBaseScale[i * 3 + 1], cloudBaseScale[i * 3 + 2]).multiplyScalar(params.cloudsLowSize);
+        dummyInit.updateMatrix();
+        instClouds.setMatrixAt(i, dummyInit.matrix);
     }
     for (let i = 0; i < HIGH_CLOUD_COUNT; i++) {
         // Golden angle distribution ensures any count (4, 6, 8, 12, 24) is evenly spaced 360 deg around horizon
         const ang = (i * 2.399963) + (Math.random() - 0.5) * 0.15;
-        const r = (params.cloudsHighDistance || 3600) + (i % 3) * 200;
-        const altOffset = highAltitudeOffsets[i] || 0;
-        dummyInit.position.set(Math.cos(ang) * r, params.cloudsHighAltitude + altOffset, Math.sin(ang) * r);
+        const r = (params.cloudsHighDistance || 2600) + (i % 3) * 200;
+        const altOffset = highAltitudeOffsets[i % highAltitudeOffsets.length] || 0;
+        dummyInit.position.set(spawnX + Math.cos(ang) * r, params.cloudsHighAltitude + altOffset, spawnZ + Math.sin(ang) * r);
         const tangentAng = ang + Math.PI * 0.5 + (Math.random() - 0.5) * 0.4;
         dummyInit.rotation.set(0, tangentAng + (i % 2 === 0 ? 0 : Math.PI), 0);
         const s = 0.95 + (i % 4) * 0.1;
@@ -3537,26 +4230,75 @@ let isInitializingGui = true;
     for (let i = 0; i < MEGA_CLOUD_COUNT; i++) {
         const variantIdx = i % MEGA_VARIANTS;
         const slotInVariant = Math.floor(i / MEGA_VARIANTS);
-        // Staggered golden angle offset from towers
-        const ang = (i * 2.399963 + 1.2) + (Math.random() - 0.5) * 0.15;
-        const baseDist = params.cloudsGiantDistance || 4200;
-        const depthLayer = (i % 2 === 0) ? (baseDist - 300) : (baseDist + 300);
-        const altOffset = cloudAltitudeOffsets[i] || 0;
-        dummyInit.position.set(Math.cos(ang) * depthLayer, params.cloudsGiantAltitude + altOffset, Math.sin(ang) * depthLayer);
-        const tangentAng = ang + Math.PI * 0.5 + (Math.random() - 0.5) * 0.3;
+        const ang = (i * 2.399963 + 1.2) + (Math.random() - 0.5) * 0.20;
+        const tierDist = (params.cloudsGiantDistance || 6000) + ((i % 3) - 1) * 350;
+        const altOffset = cloudAltitudeOffsets[i % cloudAltitudeOffsets.length] || 0;
+        dummyInit.position.set(Math.cos(ang) * tierDist, params.cloudsGiantAltitude + altOffset, Math.sin(ang) * tierDist);
+        const tangentAng = ang + Math.PI * 0.5 + (Math.random() - 0.5) * 0.5;
         dummyInit.rotation.set(0, tangentAng + (i % 2 === 0 ? 0 : Math.PI), 0);
-        const s = 0.95 + (i % 3) * 0.1;
-        megaCloudBaseScale[variantIdx][slotInVariant * 3 + 0] = s * 1.15;
-        megaCloudBaseScale[variantIdx][slotInVariant * 3 + 1] = s;
-        megaCloudBaseScale[variantIdx][slotInVariant * 3 + 2] = s;
-        dummyInit.scale.set(s * 1.15, s, s).multiplyScalar(params.cloudsGiantSize);
+        const s = 0.95 + (i % 3) * 0.12;
+        const sx = s * 1.15 * (0.88 + (i % 4) * 0.09);
+        const sy = s * (0.90 + ((i + 1) % 4) * 0.08);
+        const sz = s * (0.92 + ((i + 2) % 3) * 0.08);
+        megaCloudBaseScale[variantIdx][slotInVariant * 3 + 0] = sx;
+        megaCloudBaseScale[variantIdx][slotInVariant * 3 + 1] = sy;
+        megaCloudBaseScale[variantIdx][slotInVariant * 3 + 2] = sz;
+        dummyInit.scale.set(sx, sy, sz).multiplyScalar(params.cloudsGiantSize);
         dummyInit.updateMatrix();
         megaMeshes[variantIdx].setMatrixAt(slotInVariant, dummyInit.matrix);
     }
     instClouds.instanceMatrix.needsUpdate = true;
     instHighClouds.instanceMatrix.needsUpdate = true;
     instWispyClouds.instanceMatrix.needsUpdate = true;
+    instMegaClouds.position.set(spawnX, 0, spawnZ);
     megaMeshes.forEach(m => { m.instanceMatrix.needsUpdate = true; });
+
+    for (let i = 0; i < LOW_TOWER_CLOUD_COUNT; i++) {
+        // Full 360-degree golden angle distribution
+        const ang = (i * 2.399963 + 0.8) + (Math.random() - 0.5) * 0.25;
+        const r = (params.cloudsLowTowerDistance || 3200) + (i % 4) * 240;
+        const initAlt = (params.cloudsLowTowerAltitude !== undefined ? params.cloudsLowTowerAltitude : -35) + (lowTowerAltitudeOffsets[i % lowTowerAltitudeOffsets.length] || 0) * 0.5;
+        dummyInit.position.set(spawnX + Math.cos(ang) * r, initAlt, spawnZ + Math.sin(ang) * r);
+        const tangentAng = ang + Math.PI * 0.5 + (Math.random() - 0.5) * 0.8;
+        dummyInit.rotation.set(0, tangentAng + (Math.random() > 0.5 ? 0 : Math.PI), 0);
+        const s = 0.95 + (i % 4) * 0.12;
+        const sx = s * (0.85 + ((i * 7) % 5) * 0.10);
+        const sy = s * (0.88 + ((i * 3) % 4) * 0.12);
+        const sz = s * (0.90 + ((i * 5) % 3) * 0.12);
+        lowTowerCloudBaseScale[i * 3 + 0] = sx;
+        lowTowerCloudBaseScale[i * 3 + 1] = sy;
+        lowTowerCloudBaseScale[i * 3 + 2] = sz;
+        dummyInit.scale.set(sx, sy, sz).multiplyScalar(params.cloudsLowTowerSize);
+        dummyInit.updateMatrix();
+        instLowTowerClouds.setMatrixAt(i, dummyInit.matrix);
+    }
+    instLowTowerClouds.instanceMatrix.needsUpdate = true;
+
+    // Initialize 3D Distant High Clouds (Layer 6)
+    for (let i = 0; i < CIRRO_CLOUD_COUNT; i++) {
+        const variantIdx = i % CIRRO_VARIANTS;
+        const slotInVariant = Math.floor(i / CIRRO_VARIANTS);
+        const ang = (i * 2.399963 + 0.5) + (Math.random() - 0.5) * 0.2;
+        const distMult = 0.88 + (i % 3) * 0.14;
+        const baseDist = (params.cloudsBillboardDistance || 5200) * distMult;
+        const altOffset = (Math.random() - 0.5) * 350;
+        const baseAlt = (params.cloudsBillboardAltitude || 1400) + altOffset;
+        dummyInit.position.set(Math.sin(ang) * baseDist, baseAlt, Math.cos(ang) * baseDist);
+        const tangentAng = ang + Math.PI * 0.5 + (Math.random() - 0.5) * 0.5;
+        dummyInit.rotation.set(0, tangentAng + (i % 2 === 0 ? 0 : Math.PI), 0);
+        const s = 1.0 + (i % 3) * 0.2;
+        const sx = s * (1.3 + (i % 4) * 0.15) * (i % 2 === 0 ? 1 : -1);
+        const sy = s * 0.75;
+        const sz = s * (1.1 + ((i + 1) % 3) * 0.15);
+        cirroBaseScale[variantIdx][slotInVariant * 3 + 0] = sx;
+        cirroBaseScale[variantIdx][slotInVariant * 3 + 1] = sy;
+        cirroBaseScale[variantIdx][slotInVariant * 3 + 2] = sz;
+        dummyInit.scale.set(sx, sy, sz).multiplyScalar(params.cloudsBillboardSize || 1.0);
+        dummyInit.updateMatrix();
+        cirroMeshes[variantIdx].setMatrixAt(slotInVariant, dummyInit.matrix);
+    }
+    instBillboardClouds.position.set(spawnX, 0, spawnZ);
+    cirroMeshes.forEach(m => { m.instanceMatrix.needsUpdate = true; });
 
     // Pure harmonious white cloud color baseline
     const tempCloudColor = new THREE.Color(0xffffff);
@@ -3566,7 +4308,22 @@ let isInitializingGui = true;
     for (let i = 0; i < HIGH_CLOUD_COUNT; i++) {
         instHighClouds.setColorAt(i, tempCloudColor);
     }
+    for (let i = 0; i < LOW_TOWER_CLOUD_COUNT; i++) {
+        instLowTowerClouds.setColorAt(i, tempCloudColor);
+    }
     megaMeshes.forEach(mesh => {
+        for (let i = 0; i < mesh.count; i++) {
+            mesh.setColorAt(i, tempCloudColor);
+        }
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    });
+    lowBankMeshes.forEach(mesh => {
+        for (let i = 0; i < mesh.count; i++) {
+            mesh.setColorAt(i, tempCloudColor);
+        }
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    });
+    cirroMeshes.forEach(mesh => {
         for (let i = 0; i < mesh.count; i++) {
             mesh.setColorAt(i, tempCloudColor);
         }
@@ -3574,11 +4331,607 @@ let isInitializingGui = true;
     });
     if (instClouds.instanceColor) instClouds.instanceColor.needsUpdate = true;
     if (instHighClouds.instanceColor) instHighClouds.instanceColor.needsUpdate = true;
+    if (instLowTowerClouds.instanceColor) instLowTowerClouds.instanceColor.needsUpdate = true;
 
     // Apply initial cloud count limits so horizon starts clean and majestic
     setCloudCount(instHighClouds, params.cloudsHighCount);
     setCloudCount(instMegaClouds, params.cloudsGiantCount);
+    setCloudCount(instLowTowerClouds, params.cloudsLowTowerCount);
+    setCloudCount(instBillboardClouds, params.cloudsBillboardCount);
 
+    // =========================================================================
+    // CLOUD TYPE DEBUG MODE & 3D NAME OVERLAYS
+    // =========================================================================
+    const _cloudDebugM4 = new THREE.Matrix4();
+    const _cloudDebugPos = new THREE.Vector3();
+    const _cloudDebugProj = new THREE.Vector3();
+    const _cloudDebugCamPos = new THREE.Vector3();
+    const _cloudDebugCamDir = new THREE.Vector3();
+    const MEGA_ARCHETYPE_NAMES = ['Shelf', 'Fortress', 'Asymmetric', 'Undulating'];
+
+    function drawDebugRoundRect(c, x, y, w, h, radius) {
+        if (c.roundRect) {
+            c.beginPath();
+            c.roundRect(x, y, w, h, radius);
+            return;
+        }
+        c.beginPath();
+        c.moveTo(x + radius, y);
+        c.lineTo(x + w - radius, y);
+        c.quadraticCurveTo(x + w, y, x + w, y + radius);
+        c.lineTo(x + w, y + h - radius);
+        c.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+        c.lineTo(x + radius, y + h);
+        c.quadraticCurveTo(x, y + h, x, y + h - radius);
+        c.lineTo(x, y + radius);
+        c.quadraticCurveTo(x, y, x + radius, y);
+        c.closePath();
+    }
+
+    function setCloudDebugMode(enabled) {
+        params.showCloudDebug = !!enabled;
+        const cvs = document.getElementById('cloud-debug-canvas');
+        if (cvs) {
+            cvs.style.display = params.showCloudDebug ? 'block' : 'none';
+            if (params.showCloudDebug) {
+                cvs.width = window.innerWidth;
+                cvs.height = window.innerHeight;
+            } else {
+                const ctx = cvs.getContext('2d');
+                if (ctx) ctx.clearRect(0, 0, cvs.width, cvs.height);
+            }
+        }
+        updateCloudDebugTints();
+        if (typeof gui !== 'undefined' && gui && typeof gui.controllersRecursive === 'function') {
+            gui.controllersRecursive().forEach(c => {
+                if (c.property === 'showCloudDebug' || c.property === 'debugCloudTint') c.updateDisplay();
+            });
+        }
+    }
+    window.setCloudDebugMode = setCloudDebugMode;
+
+    function updateCloudDebugTints() {
+        const useTint = params.showCloudDebug && params.debugCloudTint;
+        const l1Color = new THREE.Color(useTint ? '#4ade80' : (params.cloudsLowColor || '#ffffff'));
+        const l2Color = new THREE.Color(useTint ? '#f472b6' : (params.cloudsHighColor || '#ffffff'));
+        const l3Color = new THREE.Color(useTint ? '#facc15' : (params.cloudsLowTowerColor || '#ffffff'));
+        const l4Color = new THREE.Color(useTint ? '#38bdf8' : (params.cloudsGiantColor || '#ffffff'));
+        const l5Color = new THREE.Color(useTint ? '#fb923c' : (params.cloudsLowBankColor || '#ffffff'));
+
+        if (matCloud && matCloud.userData && matCloud.userData.shader && matCloud.userData.shader.uniforms.uCloudTint) {
+            matCloud.userData.shader.uniforms.uCloudTint.value.copy(l1Color);
+        }
+        if (highCloudMat && highCloudMat.userData && highCloudMat.userData.shader && highCloudMat.userData.shader.uniforms.uCloudTint) {
+            highCloudMat.userData.shader.uniforms.uCloudTint.value.copy(l2Color);
+        }
+        if (lowTowerCloudMat && lowTowerCloudMat.userData && lowTowerCloudMat.userData.shader && lowTowerCloudMat.userData.shader.uniforms.uCloudTint) {
+            lowTowerCloudMat.userData.shader.uniforms.uCloudTint.value.copy(l3Color);
+        }
+        if (megaCloudMat && megaCloudMat.userData && megaCloudMat.userData.shader && megaCloudMat.userData.shader.uniforms.uCloudTint) {
+            megaCloudMat.userData.shader.uniforms.uCloudTint.value.copy(l4Color);
+        }
+        if (lowBankCloudMat && lowBankCloudMat.userData && lowBankCloudMat.userData.shader && lowBankCloudMat.userData.shader.uniforms.uCloudTint) {
+            lowBankCloudMat.userData.shader.uniforms.uCloudTint.value.copy(l5Color);
+        }
+    }
+    window.updateCloudDebugTints = updateCloudDebugTints;
+
+    function renderCloudDebugOverlays() {
+        const cvs = document.getElementById('cloud-debug-canvas');
+        if (!cvs) return;
+        const ctx = cvs.getContext('2d');
+        if (!ctx) return;
+
+        if (!params.showCloudDebug) {
+            ctx.clearRect(0, 0, cvs.width, cvs.height);
+            return;
+        }
+
+        const curCam = (params.godMode && godCamera) ? godCamera : camera;
+        if (!curCam) return;
+
+        curCam.getWorldPosition(_cloudDebugCamPos);
+        curCam.getWorldDirection(_cloudDebugCamDir);
+
+        const w = cvs.width;
+        const h = cvs.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const candidates = [];
+
+        // 1. Layer 1: Low Clouds (Nearby)
+        if (instClouds && instClouds.visible) {
+            const count = instClouds.count;
+            for (let i = 0; i < count; i++) {
+                instClouds.getMatrixAt(i, _cloudDebugM4);
+                _cloudDebugPos.setFromMatrixPosition(_cloudDebugM4);
+                if (_cloudDebugPos.y < -4000) continue;
+
+                const cdx = _cloudDebugPos.x - _cloudDebugCamPos.x;
+                const cdy = _cloudDebugPos.y - _cloudDebugCamPos.y;
+                const cdz = _cloudDebugPos.z - _cloudDebugCamPos.z;
+                const dot = cdx * _cloudDebugCamDir.x + cdy * _cloudDebugCamDir.y + cdz * _cloudDebugCamDir.z;
+                if (dot <= 5) continue;
+
+                const dist = Math.hypot(cdx, cdy, cdz);
+                if (dist > 3500) continue;
+
+                candidates.push({
+                    layer: 1,
+                    code: 'L1',
+                    name: `Low Cloud #${i + 1}`,
+                    x: _cloudDebugPos.x,
+                    y: _cloudDebugPos.y,
+                    z: _cloudDebugPos.z,
+                    alt: Math.round(_cloudDebugPos.y),
+                    dist: Math.round(dist),
+                    crownH: 26,
+                    radius: 55,
+                    color: '#4ade80',
+                    badgeBg: 'rgba(15, 23, 42, 0.92)',
+                    border: '#4ade80'
+                });
+            }
+        }
+
+        // 2. Layer 2: Distant Cumulus Towers
+        if (instHighClouds && instHighClouds.visible) {
+            const count = instHighClouds.count;
+            for (let i = 0; i < count; i++) {
+                instHighClouds.getMatrixAt(i, _cloudDebugM4);
+                _cloudDebugPos.setFromMatrixPosition(_cloudDebugM4);
+                if (_cloudDebugPos.y < -4000) continue;
+
+                const cdx = _cloudDebugPos.x - _cloudDebugCamPos.x;
+                const cdy = _cloudDebugPos.y - _cloudDebugCamPos.y;
+                const cdz = _cloudDebugPos.z - _cloudDebugCamPos.z;
+                const dot = cdx * _cloudDebugCamDir.x + cdy * _cloudDebugCamDir.y + cdz * _cloudDebugCamDir.z;
+                if (dot <= 5) continue;
+
+                const dist = Math.hypot(cdx, cdy, cdz);
+                if (dist > 7500) continue;
+
+                candidates.push({
+                    layer: 2,
+                    code: 'L2',
+                    name: `Cumulus Tower #${i + 1}`,
+                    x: _cloudDebugPos.x,
+                    y: _cloudDebugPos.y,
+                    z: _cloudDebugPos.z,
+                    alt: Math.round(_cloudDebugPos.y),
+                    dist: Math.round(dist),
+                    crownH: 140,
+                    radius: 120,
+                    color: '#f472b6',
+                    badgeBg: 'rgba(15, 23, 42, 0.92)',
+                    border: '#f472b6'
+                });
+            }
+        }
+
+        // 3. Layer 3: Low Horizon Towers
+        if (instLowTowerClouds && instLowTowerClouds.visible) {
+            const count = instLowTowerClouds.count;
+            for (let i = 0; i < count; i++) {
+                instLowTowerClouds.getMatrixAt(i, _cloudDebugM4);
+                _cloudDebugPos.setFromMatrixPosition(_cloudDebugM4);
+                if (_cloudDebugPos.y < -4000) continue;
+
+                const cdx = _cloudDebugPos.x - _cloudDebugCamPos.x;
+                const cdy = _cloudDebugPos.y - _cloudDebugCamPos.y;
+                const cdz = _cloudDebugPos.z - _cloudDebugCamPos.z;
+                const dot = cdx * _cloudDebugCamDir.x + cdy * _cloudDebugCamDir.y + cdz * _cloudDebugCamDir.z;
+                if (dot <= 5) continue;
+
+                const dist = Math.hypot(cdx, cdy, cdz);
+                if (dist > 8000) continue;
+
+                candidates.push({
+                    layer: 3,
+                    code: 'L3',
+                    name: `Horizon Tower #${i + 1}`,
+                    x: _cloudDebugPos.x,
+                    y: _cloudDebugPos.y,
+                    z: _cloudDebugPos.z,
+                    alt: Math.round(_cloudDebugPos.y),
+                    dist: Math.round(dist),
+                    crownH: 120,
+                    radius: 100,
+                    color: '#facc15',
+                    badgeBg: 'rgba(15, 23, 42, 0.92)',
+                    border: '#facc15'
+                });
+            }
+        }
+
+        // 4. Layer 4: Distant Horizon Banks
+        if (instMegaClouds && instMegaClouds.visible && typeof megaMeshes !== 'undefined') {
+            instMegaClouds.updateMatrixWorld();
+            const totalMega = params.cloudsGiantCount !== undefined ? params.cloudsGiantCount : 14;
+            for (let i = 0; i < totalMega; i++) {
+                const variantIdx = i % MEGA_VARIANTS;
+                const slotInVariant = Math.floor(i / MEGA_VARIANTS);
+                const mesh = megaMeshes[variantIdx];
+                if (!mesh || !mesh.visible) continue;
+                const arch = MEGA_ARCHETYPE_NAMES[variantIdx] || `Variant ${variantIdx + 1}`;
+
+                mesh.getMatrixAt(slotInVariant, _cloudDebugM4);
+                _cloudDebugPos.setFromMatrixPosition(_cloudDebugM4);
+                _cloudDebugPos.applyMatrix4(instMegaClouds.matrixWorld);
+                if (_cloudDebugPos.y < -4000) continue;
+
+                const cdx = _cloudDebugPos.x - _cloudDebugCamPos.x;
+                const cdy = _cloudDebugPos.y - _cloudDebugCamPos.y;
+                const cdz = _cloudDebugPos.z - _cloudDebugCamPos.z;
+                const dot = cdx * _cloudDebugCamDir.x + cdy * _cloudDebugCamDir.y + cdz * _cloudDebugCamDir.z;
+                if (dot <= 5) continue;
+
+                const dist = Math.hypot(cdx, cdy, cdz);
+                if (dist > 6500) continue;
+
+                candidates.push({
+                    layer: 4,
+                    code: 'L4',
+                    name: `Horizon Bank (${arch})`,
+                    x: _cloudDebugPos.x,
+                    y: _cloudDebugPos.y,
+                    z: _cloudDebugPos.z,
+                    alt: Math.round(_cloudDebugPos.y),
+                    dist: Math.round(dist),
+                    crownH: 260,
+                    radius: 280,
+                    color: '#38bdf8',
+                    badgeBg: 'rgba(15, 23, 42, 0.92)',
+                    border: '#38bdf8'
+                });
+            }
+        }
+
+        // 5. Layer 5: Low Horizon Banks
+        if (instLowBankClouds && instLowBankClouds.visible && typeof lowBankMeshes !== 'undefined') {
+            instLowBankClouds.updateMatrixWorld();
+            const totalLowBank = params.cloudsLowBankCount !== undefined ? params.cloudsLowBankCount : 14;
+            for (let i = 0; i < totalLowBank; i++) {
+                const variantIdx = i % MEGA_VARIANTS;
+                const slotInVariant = Math.floor(i / MEGA_VARIANTS);
+                const mesh = lowBankMeshes[variantIdx];
+                if (!mesh || !mesh.visible) continue;
+                const arch = MEGA_ARCHETYPE_NAMES[variantIdx] || `Variant ${variantIdx + 1}`;
+
+                mesh.getMatrixAt(slotInVariant, _cloudDebugM4);
+                _cloudDebugPos.setFromMatrixPosition(_cloudDebugM4);
+                _cloudDebugPos.applyMatrix4(instLowBankClouds.matrixWorld);
+                if (_cloudDebugPos.y < -4000) continue;
+
+                const cdx = _cloudDebugPos.x - _cloudDebugCamPos.x;
+                const cdy = _cloudDebugPos.y - _cloudDebugCamPos.y;
+                const cdz = _cloudDebugPos.z - _cloudDebugCamPos.z;
+                const dot = cdx * _cloudDebugCamDir.x + cdy * _cloudDebugCamDir.y + cdz * _cloudDebugCamDir.z;
+                if (dot <= 5) continue;
+
+                const dist = Math.hypot(cdx, cdy, cdz);
+                if (dist > 6500) continue;
+
+                candidates.push({
+                    layer: 5,
+                    code: 'L5',
+                    name: `Low Bank (${arch})`,
+                    x: _cloudDebugPos.x,
+                    y: _cloudDebugPos.y,
+                    z: _cloudDebugPos.z,
+                    alt: Math.round(_cloudDebugPos.y),
+                    dist: Math.round(dist),
+                    crownH: 240,
+                    radius: 240,
+                    color: '#fb923c',
+                    badgeBg: 'rgba(15, 23, 42, 0.92)',
+                    border: '#fb923c'
+                });
+            }
+        }
+
+        // 6. Layer 6: Distant High Clouds
+        if (instBillboardClouds && instBillboardClouds.visible && typeof cirroMeshes !== 'undefined') {
+            instBillboardClouds.updateMatrixWorld();
+            const CIRRO_ARCH_NAMES = ['Cirro Shelf', 'Cirro Cluster', 'High Horizon Shelf'];
+            const totalCirro = params.cloudsBillboardCount !== undefined ? params.cloudsBillboardCount : 26;
+            for (let i = 0; i < totalCirro; i++) {
+                const variantIdx = i % CIRRO_VARIANTS;
+                const slotInVariant = Math.floor(i / CIRRO_VARIANTS);
+                const mesh = cirroMeshes[variantIdx];
+                if (!mesh || !mesh.visible) continue;
+                const arch = CIRRO_ARCH_NAMES[variantIdx] || `Variant ${variantIdx + 1}`;
+
+                mesh.getMatrixAt(slotInVariant, _cloudDebugM4);
+                _cloudDebugPos.setFromMatrixPosition(_cloudDebugM4);
+                _cloudDebugPos.applyMatrix4(instBillboardClouds.matrixWorld);
+                if (_cloudDebugPos.y < -4000) continue;
+
+                const cdx = _cloudDebugPos.x - _cloudDebugCamPos.x;
+                const cdy = _cloudDebugPos.y - _cloudDebugCamPos.y;
+                const cdz = _cloudDebugPos.z - _cloudDebugCamPos.z;
+                const dot = cdx * _cloudDebugCamDir.x + cdy * _cloudDebugCamDir.y + cdz * _cloudDebugCamDir.z;
+                if (dot <= 5) continue;
+
+                const dist = Math.hypot(cdx, cdy, cdz);
+                if (dist > 12000) continue;
+
+                candidates.push({
+                    layer: 6,
+                    code: 'L6',
+                    name: `Distant Cloud (${arch})`,
+                    x: _cloudDebugPos.x,
+                    y: _cloudDebugPos.y,
+                    z: _cloudDebugPos.z,
+                    alt: Math.round(_cloudDebugPos.y),
+                    dist: Math.round(dist),
+                    crownH: 180,
+                    radius: 350,
+                    color: '#c084fc',
+                    badgeBg: 'rgba(15, 23, 42, 0.92)',
+                    border: '#c084fc'
+                });
+            }
+        }
+
+        // Project candidates onto screen coordinates
+        const onScreen = [];
+        const fovRad = ((curCam.fov || 60) * Math.PI) / 180;
+        const tanHalfFov = Math.tan(fovRad * 0.5);
+
+        for (let i = 0; i < candidates.length; i++) {
+            const c = candidates[i];
+            if (c.y < -20 && c.dist > 1800) continue;
+
+            _cloudDebugProj.set(c.x, c.y + c.crownH * 0.7, c.z);
+            _cloudDebugProj.project(curCam);
+
+            if (_cloudDebugProj.z >= 1.0 || _cloudDebugProj.z <= -1.0) continue;
+            if (_cloudDebugProj.x < -0.95 || _cloudDebugProj.x > 0.95 || _cloudDebugProj.y < -0.95 || _cloudDebugProj.y > 0.95) continue;
+
+            const sx = (_cloudDebugProj.x * 0.5 + 0.5) * w;
+            const sy = (-_cloudDebugProj.y * 0.5 + 0.5) * h;
+            const centerDist = Math.hypot(_cloudDebugProj.x, _cloudDebugProj.y);
+            const screenRadius = Math.max(16, Math.min(320, (c.radius / (c.dist * tanHalfFov)) * (h * 0.5)));
+
+            onScreen.push({
+                ...c,
+                subtext: `Alt: ${c.alt}m  •  Dist: ${c.dist}m`,
+                centerDist,
+                screenRadius,
+                sx,
+                sy
+            });
+        }
+
+        onScreen.sort((a, b) => a.dist - b.dist);
+
+        const visibleClouds = [];
+        for (let i = 0; i < onScreen.length; i++) {
+            const cand = onScreen[i];
+            let isOccluded = false;
+
+            for (let j = 0; j < visibleClouds.length; j++) {
+                const closer = visibleClouds[j];
+                if (cand.dist > closer.dist * 1.3) {
+                    const dx = cand.sx - closer.sx;
+                    const dy = cand.sy - closer.sy;
+                    const dist2D = Math.hypot(dx, dy);
+                    if (dist2D < closer.screenRadius * 0.75) {
+                        isOccluded = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!isOccluded) {
+                visibleClouds.push(cand);
+            }
+        }
+
+        let centerTarget = null;
+        let minCenterDist = Infinity;
+        for (let i = 0; i < visibleClouds.length; i++) {
+            if (visibleClouds[i].centerDist < minCenterDist) {
+                minCenterDist = visibleClouds[i].centerDist;
+                centerTarget = visibleClouds[i];
+            }
+        }
+        if (centerTarget && centerTarget.centerDist < 0.65) {
+            centerTarget.isCenterTarget = true;
+        }
+
+        const mode = params.cloudDebugTargetMode || 'visible';
+        let toRender = [];
+        if (mode === 'single') {
+            toRender = centerTarget ? [centerTarget] : (visibleClouds.slice(0, 1));
+        } else if (mode === 'nearest3') {
+            toRender = visibleClouds.slice(0, 3);
+        } else {
+            toRender = visibleClouds;
+        }
+
+        const badgeW = 148;
+        const badgeH = 32;
+        for (let i = 0; i < toRender.length; i++) {
+            const item = toRender[i];
+            item.bx = Math.max(12, Math.min(w - badgeW - 12, item.sx - badgeW / 2));
+            item.by = item.sy - 44;
+            if (item.by < 75) item.by = item.sy + 22;
+        }
+
+        for (let pass = 0; pass < 6; pass++) {
+            let collided = false;
+            for (let i = 0; i < toRender.length; i++) {
+                for (let j = 0; j < toRender.length; j++) {
+                    if (i === j) continue;
+                    const a = toRender[i];
+                    const b = toRender[j];
+                    const overlapX = (badgeW + 6) - Math.abs(a.bx - b.bx);
+                    const overlapY = (badgeH + 6) - Math.abs(a.by - b.by);
+                    if (overlapX > 0 && overlapY > 0) {
+                        collided = true;
+                        const shift = overlapY * 0.5 + 2;
+                        if (a.by < b.by) {
+                            a.by = Math.max(75, a.by - shift);
+                            b.by = Math.min(h - badgeH - 40, b.by + shift);
+                        } else {
+                            a.by = Math.min(h - badgeH - 40, a.by + shift);
+                            b.by = Math.max(75, b.by - shift);
+                        }
+                    }
+                }
+            }
+            if (!collided) break;
+        }
+
+        ctx.save();
+        for (let i = 0; i < toRender.length; i++) {
+            const item = toRender[i];
+            const isAim = !!item.isCenterTarget;
+
+            ctx.save();
+            ctx.strokeStyle = item.color;
+            if (isAim) {
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(item.sx, item.sy, 13, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(item.sx - 18, item.sy); ctx.lineTo(item.sx - 13, item.sy);
+                ctx.moveTo(item.sx + 13, item.sy); ctx.lineTo(item.sx + 18, item.sy);
+                ctx.moveTo(item.sx, item.sy - 18); ctx.lineTo(item.sx, item.sy - 13);
+                ctx.moveTo(item.sx, item.sy + 13); ctx.lineTo(item.sx, item.sy + 18);
+                ctx.stroke();
+
+                ctx.fillStyle = item.color;
+                ctx.beginPath();
+                ctx.arc(item.sx, item.sy, 3.5, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(item.sx, item.sy, 6, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.fillStyle = item.color;
+                ctx.beginPath();
+                ctx.arc(item.sx, item.sy, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            ctx.strokeStyle = item.border;
+            ctx.lineWidth = isAim ? 1.8 : 1.2;
+            ctx.setLineDash([3, 3]);
+            ctx.globalAlpha = isAim ? 0.85 : 0.60;
+            ctx.beginPath();
+            ctx.moveTo(item.sx, item.by > item.sy ? item.sy + 6 : item.sy - 6);
+            ctx.lineTo(item.bx + badgeW / 2, item.by > item.sy ? item.by : item.by + badgeH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.globalAlpha = 0.94;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+            ctx.strokeStyle = item.border;
+            ctx.lineWidth = isAim ? 2.5 : 1.5;
+            if (isAim) {
+                ctx.shadowColor = item.color;
+                ctx.shadowBlur = 8;
+            } else {
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+            }
+            drawDebugRoundRect(ctx, item.bx, item.by, badgeW, badgeH, 6);
+            ctx.fill();
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = item.color;
+            ctx.beginPath();
+            ctx.arc(item.bx + 12, item.by + 11, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(item.name, item.bx + 21, item.by + 14);
+
+            ctx.font = '10px monospace, sans-serif';
+            ctx.fillStyle = item.color;
+            ctx.fillText(item.subtext, item.bx + 12, item.by + 26);
+        }
+
+        const legW = 250;
+        const legH = 158;
+        const lx = 20;
+        const ly = 75;
+
+        ctx.globalAlpha = 0.92;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 1;
+        drawDebugRoundRect(ctx, lx, ly, legW, legH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.globalAlpha = 1.0;
+        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 3;
+        ctx.fillText('CLOUD TYPE INSPECTOR', lx + 12, ly + 20);
+
+        ctx.font = 'bold 10px system-ui, sans-serif';
+        if (centerTarget && centerTarget.isCenterTarget) {
+            ctx.fillStyle = centerTarget.color;
+            ctx.fillText(`Aim: ${centerTarget.name} (${toRender.length} in view)`, lx + 12, ly + 36);
+        } else {
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText(`Visible Clouds in View: ${toRender.length}`, lx + 12, ly + 36);
+        }
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.beginPath();
+        ctx.moveTo(lx + 10, ly + 43);
+        ctx.lineTo(lx + legW - 10, ly + 43);
+        ctx.stroke();
+
+        ctx.font = '10px system-ui, -apple-system, sans-serif';
+        const l1Count = instClouds && instClouds.visible ? instClouds.count : 0;
+        const l2Count = instHighClouds && instHighClouds.visible ? instHighClouds.count : 0;
+        const l3Count = instLowTowerClouds && instLowTowerClouds.visible ? instLowTowerClouds.count : 0;
+        const l4Count = instMegaClouds && instMegaClouds.visible ? (params.cloudsGiantCount || 14) : 0;
+        const l5Count = instLowBankClouds && instLowBankClouds.visible ? (params.cloudsLowBankCount || 14) : 0;
+
+        const legendItems = [
+            { color: '#4ade80', text: `Layer 1: Low Clouds (Nearby) [${l1Count}]` },
+            { color: '#f472b6', text: `Layer 2: Distant Towers [${l2Count}]` },
+            { color: '#facc15', text: `Layer 3: Low Horizon Towers [${l3Count}]` },
+            { color: '#38bdf8', text: `Layer 4: Distant Horizon Banks [${l4Count}]` },
+            { color: '#fb923c', text: `Layer 5: Low Horizon Banks [${l5Count}]` }
+        ];
+
+        legendItems.forEach((it, idx) => {
+            const rowY = ly + 58 + idx * 16;
+            ctx.fillStyle = it.color;
+            ctx.beginPath();
+            ctx.arc(lx + 16, rowY - 3, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillText(it.text, lx + 26, rowY);
+        });
+
+        ctx.font = 'italic 9px system-ui, sans-serif';
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText("Mode: Every Visible Cloud  •  Press 'U' to toggle", lx + 12, ly + legH - 9);
+        ctx.restore();
+    }
+    window.renderCloudDebugOverlays = renderCloudDebugOverlays;
+    
     instFlowers.receiveShadow = false;
     instFlowers.castShadow = false;
     scene.add(instFlowers);
@@ -3691,6 +5044,108 @@ let isInitializingGui = true;
        trailsData[i*4+1] = (Math.random() - 0.5) * 60;
        trailsData[i*4+2] = (Math.random() - 0.5) * 100;
        trailsData[i*4+3] = Math.random();
+    }
+
+    // ==========================================
+    // CLOUD EXIT CONDENSATION MIST PARTICLES
+    // ==========================================
+    const MIST_EXIT_DURATION = 4.0;
+    const MIST_COUNT = LOW_GFX ? 80 : 200;
+    const mistGeo = new THREE.PlaneGeometry(1, 1);
+
+    // Procedural 128x128 cloud puff — multiple offset radial blobs for organic lumpy shape
+    const mistCanvas = document.createElement('canvas');
+    mistCanvas.width = 128; mistCanvas.height = 128;
+    const mCtx = mistCanvas.getContext('2d');
+    const blobOffsets = [
+        [64, 64, 52], [42, 50, 38], [82, 55, 36], [58, 78, 32],
+        [72, 40, 30], [48, 60, 34], [76, 72, 28]
+    ];
+    mCtx.globalCompositeOperation = 'lighter';
+    for (const [bx, by, br] of blobOffsets) {
+        const mGrad = mCtx.createRadialGradient(bx, by, 0, bx, by, br);
+        mGrad.addColorStop(0, 'rgba(255,255,255,0.22)');
+        mGrad.addColorStop(0.4, 'rgba(255,255,255,0.12)');
+        mGrad.addColorStop(0.75, 'rgba(255,255,255,0.04)');
+        mGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        mCtx.fillStyle = mGrad;
+        mCtx.fillRect(0, 0, 128, 128);
+    }
+    const mistTexture = new THREE.CanvasTexture(mistCanvas);
+
+    const mistMat = new THREE.MeshBasicMaterial({
+        map: mistTexture,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+        depthTest: true,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide
+    });
+    const instMist = new THREE.InstancedMesh(mistGeo, mistMat, MIST_COUNT);
+    instMist.frustumCulled = false;
+    scene.add(instMist);
+
+    // Initialize instanceColor buffer (all black = invisible)
+    const _mistColor = new THREE.Color();
+    for (let ci = 0; ci < MIST_COUNT; ci++) {
+        _mistColor.setRGB(0, 0, 0);
+        instMist.setColorAt(ci, _mistColor);
+    }
+    instMist.instanceColor.needsUpdate = true;
+
+    const mistPool = [];
+    for (let i = 0; i < MIST_COUNT; i++) {
+        mistPool.push({
+            pos: new THREE.Vector3(0, -9999, 0),
+            vel: new THREE.Vector3(0, 0, 0),
+            life: 0.0,
+            maxLife: 3.0,
+            scale: 0.1,
+            rot: 0
+        });
+    }
+    let mistSpawnIndex = 0;
+    let cloudImmersion = 0.0;
+    let cloudExitMistTimer = 0.0;
+    let wasInsideCloud = false;
+    const _scratchMistWingL = new THREE.Vector3();
+    const _scratchMistWingR = new THREE.Vector3();
+    const _scratchMistNose = new THREE.Vector3();
+    const _scratchMistBody = new THREE.Vector3();
+    const _scratchCloudCheckM4 = new THREE.Matrix4();
+
+    // Pre-rendered fog blob sprite for animated screen overlay (drawn once, stamped per frame)
+    const fogBlobSprite = document.createElement('canvas');
+    fogBlobSprite.width = 128; fogBlobSprite.height = 128;
+    const fbsCtx = fogBlobSprite.getContext('2d');
+    const fbsGrad = fbsCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    fbsGrad.addColorStop(0, 'rgba(255,255,255,1.0)');
+    fbsGrad.addColorStop(0.3, 'rgba(250,252,255,0.55)');
+    fbsGrad.addColorStop(0.65, 'rgba(245,250,255,0.15)');
+    fbsGrad.addColorStop(1, 'rgba(240,248,255,0)');
+    fbsCtx.fillStyle = fbsGrad;
+    fbsCtx.fillRect(0, 0, 128, 128);
+
+    // Animated fog overlay blobs — drift across screen for living fog feel
+    const FOG_BLOB_COUNT = LOW_GFX ? 0 : 8;
+    const fogBlobs = [];
+    for (let i = 0; i < FOG_BLOB_COUNT; i++) {
+        fogBlobs.push({
+            x: Math.random(), y: Math.random(),
+            radius: 0.18 + Math.random() * 0.28,
+            driftX: (Math.random() - 0.5) * 0.04,
+            driftY: (Math.random() - 0.5) * 0.025,
+            phase: Math.random() * Math.PI * 2,
+            opacity: 0.25 + Math.random() * 0.35
+        });
+    }
+    const fogOverlayCanvas = document.getElementById('cloud-fog-canvas');
+    let fogOverlayCtx = null;
+    if (fogOverlayCanvas && FOG_BLOB_COUNT > 0) {
+        fogOverlayCanvas.width = Math.ceil(window.innerWidth / 2);
+        fogOverlayCanvas.height = Math.ceil(window.innerHeight / 2);
+        fogOverlayCtx = fogOverlayCanvas.getContext('2d');
     }
 
     // ==========================================
@@ -4020,26 +5475,32 @@ let isInitializingGui = true;
         // Distant Ghibli Towering Cumulus Clouds — more at altitude, hazier
         const highAltFrac = Math.min(1, Math.max(0, (playerGrp.position.y - 200) / 600));
         instHighClouds.count = Math.round(BASE_HIGH_CLOUD_COUNT + (HIGH_CLOUD_COUNT - BASE_HIGH_CLOUD_COUNT) * highAltFrac);
+        if (matCloud.userData && matCloud.userData.shader) {
+            matCloud.userData.shader.uniforms.uCloudOpacity.value = params.cloudsLowOpacity;
+        }
         if (highCloudMat.userData && highCloudMat.userData.shader) {
-            highCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsHighOpacity * (1.0 - highAltFrac * 0.45);
+            highCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsHighOpacity;
         }
-        if (megaCloudMat.userData && megaCloudMat.userData.shader) {
-            megaCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsGiantOpacity * (1.0 - highAltFrac * 0.45);
+        const highCloudDist = params.cloudsHighDistance || 2600;
+        const targetHighCount = (params.cloudsHighCount !== undefined) ? params.cloudsHighCount : (LOW_GFX ? 0 : 14);
+        setCloudCount(instHighClouds, targetHighCount);
+        if (highCloudMat.userData && highCloudMat.userData.shader) {
+            highCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsHighOpacity;
         }
-        const highCloudDist = params.cloudsHighDistance || 3600;
-        const highCloudTeleport = highCloudDist * 1.22;
-        for (let i = 0; i < instHighClouds.count; i++) {
+
+        for (let i = 0; i < targetHighCount; i++) {
             instHighClouds.getMatrixAt(i, dummy.matrix);
             dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
             const hdx = dummy.position.x - playerX;
             const hdz = dummy.position.z - playerZ;
-            if (hdx * hdx + hdz * hdz > highCloudTeleport * highCloudTeleport || Math.abs(dummy.position.y - playerGrp.position.y - params.cloudsHighAltitude) > 300 || dummy.position.y < -500) {
+            const hDist = Math.hypot(hdx, hdz);
+            if (hDist > highCloudDist * 1.5 || dummy.position.y < -500) {
                 const angle = Math.random() * Math.PI * 2.0;
                 const r = highCloudDist * (0.88 + Math.random() * 0.24);
-                const altOffset = (highAltitudeOffsets[i] !== undefined) ? highAltitudeOffsets[i] : 0;
+                const altOffset = (highAltitudeOffsets[i % highAltitudeOffsets.length] !== undefined) ? highAltitudeOffsets[i % highAltitudeOffsets.length] : 0;
                 dummy.position.set(
                     playerX + Math.cos(angle) * r,
-                    playerGrp.position.y + params.cloudsHighAltitude + altOffset,
+                    params.cloudsHighAltitude + altOffset,
                     playerZ + Math.sin(angle) * r
                 );
                 const tangentAngle = angle + Math.PI * 0.5 + (Math.random() - 0.5) * 0.6;
@@ -4055,6 +5516,47 @@ let isInitializingGui = true;
             instHighClouds.setMatrixAt(i, dummy.matrix);
         }
         instHighClouds.instanceMatrix.needsUpdate = true;
+
+        // 2b. Low Horizon Towers (Towering clouds sunken at waterline: bases at -40m to -10m)
+        const targetLowTowerCount = (params.cloudsLowTowerCount !== undefined) ? params.cloudsLowTowerCount : (LOW_GFX ? 0 : 12);
+        setCloudCount(instLowTowerClouds, targetLowTowerCount);
+        if (lowTowerCloudMat.userData && lowTowerCloudMat.userData.shader) {
+            lowTowerCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsLowTowerOpacity;
+        }
+        const lowTowerCloudDist = params.cloudsLowTowerDistance || 3200;
+
+        for (let i = 0; i < targetLowTowerCount; i++) {
+            instLowTowerClouds.getMatrixAt(i, dummy.matrix);
+            dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
+
+            const hdx = dummy.position.x - playerX;
+            const hdz = dummy.position.z - playerZ;
+            const hDist = Math.hypot(hdx, hdz);
+
+            if (hDist > lowTowerCloudDist * 1.5 || dummy.position.y < -500) {
+                const spawnAngle = Math.random() * Math.PI * 2.0;
+                const r = lowTowerCloudDist * (0.85 + Math.random() * 0.35);
+                const sX = playerX + Math.sin(spawnAngle) * r;
+                const sZ = playerZ + Math.cos(spawnAngle) * r;
+
+                const baseLowTowerAlt = params.cloudsLowTowerAltitude !== undefined ? params.cloudsLowTowerAltitude : -35;
+                const altOffset = (lowTowerAltitudeOffsets[i % lowTowerAltitudeOffsets.length] || 0) * 0.5;
+                const sY = Math.max(-40, Math.min(-10, baseLowTowerAlt + altOffset));
+
+                dummy.position.set(sX, sY, sZ);
+                const tangentAngle = spawnAngle + Math.PI * 0.5 + (Math.random() - 0.5) * 0.8;
+                dummy.rotation.set(0, tangentAngle + (Math.random() > 0.5 ? 0 : Math.PI), 0);
+                dummy.scale.set(
+                    lowTowerCloudBaseScale[i * 3 + 0],
+                    lowTowerCloudBaseScale[i * 3 + 1],
+                    lowTowerCloudBaseScale[i * 3 + 2]
+                ).multiplyScalar(params.cloudsLowTowerSize);
+            }
+            dummy.position.x += 0.8 * dt;
+            dummy.updateMatrix();
+            instLowTowerClouds.setMatrixAt(i, dummy.matrix);
+        }
+        instLowTowerClouds.instanceMatrix.needsUpdate = true;
 
         // See-Through Wispy Clouds
         const wispyDist = ((params.cloudsLowDistance || 1200) * 1.16) * cloudScale;
@@ -4081,41 +5583,20 @@ let isInitializingGui = true;
         }
         instWispyClouds.instanceMatrix.needsUpdate = true;
 
-        // Distant Ghibli Horizon Cloud Banks (4 Varied Archetypes) — more at altitude
-        const megaTarget = Math.round(BASE_MEGA_CLOUD_COUNT + (MEGA_CLOUD_COUNT - BASE_MEGA_CLOUD_COUNT) * highAltFrac);
-        setCloudCount(instMegaClouds, megaTarget);
-        const megaDist = params.cloudsGiantDistance || 4200;
-        const megaTeleport = megaDist * 1.25;
-        megaMeshes.forEach((mesh, vIdx) => {
-            for (let i = 0; i < mesh.count; i++) {
-                mesh.getMatrixAt(i, dummy.matrix);
-                dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
-                const mdx = dummy.position.x - playerX;
-                const mdz = dummy.position.z - playerZ;
-                if (mdx * mdx + mdz * mdz > megaTeleport * megaTeleport || Math.abs(dummy.position.y - playerGrp.position.y - params.cloudsGiantAltitude) > 400 || dummy.position.y < -500) {
-                    const ang = Math.random() * Math.PI * 2.0;
-                    const r = (i % 2 === 0) ? (megaDist * 0.92 + Math.random() * 300) : (megaDist * 1.08 + Math.random() * 300);
-                    const cloudIdx = vIdx * MEGA_PER_VARIANT + i;
-                    const altOffset = (cloudAltitudeOffsets[cloudIdx] !== undefined) ? cloudAltitudeOffsets[cloudIdx] : 0;
-                    dummy.position.set(
-                        playerX + Math.cos(ang) * r,
-                        playerGrp.position.y + params.cloudsGiantAltitude + altOffset,
-                        playerZ + Math.sin(ang) * r
-                    );
-                    const tangentAngle = ang + Math.PI * 0.5 + (Math.random() - 0.5) * 0.5;
-                    dummy.rotation.set(0, tangentAngle + (Math.random() > 0.5 ? 0 : Math.PI), 0);
-                    dummy.scale.set(
-                        megaCloudBaseScale[vIdx][i * 3 + 0],
-                        megaCloudBaseScale[vIdx][i * 3 + 1],
-                        megaCloudBaseScale[vIdx][i * 3 + 2]
-                    ).multiplyScalar(params.cloudsGiantSize);
-                }
-                dummy.position.x += 0.6 * dt;
-                dummy.updateMatrix();
-                mesh.setMatrixAt(i, dummy.matrix);
-            }
-            mesh.instanceMatrix.needsUpdate = true;
-        });
+        // 3. Distant Ghibli Horizon Cloud Banks (Continuous 360-degree panorama attached to camera)
+        if (megaCloudMat.userData && megaCloudMat.userData.shader) {
+            megaCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsGiantOpacity;
+        }
+        instMegaClouds.position.set(playerX, 0, playerZ);
+        instMegaClouds.rotation.y += 0.0008 * dt; // Majestic slow atmospheric rotation
+
+
+
+        // 3c. Distant High Clouds (Anchored around player at high altitude)
+        if (typeof instBillboardClouds !== 'undefined') {
+            instBillboardClouds.position.set(playerX, 0, playerZ);
+            instBillboardClouds.rotation.y += 0.0005 * dt;
+        }
 
         const treesCulledByAlt = playerGrp.position.y > 600;
         treeMeshes.forEach(m => { m.visible = params.showTrees && !treesCulledByAlt; });
@@ -4520,11 +6001,8 @@ let isInitializingGui = true;
             cameraZoomDist = initialZoomDist * (initialPinchDist / newDist);
             cameraZoomDist = Math.max(5.0, Math.min(100.0, cameraZoomDist));
 
-            const zoomToggle = document.getElementById('zoom-toggle');
-            if (zoomToggle) {
-                if (cameraZoomDist > 25.0) zoomToggle.innerText = 'Zoom In';
-                else zoomToggle.innerText = 'Zoom Out';
-            }
+            if (cameraZoomDist > 25.0) document.getElementById('zoom-toggle').innerText = 'Zoom In';
+            else document.getElementById('zoom-toggle').innerText = 'Zoom Out';
         } else {
             for(let touch of e.changedTouches) {
                 if(touch.identifier === activeTouchId) updateJoystick(touch);
@@ -4594,16 +6072,19 @@ let isInitializingGui = true;
     const starPositions = new Float32Array(starCount * 3);
 
     for (let i = 0; i < starCount * 3; i += 3) {
-        // Distribute randomly in a sphere well within camera.far (3000)
-        const radius = 2500;
+        // Distribute randomly in an upper sky dome beyond all clouds (well within camera.far 30000)
+        // Stars are placed strictly above the horizon so they never appear below the player
+        const radius = 24000;
         const u = Math.random();
         const v = Math.random();
         const theta = u * 2.0 * Math.PI;
-        const phi = Math.acos(2.0 * v - 1.0);
+        // Upper hemisphere only: cos(phi) from 0.05 (just above horizon) to 1.0 (zenith)
+        const cosPhi = 0.05 + 0.95 * v;
+        const sinPhi = Math.sqrt(Math.max(0, 1.0 - cosPhi * cosPhi));
 
-        const y = radius * Math.cos(phi);
-        const x = radius * Math.sin(phi) * Math.cos(theta);
-        const z = radius * Math.sin(phi) * Math.sin(theta);
+        const y = radius * cosPhi;
+        const x = radius * sinPhi * Math.cos(theta);
+        const z = radius * sinPhi * Math.sin(theta);
 
         starPositions[i] = x;
         starPositions[i + 1] = y;
@@ -4808,16 +6289,86 @@ let isInitializingGui = true;
     let envConfigs = [
         {bg: 0x3a88d6, skyMid: 0x72b2e8, skyHorizon: 0xb8daf2, horizonGlow: 0.15, amb: 0xd8eefa, dir: 0xfffbf0, ambI: 1.25, dirI: 2.50, starOp: 0, sunY: 10000, moonY: -8000, glintCol: 0xfff0d0, cloudCol: 0xfffcf5, crystalGlowMult: 0.0}, // Day (Wanderlust-II)
         {bg: 0x2a5090, skyMid: 0xc85078, skyHorizon: 0xffa07a, horizonGlow: 0.45, amb: 0xffdab9, dir: 0xffaa00, ambI: 1.10, dirI: 3.20, starOp: 0, sunY: 160, moonY: 200, glintCol: 0xffaa00, cloudCol: 0xfffaec, crystalGlowMult: 0.45}, // Dusk (Cloned from Wanderlust-II)
-        {bg: 0x080d1e, skyMid: 0x121e3d, skyHorizon: 0x14223d, horizonGlow: 0.10, amb: 0x485878, dir: 0xd8e8ff, ambI: 0.95, dirI: 2.00, starOp: 1.0, sunY: -8000, moonY: 9000, glintCol: 0x88b0e8, cloudCol: 0x162238, crystalGlowMult: 1.0}, // Night (Wanderlust-II)
+        {bg: 0x162d5a, skyMid: 0x1d3a6e, skyHorizon: 0x224888, horizonGlow: 0.10, amb: 0x7788bb, dir: 0xffbb55, ambI: 1.5, dirI: 3.5, starOp: 1.0, sunY: -8000, moonY: 1600, glintCol: 0xffaa44, cloudCol: 0x2e4a80, crystalGlowMult: 1.0}, // Night (copied from ghibli-flight)
     ];
+    function createCloudNoiseTexture(size = 256) {
+        const data = new Uint8Array(size * size * 4);
+        const p = new Uint8Array(512);
+        for (let i = 0; i < 256; i++) p[i] = i;
+        for (let i = 255; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const temp = p[i]; p[i] = p[j]; p[j] = temp;
+        }
+        for (let i = 0; i < 256; i++) p[256 + i] = p[i];
+
+        function hash2(x, y) {
+            return p[p[x & 255] + (y & 255)] / 255.0;
+        }
+
+        function tileableNoise(x, y, period) {
+            const px = ((x % period) + period) % period;
+            const py = ((y % period) + period) % period;
+            const x0 = Math.floor(px);
+            const y0 = Math.floor(py);
+            const x1 = (x0 + 1) % period;
+            const y1 = (y0 + 1) % period;
+            const fx = px - x0;
+            const fy = py - y0;
+            const u = fx * fx * fx * (fx * (fx * 6.0 - 15.0) + 10.0);
+            const v = fy * fy * fy * (fy * (fy * 6.0 - 15.0) + 10.0);
+            const v00 = hash2(x0, y0);
+            const v10 = hash2(x1, y0);
+            const v01 = hash2(x0, y1);
+            const v11 = hash2(x1, y1);
+            return (v00 * (1.0 - u) + v10 * u) * (1.0 - v) + (v01 * (1.0 - u) + v11 * u) * v;
+        }
+
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const u = x / size;
+                const v = y / size;
+                const idx = (y * size + x) * 4;
+                data[idx + 0] = Math.floor(tileableNoise(u * 4, v * 4, 4) * 255);
+                data[idx + 1] = Math.floor(tileableNoise(u * 8, v * 8, 8) * 255);
+                data[idx + 2] = Math.floor(tileableNoise(u * 16, v * 16, 16) * 255);
+                data[idx + 3] = Math.floor(tileableNoise(u * 32, v * 32, 32) * 255);
+            }
+        }
+
+        const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = true;
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    const cloudNoiseTex = createCloudNoiseTexture(256);
+
     const skyUniforms = {
-        uZenith: { value: new THREE.Color(envConfigs[0].bg) },
-        uMid: { value: new THREE.Color(envConfigs[0].skyMid) },
-        uHorizon: { value: new THREE.Color(envConfigs[0].skyHorizon) },
-        uHorizonGlow: { value: envConfigs[0].horizonGlow },
+        uZenith: { value: new THREE.Color(envConfigs[1].bg) },
+        uMid: { value: new THREE.Color(envConfigs[1].skyMid) },
+        uHorizon: { value: new THREE.Color(envConfigs[1].skyHorizon) },
+        uHorizonGlow: { value: envConfigs[1].horizonGlow },
         uGradientPower: { value: 0.7 },
         uGradientMidOffset: { value: 0.08 },
         uGradientSkyEnabled: { value: 1.0 },
+
+        uTime: { value: 0.0 },
+        uSunPosition: { value: new THREE.Vector3(0.0, 0.5, -0.866).normalize() },
+        uSunColor: { value: new THREE.Color(0xffaa00) },
+        uNoiseTex: { value: cloudNoiseTex },
+        uCloudColor: { value: new THREE.Color(0xfffaec) },
+        uCloudShadowColor: { value: new THREE.Color(0x8ca4c8) },
+        uCloudCoverage: { value: params.domeCloudCoverage || 0.45 },
+        uCloudEdge: { value: params.domeCloudEdge || 0.08 },
+        uCloudSpeed: { value: params.domeCloudSpeed || 0.015 },
+        uCloudOpacity: { value: params.domeCloudOpacity || 0.95 },
+        uEnableProceduralClouds: { value: params.domeClouds ? 1.0 : 0.0 },
+        uDuskFactor: { value: 1.0 },
+        uNightFactor: { value: 0.0 },
     };
     const skyMaterial = new THREE.ShaderMaterial({
         uniforms: skyUniforms,
@@ -4831,11 +6382,29 @@ let isInitializingGui = true;
         fragmentShader: `
             uniform vec3 uZenith, uMid, uHorizon;
             uniform float uHorizonGlow, uGradientPower, uGradientMidOffset, uGradientSkyEnabled;
+            uniform float uTime;
+            uniform vec3 uSunPosition;
+            uniform vec3 uSunColor;
+            uniform sampler2D uNoiseTex;
+            uniform vec3 uCloudColor;
+            uniform vec3 uCloudShadowColor;
+            uniform float uCloudCoverage;
+            uniform float uCloudEdge;
+            uniform float uCloudSpeed;
+            uniform float uCloudOpacity;
+            uniform float uEnableProceduralClouds;
+            uniform float uDuskFactor;
+            uniform float uNightFactor;
+
             varying vec3 vDir;
+
             void main() {
                 vec3 dir = normalize(vDir);
-                float tanElev = dir.y / max(length(dir.xz), 0.001);
-                float alt = clamp((tanElev - 0.05) / 1.95, 0.0, 1.0);
+                vec3 sunDir = normalize(uSunPosition);
+                float sunDot = dot(dir, sunDir);
+
+                // Vertical altitude angle: 0.0 at horizon, 1.0 overhead
+                float alt = clamp((dir.y - 0.05) / 0.95, 0.0, 1.0);
 
                 // 3-stop gradient: horizon -> mid (up to Mid-Height Offset) -> zenith
                 float tLower = clamp(alt / max(uGradientMidOffset, 0.01), 0.0, 1.0);
@@ -4845,10 +6414,85 @@ let isInitializingGui = true;
 
                 // Simple 2-stop fallback when the gradient curve is disabled
                 vec3 twoStopSky = mix(uHorizon, uZenith, pow(clamp(alt * 1.5, 0.0, 1.0), 0.6));
-                vec3 sky = mix(twoStopSky, gradientSky, uGradientSkyEnabled);
+                vec3 baseAtmosphere = mix(twoStopSky, gradientSky, uGradientSkyEnabled);
 
-                // Horizon band glow, kept off the fog band
-                sky += pow(1.0 - abs(dir.y), 3.0) * uHorizon * uHorizonGlow * smoothstep(0.03, 0.12, dir.y);
+                // Sun disc and forward atmospheric corona glow (from Wanderlust proceduralSky.js)
+                vec3 sunDisc = smoothstep(0.9985, 0.9997, sunDot) * uSunColor * 1.5;
+                vec3 sunCorona = pow(clamp(sunDot, 0.0, 1.0), 96.0) * uSunColor * 0.35;
+                vec3 sunHaze = pow(clamp(sunDot, 0.0, 1.0), 32.0) * uHorizon * 0.04;
+
+                // Horizon warm rim glow
+                float horizonBand = pow(clamp(1.0 - abs(dir.y), 0.0, 1.0), 3.0) * smoothstep(0.03, 0.12, dir.y);
+                vec3 duskGlow = horizonBand * uHorizon * uHorizonGlow * mix(1.0, 1.8, uDuskFactor);
+
+                // Night stars (lightweight, zero-cost during day)
+                vec3 nightSky = vec3(0.0);
+                if (uNightFactor > 0.01) {
+                    vec3 pStar = dir * 180.0;
+                    vec4 sNoise = texture2D(uNoiseTex, pStar.xz * 0.02 + pStar.y * 0.01);
+                    float starVal = step(0.97, sNoise.r) * pow(sNoise.g, 2.0);
+                    float starTwinkle = sin(uTime * 2.0 + sNoise.b * 6.28) * 0.35 + 0.65;
+                    float starFade = smoothstep(0.05, 0.30, dir.y);
+                    nightSky = vec3(starVal * starTwinkle * starFade * 1.4);
+                }
+
+                // Composite atmospheric sky
+                vec3 sky = baseAtmosphere + sunCorona + sunHaze + sunDisc + duskGlow + nightSky * uNightFactor;
+
+                // PROCEDURAL CLOUDS LAYER (Level 2 Noise Texture WebGL Optimized)
+                if (uEnableProceduralClouds > 0.01 && dir.y > -0.05) {
+                    // Upper hemisphere dome projection (from Wanderlust proceduralSky.js)
+                    float skyDomeDist = 1.0 / max(dir.y + 0.15, 0.08);
+                    vec2 cloudUV = dir.xz * skyDomeDist * 0.45;
+
+                    // Wind drift & movement + initial offset
+                    vec2 windOffset = vec2(uTime * uCloudSpeed * 0.15, uTime * uCloudSpeed * 0.08);
+                    vec2 uvSample = cloudUV + windOffset + vec2(14.8, 32.4);
+
+                    // Sample Level 2 noise texture (calibrated to Wanderlust unit scale)
+                    vec4 t0 = texture2D(uNoiseTex, uvSample * 0.25);
+                    vec4 t1 = texture2D(uNoiseTex, (uvSample + vec2(5.2, 1.3)) * 0.25);
+
+                    float f0 = t0.r * 0.50 + t0.g * 0.25 + t0.b * 0.15 + t0.a * 0.10;
+                    float f1 = t1.r * 0.50 + t1.g * 0.25 + t1.b * 0.15 + t1.a * 0.10;
+                    vec2 q = vec2(f0 - 0.5, f1 - 0.5) * 1.6;
+
+                    // Domain warping produces billowy anime cloud formations
+                    vec2 warpedUV = uvSample * 0.25 + q * 0.35;
+                    vec4 tWarp = texture2D(uNoiseTex, warpedUV);
+                    float cloudNoise = tWarp.r * 0.50 + tWarp.g * 0.25 + tWarp.b * 0.15 + tWarp.a * 0.10;
+
+                    // Coverage & Soft Edge Thresholding
+                    float lowThreshold = 1.0 - uCloudCoverage;
+                    float highThreshold = lowThreshold + max(uCloudEdge, 0.02);
+                    float cloudAlpha = smoothstep(lowThreshold, highThreshold, cloudNoise);
+
+                    // Solar Clearance Corridor: subtle clearing right at the sun center
+                    float sunProximity = clamp(sunDot, 0.0, 1.0);
+                    float sunClearMask = 1.0 - smoothstep(0.96, 0.998, sunProximity) * 0.70;
+
+                    // Horizon fade so clouds blend cleanly above the horizon
+                    float horizonFade = smoothstep(0.02, 0.22, dir.y);
+                    float finalAlpha = cloudAlpha * horizonFade * sunClearMask * uCloudOpacity;
+
+                    // Cloud Lighting & Rim / Silver Lining
+                    float sunDiffuse = clamp(sunDot * 0.5 + 0.5, 0.0, 1.0);
+                    float silverLining = pow(clamp(sunDot, 0.0, 1.0), 4.0) * 0.4;
+
+                    // Base cloud color with directional shading
+                    vec3 dayCloudCol = mix(uCloudShadowColor, uCloudColor, sunDiffuse + silverLining);
+
+                    // Sunset & Dusk tinting (warm golden peach on lit edges, soft violet on shadow)
+                    vec3 sunsetCloudCol = mix(dayCloudCol, vec3(1.0, 0.70, 0.55), uDuskFactor * 0.75);
+                    sunsetCloudCol = mix(sunsetCloudCol, uCloudShadowColor, (1.0 - sunDiffuse) * 0.45);
+
+                    // Night sky darkening
+                    vec3 nightCloudCol = mix(sunsetCloudCol, vec3(0.04, 0.05, 0.10), uNightFactor * 0.85);
+
+                    // Composite procedural clouds over sky
+                    sky = mix(sky, nightCloudCol, finalAlpha * uEnableProceduralClouds);
+                }
+
                 gl_FragColor = vec4(sky, 1.0);
                 #include <colorspace_fragment>
             }`,
@@ -4863,6 +6507,9 @@ let isInitializingGui = true;
     scene.add(skyDome);
     const _skyCol = new THREE.Color();
     const _scratchSkyPos = new THREE.Vector3();
+    const _scratchSunDir = new THREE.Vector3();
+    const _scratchCloudCol = new THREE.Color();
+    const _scratchCloudShadowCol = new THREE.Color();
 
     let currentSunY = 1500;
     let currentMoonY = -1500;
@@ -4913,13 +6560,31 @@ let isInitializingGui = true;
 
         // 3-Stage Lighting Engine Lerp
         const target = envConfigs[timePhase];
-        scene.background.lerp(_scratchBgColor.set(target.bg), dt * 2);
-        scene.fog.color.lerp(_scratchFogColor.set(target.skyHorizon), dt * 2); // must match the sky horizon band
+        if (scene.background) scene.background.lerp(_scratchBgColor.set(target.bg), dt * 2);
+        if (scene.fog) scene.fog.color.lerp(_scratchFogColor.set(target.skyHorizon), dt * 2); // must match the sky horizon band
         skyDome.position.copy(camera.getWorldPosition(_scratchSkyPos));
         skyUniforms.uZenith.value.lerp(_skyCol.set(target.bg), dt * 2);
         skyUniforms.uMid.value.lerp(_skyCol.set(target.skyMid), dt * 2);
         skyUniforms.uHorizon.value.lerp(_skyCol.set(target.skyHorizon), dt * 2);
         skyUniforms.uHorizonGlow.value += (target.horizonGlow - skyUniforms.uHorizonGlow.value) * dt * 2;
+
+        // Update procedural sky & clouds (Level 2 WebGL optimized)
+        skyUniforms.uTime.value += dt;
+        if (typeof dirLight !== 'undefined' && dirLight && typeof playerGrp !== 'undefined' && playerGrp) {
+            _scratchSunDir.copy(dirLight.position).sub(playerGrp.position).normalize();
+            skyUniforms.uSunPosition.value.copy(_scratchSunDir);
+            skyUniforms.uSunColor.value.copy(dirLight.color);
+        }
+        const targetDusk = (timePhase === 1) ? 1.0 : 0.0;
+        skyUniforms.uDuskFactor.value += (targetDusk - skyUniforms.uDuskFactor.value) * dt * 2.0;
+        const targetNight = (timePhase === 2) ? 1.0 : 0.0;
+        skyUniforms.uNightFactor.value += (targetNight - skyUniforms.uNightFactor.value) * dt * 2.0;
+        if (target.cloudCol) {
+            skyUniforms.uCloudColor.value.lerp(_scratchCloudCol.set(target.cloudCol), dt * 2.0);
+        }
+        if (target.skyMid) {
+            skyUniforms.uCloudShadowColor.value.lerp(_scratchCloudShadowCol.set(target.skyMid), dt * 2.0);
+        }
 
         // Distance fog — must hide terrain edges at ±2000 units from center
         const fogAltitude = Math.max(0, playerGrp.position.y);
@@ -5103,15 +6768,13 @@ let isInitializingGui = true;
         // Remove extra pitch to prevent double-rotation
         playerVisuals.rotation.x = THREE.MathUtils.lerp(playerVisuals.rotation.x, 0, dt * 5.0);
 
-        const highAltCull = playerGrp.position.y > 600;
-        terrain.visible = params.showTerrain && !highAltCull;
-        waterMesh.visible = !highAltCull;
-        dirLight.castShadow = params.shadows && !highAltCull;
-        if (!highAltCull && params.showTerrain) updateTerrainGeometry(playerGrp.position.x, playerGrp.position.z);
-        if (!highAltCull) {
-            waterMesh.position.x = playerGrp.position.x;
-            waterMesh.position.z = playerGrp.position.z;
-        }
+        const highAlt = playerGrp.position.y > 600;
+        terrain.visible = params.showTerrain;
+        waterMesh.visible = params.showWater !== false;
+        dirLight.castShadow = params.shadows && !highAlt;
+        if (params.showTerrain) updateTerrainGeometry(playerGrp.position.x, playerGrp.position.z);
+        waterMesh.position.x = playerGrp.position.x;
+        waterMesh.position.z = playerGrp.position.z;
 
         if(typeof window.fogGroup !== 'undefined' && window.fogGroup.visible) {
             window.fogUniforms.uTime.value = time;
@@ -5120,8 +6783,11 @@ let isInitializingGui = true;
             window.fogGroup.position.x = playerGrp.position.x;
             window.fogGroup.position.z = playerGrp.position.z;
             // Tint fog slightly towards sun color during sunrise/sunset
-            const currentFogMat = window.fogGroup.children[0].material;
-            currentFogMat.color.lerp(scene.fog.color, 0.01);
+            const currentFogMat = window.fogGroup.children[0] ? window.fogGroup.children[0].material : null;
+            if (currentFogMat && currentFogMat.color) {
+                const targetFogCol = scene.fog ? scene.fog.color : _scratchFogColor.set(target.skyHorizon);
+                currentFogMat.color.lerp(targetFogCol, 0.01);
+            }
         }
 
         camera.fov = THREE.MathUtils.lerp(camera.fov, isBoosting ? BASE_FOV + 12 : BASE_FOV, dt * 5.0);
@@ -5173,6 +6839,9 @@ let isInitializingGui = true;
         if (window.cloudShaderUniformsList) {
             window.cloudShaderUniformsList.forEach(u => {
                 if (!u) return;
+                if (u.uTime) u.uTime.value = time;
+                if (u.uBillowSpeed) u.uBillowSpeed.value = params.cloudsBillowSpeed;
+                if (u.uBillowAmount) u.uBillowAmount.value = params.cloudsBillowAmount;
                 if (u.uSunDir) u.uSunDir.value.copy(_scratchToLight);
                 if (u.uHorizonColor) u.uHorizonColor.value.copy(scene.fog ? scene.fog.color : _scratchFogColor.set(target.skyHorizon));
                 if (u.uSunLitColor) {
@@ -5201,12 +6870,19 @@ let isInitializingGui = true;
                 highCloudMat.userData.shader.uniforms.uCloudTint.value.set(params.cloudsHighColor);
             }
         }
+        if (typeof lowTowerCloudMat !== 'undefined') {
+            lowTowerCloudMat.color.lerp(_scratchCloudColor.set(target.cloudCol).multiply(_scratchCloudTint.set(params.cloudsLowTowerColor)), dt * 2);
+            if (lowTowerCloudMat.userData && lowTowerCloudMat.userData.shader && lowTowerCloudMat.userData.shader.uniforms.uCloudTint) {
+                lowTowerCloudMat.userData.shader.uniforms.uCloudTint.value.set(params.cloudsLowTowerColor);
+            }
+        }
         if (typeof megaCloudMat !== 'undefined') {
             megaCloudMat.color.lerp(_scratchCloudColor.set(target.cloudCol).multiply(_scratchCloudTint.set(params.cloudsGiantColor)), dt * 2);
             if (megaCloudMat.userData && megaCloudMat.userData.shader && megaCloudMat.userData.shader.uniforms.uCloudTint) {
                 megaCloudMat.userData.shader.uniforms.uCloudTint.value.set(params.cloudsGiantColor);
             }
         }
+
         if (typeof matWispyCloud !== 'undefined') matWispyCloud.color.lerp(_scratchCloudColor.set(target.cloudCol), dt * 2);
 
         // Dynamically scale up the terrain and water as Kiki flies high
@@ -5214,12 +6890,16 @@ let isInitializingGui = true;
         waterMesh.scale.set(terrainScale, 1.0, terrainScale);
 
         // Scale render distance (fog far) to reveal landscape when high
-        // Near the ground fog is opaque by TREE_VIEW_DIST, so trees streaming in/out are never seen
-        const dynamicFar = TREE_VIEW_DIST - 70.0 + Math.max(0, playerGrp.position.y - 300.0) * 2.2;
-        const dynamicNear = 60 + Math.max(0, playerGrp.position.y - 300.0) * 0.4;
+        const baseFar = (typeof params.fogFarDist === 'number') ? params.fogFarDist : 1400.0;
+        const baseNear = (typeof params.fogNearDist === 'number') ? params.fogNearDist : 220.0;
 
-        scene.fog.far += (dynamicFar - scene.fog.far) * dt * 2.0;
-        scene.fog.near += (dynamicNear - scene.fog.near) * dt * 2.0;
+        const dynamicFar = baseFar + Math.max(0, playerGrp.position.y - 300.0) * 2.2;
+        const dynamicNear = baseNear + Math.max(0, playerGrp.position.y - 300.0) * 0.4;
+
+        if (scene.fog) {
+            scene.fog.far += (dynamicFar - scene.fog.far) * dt * 2.0;
+            scene.fog.near += (dynamicNear - scene.fog.near) * dt * 2.0;
+        }
 
         const altitude = Math.max(0, playerGrp.position.y - groundY);
 
@@ -5293,6 +6973,216 @@ let isInitializingGui = true;
             instTrails.visible = false;
         }
 
+        // ==========================================
+        // CLOUD IMMERSION & EXIT CONDENSATION MIST
+        // ==========================================
+        let isInsideCloud = false;
+        const px = playerGrp.position.x;
+        const py = playerGrp.position.y;
+        const pz = playerGrp.position.z;
+        const _mMist = new THREE.Matrix4();
+
+        if (params.showClouds && typeof instClouds !== 'undefined' && instClouds && instClouds.visible && typeof instClouds.getMatrixAt === 'function') {
+            const count = instClouds.count || (instClouds.instanceMatrix ? instClouds.instanceMatrix.count : 0);
+            const rLow = 65 * (params.cloudsLowSize || 1.0);
+            const rLowSq = rLow * rLow;
+            for (let i = 0; i < count; i++) {
+                instClouds.getMatrixAt(i, _mMist);
+                const cx = _mMist.elements[12];
+                const cy = _mMist.elements[13];
+                const cz = _mMist.elements[14];
+                const dx = px - cx;
+                const dy = (py - cy) * 1.8;
+                const dz = pz - cz;
+                if (dx * dx + dy * dy + dz * dz < rLowSq) {
+                    isInsideCloud = true;
+                    break;
+                }
+            }
+        }
+
+        if (!isInsideCloud && params.cloudsHigh && typeof instHighClouds !== 'undefined' && instHighClouds && instHighClouds.visible && typeof instHighClouds.getMatrixAt === 'function') {
+            const count = instHighClouds.count || (instHighClouds.instanceMatrix ? instHighClouds.instanceMatrix.count : 0);
+            const rHigh = 160 * (params.cloudsHighSize || 1.0);
+            const rHighSq = rHigh * rHigh;
+            for (let i = 0; i < count; i++) {
+                instHighClouds.getMatrixAt(i, _mMist);
+                const cx = _mMist.elements[12];
+                const cy = _mMist.elements[13];
+                const cz = _mMist.elements[14];
+                const dx = px - cx;
+                const dy = (py - (cy + 40)) * 0.9;
+                const dz = pz - cz;
+                if (dx * dx + dy * dy + dz * dz < rHighSq) {
+                    isInsideCloud = true;
+                    break;
+                }
+            }
+        }
+
+        if (!isInsideCloud && params.cloudsLowTower && typeof instLowTowerClouds !== 'undefined' && instLowTowerClouds && instLowTowerClouds.visible && typeof instLowTowerClouds.getMatrixAt === 'function') {
+            const count = instLowTowerClouds.count || (instLowTowerClouds.instanceMatrix ? instLowTowerClouds.instanceMatrix.count : 0);
+            const rLowTower = 140 * (params.cloudsLowTowerSize || 1.0);
+            const rLowTowerSq = rLowTower * rLowTower;
+            for (let i = 0; i < count; i++) {
+                instLowTowerClouds.getMatrixAt(i, _mMist);
+                const cx = _mMist.elements[12];
+                const cy = _mMist.elements[13];
+                const cz = _mMist.elements[14];
+                const dx = px - cx;
+                const dy = (py - (cy + 40)) * 0.9;
+                const dz = pz - cz;
+                if (dx * dx + dy * dy + dz * dz < rLowTowerSq) {
+                    isInsideCloud = true;
+                    break;
+                }
+            }
+        }
+
+        // Manage immersion and exit mist timers
+        if (isInsideCloud) {
+            cloudImmersion = Math.min(1.0, cloudImmersion + dt * 3.5);
+            wasInsideCloud = true;
+            cloudExitMistTimer = MIST_EXIT_DURATION;
+        } else {
+            cloudImmersion = Math.max(0.0, cloudImmersion - dt * 1.8);
+            if (wasInsideCloud) {
+                cloudExitMistTimer -= dt;
+                if (cloudExitMistTimer <= 0) {
+                    cloudExitMistTimer = 0;
+                    wasInsideCloud = false;
+                }
+            }
+        }
+
+        // Animated fog overlay canvas (drifting blobs) + CSS vignette
+        const mistOverlay = document.getElementById('cloud-mist-overlay');
+        if (params.cloudMistEffect) {
+            const fogAlpha = (cloudImmersion * 0.85) + (cloudExitMistTimer > 0 ? (cloudExitMistTimer / MIST_EXIT_DURATION) * 0.35 : 0.0);
+
+            // Animated canvas fog (normal GFX only)
+            if (fogOverlayCtx && fogOverlayCanvas) {
+                if (fogAlpha > 0.01) {
+                    fogOverlayCanvas.style.opacity = '1';
+                    const cw = fogOverlayCanvas.width;
+                    const ch = fogOverlayCanvas.height;
+                    fogOverlayCtx.clearRect(0, 0, cw, ch);
+                    for (const blob of fogBlobs) {
+                        blob.x += blob.driftX * dt;
+                        blob.y += blob.driftY * dt;
+                        blob.phase += dt * 0.5;
+                        if (blob.x < -0.35) blob.x = 1.35;
+                        if (blob.x > 1.35) blob.x = -0.35;
+                        if (blob.y < -0.35) blob.y = 1.35;
+                        if (blob.y > 1.35) blob.y = -0.35;
+                        const wobbleX = Math.sin(blob.phase) * 0.025;
+                        const wobbleY = Math.cos(blob.phase * 0.7) * 0.018;
+                        const bx = (blob.x + wobbleX) * cw;
+                        const by = (blob.y + wobbleY) * ch;
+                        const size = blob.radius * Math.max(cw, ch) * 2;
+                        fogOverlayCtx.globalAlpha = Math.min(1.0, fogAlpha) * blob.opacity;
+                        fogOverlayCtx.drawImage(fogBlobSprite, bx - size * 0.5, by - size * 0.5, size, size);
+                    }
+                } else {
+                    fogOverlayCanvas.style.opacity = '0';
+                }
+            }
+
+            // CSS vignette (used alongside canvas on normal, sole overlay on LOW_GFX)
+            if (mistOverlay) {
+                const vignetteAlpha = (cloudImmersion * 0.55) + (cloudExitMistTimer > 0 ? (cloudExitMistTimer / MIST_EXIT_DURATION) * 0.22 : 0.0);
+                mistOverlay.style.opacity = Math.min(1.0, vignetteAlpha).toFixed(3);
+            }
+        } else {
+            if (mistOverlay) mistOverlay.style.opacity = '0';
+            if (fogOverlayCanvas) fogOverlayCanvas.style.opacity = '0';
+        }
+
+        // Condensation mist particles (spawn and animate)
+        if (typeof instMist !== 'undefined') {
+            if (params.cloudMistEffect) {
+                instMist.visible = true;
+
+                // Spawn particles from 4 points on the aircraft
+                const isEmittingMist = isInsideCloud || (cloudExitMistTimer > 0.05);
+                if (isEmittingMist) {
+                    _scratchMistWingL.set(-2.5, 0.0, -0.5).applyMatrix4(playerGrp.matrixWorld);
+                    _scratchMistWingR.set(2.5, 0.0, -0.5).applyMatrix4(playerGrp.matrixWorld);
+                    _scratchMistNose.set(0.0, 0.2, 2.0).applyMatrix4(playerGrp.matrixWorld);
+                    _scratchMistBody.set(0.0, 0.5, -0.2).applyMatrix4(playerGrp.matrixWorld);
+
+                    const exitFrac = cloudExitMistTimer / MIST_EXIT_DURATION;
+                    const emitRate = isInsideCloud ? 4 : (exitFrac > 0.5 ? 3 : (exitFrac > 0.2 ? 2 : 1));
+                    const spawnPoints = [_scratchMistWingL, _scratchMistWingR, _scratchMistNose, _scratchMistBody];
+
+                    for (let k = 0; k < emitRate; k++) {
+                        const srcPt = spawnPoints[k % spawnPoints.length];
+                        const p = mistPool[mistSpawnIndex % MIST_COUNT];
+                        mistSpawnIndex++;
+                        p.pos.copy(srcPt);
+                        p.pos.x += (Math.random() - 0.5) * 1.2;
+                        p.pos.y += (Math.random() - 0.5) * 0.8;
+                        p.pos.z += (Math.random() - 0.5) * 1.2;
+                        p.vel.set(
+                            (Math.random() - 0.5) * 0.3,
+                            0.08 + Math.random() * 0.25,
+                            (Math.random() - 0.5) * 0.3
+                        );
+                        p.life = 0.0;
+                        p.maxLife = 2.5 + Math.random() * 2.0;
+                        p.scale = 1.5 + Math.random() * 2.5;
+                        p.rot = Math.random() * Math.PI * 2;
+                    }
+                }
+
+                // Update all mist particles — bell curve fade via instanceColor
+                let anyColorChanged = false;
+                for (let i = 0; i < MIST_COUNT; i++) {
+                    const p = mistPool[i];
+                    if (p.life < p.maxLife) {
+                        p.life += dt;
+                        const progress = p.life / p.maxLife;
+                        p.pos.addScaledVector(p.vel, dt);
+                        p.rot += dt * 0.3;
+                        const currentScale = p.scale * (1.0 + progress * 2.5);
+
+                        // Bell curve: fade in 0-15%, hold 15-60%, fade out 60-100%
+                        let fadeAlpha;
+                        if (progress < 0.15) {
+                            fadeAlpha = progress / 0.15;
+                        } else if (progress < 0.60) {
+                            fadeAlpha = 1.0;
+                        } else {
+                            fadeAlpha = 1.0 - (progress - 0.60) / 0.40;
+                        }
+                        fadeAlpha = Math.max(0, Math.min(1, fadeAlpha));
+                        _mistColor.setRGB(fadeAlpha, fadeAlpha, fadeAlpha);
+                        instMist.setColorAt(i, _mistColor);
+                        anyColorChanged = true;
+
+                        dummy.position.copy(p.pos);
+                        dummy.quaternion.copy(camera.quaternion);
+                        dummy.scale.set(currentScale, currentScale, 1.0);
+                        dummy.updateMatrix();
+                        instMist.setMatrixAt(i, dummy.matrix);
+                    } else {
+                        _mistColor.setRGB(0, 0, 0);
+                        instMist.setColorAt(i, _mistColor);
+                        anyColorChanged = true;
+
+                        dummy.position.set(0, -9999, 0);
+                        dummy.scale.set(0.0001, 0.0001, 0.0001);
+                        dummy.updateMatrix();
+                        instMist.setMatrixAt(i, dummy.matrix);
+                    }
+                }
+                instMist.instanceMatrix.needsUpdate = true;
+                if (anyColorChanged && instMist.instanceColor) instMist.instanceColor.needsUpdate = true;
+            } else {
+                instMist.visible = false;
+            }
+        }
+
         if (audioCtx && audioCtx.state === 'running' && windGain && windFilter) {
             if (!isWindOn || !isBoosting) {
                 windGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.15);
@@ -5333,13 +7223,27 @@ let isInitializingGui = true;
             lastRecordedCalls = renderer.info.render.calls;
             lastRecordedTris = Math.round(renderer.info.render.triangles / 1000);
         }
+        if (typeof renderCloudDebugOverlays === 'function') renderCloudDebugOverlays();
     }
 
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
+        if (godCamera) {
+            godCamera.aspect = window.innerWidth / window.innerHeight;
+            godCamera.updateProjectionMatrix();
+        }
         renderer.setSize(window.innerWidth, window.innerHeight);
         composer.setSize(window.innerWidth, window.innerHeight);
+        const cloudCvs = document.getElementById('cloud-debug-canvas');
+        if (cloudCvs && params.showCloudDebug) {
+            cloudCvs.width = window.innerWidth;
+            cloudCvs.height = window.innerHeight;
+        }
+        if (fogOverlayCanvas && fogOverlayCtx) {
+            fogOverlayCanvas.width = Math.ceil(window.innerWidth / 2);
+            fogOverlayCanvas.height = Math.ceil(window.innerHeight / 2);
+        }
     });
 
     let timePhase = 1; // 0: Day, 1: Dusk, 2: Deep Twilight
@@ -5354,6 +7258,7 @@ let isInitializingGui = true;
 
     const timeToggleBtn = document.getElementById('time-toggle');
     if (timeToggleBtn) {
+        timeToggleBtn.title = 'Cycle Time of Day (Sunset)';
         timeToggleBtn.addEventListener('click', () => {
             timePhase = (timePhase + 1) % 3;
             const phaseNames = ['Day', 'Sunset', 'Night'];
@@ -5817,18 +7722,19 @@ let isInitializingGui = true;
     // Atmosphere Editor (Appended to lil-gui)
     if (typeof gui !== 'undefined') {
         const atmoParams = {
-            skyColor: '#' + envConfigs[0].bg.toString(16).padStart(6, '0'),
-            skyMid: '#' + envConfigs[0].skyMid.toString(16).padStart(6, '0'),
-            skyHorizon: '#' + envConfigs[0].skyHorizon.toString(16).padStart(6, '0'),
-            horizonGlow: envConfigs[0].horizonGlow,
+            skyColor: '#' + envConfigs[timePhase].bg.toString(16).padStart(6, '0'),
+            skyMid: '#' + envConfigs[timePhase].skyMid.toString(16).padStart(6, '0'),
+            skyHorizon: '#' + envConfigs[timePhase].skyHorizon.toString(16).padStart(6, '0'),
+            horizonGlow: envConfigs[timePhase].horizonGlow,
             gradientEnabled: true,
             gradientPower: 0.7,
             gradientMidOffset: 0.08,
-            ambColor: '#' + envConfigs[0].amb.toString(16).padStart(6, '0'),
-            dirColor: '#' + envConfigs[0].dir.toString(16).padStart(6, '0'),
-            ambI: envConfigs[0].ambI,
-            dirI: envConfigs[0].dirI,
-            glintCol: '#' + envConfigs[0].glintCol.toString(16).padStart(6, '0')
+            ambColor: '#' + envConfigs[timePhase].amb.toString(16).padStart(6, '0'),
+            dirColor: '#' + envConfigs[timePhase].dir.toString(16).padStart(6, '0'),
+            ambI: envConfigs[timePhase].ambI,
+            dirI: envConfigs[timePhase].dirI,
+            waterColor: '#' + (envConfigs[timePhase].waterColor !== undefined ? envConfigs[timePhase].waterColor.toString(16).padStart(6, '0') : '1a4075'),
+            glintCol: '#' + envConfigs[timePhase].glintCol.toString(16).padStart(6, '0')
         };
 
         function updateAtmoParamsFromPhase() {
@@ -5841,6 +7747,7 @@ let isInitializingGui = true;
             atmoParams.dirColor = '#' + cur.dir.toString(16).padStart(6, '0');
             atmoParams.ambI = cur.ambI;
             atmoParams.dirI = cur.dirI;
+            if (cur.waterColor !== undefined) atmoParams.waterColor = '#' + cur.waterColor.toString(16).padStart(6, '0');
             atmoParams.glintCol = '#' + cur.glintCol.toString(16).padStart(6, '0');
             params.sunAltitude = cur.sunY;
             // Refresh GUI display without triggering onChange
@@ -5873,6 +7780,7 @@ let isInitializingGui = true;
             params.sunAzimuth = v;
         });
         sunGodRaysFolder.add(params, 'lockSunToPlayer').name('Lock Sun to Player');
+        sunGodRaysFolder.add(params, 'normalizeSun').name('Normalize Sun').listen().onChange(v => setNormalizeSun(v));
         sunGodRaysFolder.add(params, 'sunDiscScale', 0.5, 5.0, 0.1).name('Sun Disc Size').onChange(v => {
             params.sunDiscScale = v;
             if (typeof staticSun !== 'undefined' && staticSun) staticSun.scale.setScalar(v);
@@ -5929,6 +7837,13 @@ let isInitializingGui = true;
         atmoFolder.addColor(atmoParams, 'dirColor').name('Sun Light').onChange(v => envConfigs[timePhase].dir = parseInt(v.replace('#',''), 16));
         atmoFolder.add(atmoParams, 'ambI', 0, 3).name('Amb Intensity').onChange(v => envConfigs[timePhase].ambI = v);
         atmoFolder.add(atmoParams, 'dirI', 0, 5).name('Sun Intensity').onChange(v => envConfigs[timePhase].dirI = v);
+        atmoFolder.addColor(atmoParams, 'waterColor').name('Water Color').onChange(v => {
+            const col = parseInt(v.replace('#',''), 16);
+            envConfigs[timePhase].waterColor = col;
+            if (typeof waterUniforms !== 'undefined' && waterUniforms.uWaterColor) {
+                waterUniforms.uWaterColor.value.set(col);
+            }
+        });
         atmoFolder.addColor(atmoParams, 'glintCol').name('Water Glint').onChange(v => envConfigs[timePhase].glintCol = parseInt(v.replace('#',''), 16));
 
         // Character Glow (merged from old top-level "Kiki Warm Side Glow")
@@ -6029,6 +7944,33 @@ let isInitializingGui = true;
             }
         }
 
+        function enforceCloudMinDistance(minDist) {
+            if (!instClouds || typeof playerGrp === 'undefined') return;
+            const px = playerGrp.position.x;
+            const pz = playerGrp.position.z;
+            const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+            const totalCloudSlots = (instClouds.instanceMatrix ? instClouds.instanceMatrix.count : instClouds.count);
+            let updated = false;
+            for (let i = 0; i < totalCloudSlots; i++) {
+                instClouds.getMatrixAt(i, m);
+                m.decompose(p, q, sc);
+                if (p.y > -4000) {
+                    const dx = p.x - px;
+                    const dz = p.z - pz;
+                    const dist = Math.hypot(dx, dz);
+                    if (dist < minDist) {
+                        const pushFactor = (minDist * 1.25) / Math.max(dist, 1);
+                        p.x = px + dx * pushFactor;
+                        p.z = pz + dz * pushFactor;
+                        m.compose(p, q, sc);
+                        instClouds.setMatrixAt(i, m);
+                        updated = true;
+                    }
+                }
+            }
+            if (updated) instClouds.instanceMatrix.needsUpdate = true;
+        }
+
         let lastHighCloudDistance = params.cloudsHighDistance || 3600;
         function updateHighCloudDistance(newDist) {
             if (!lastHighCloudDistance || lastHighCloudDistance === newDist) {
@@ -6061,15 +8003,94 @@ let isInitializingGui = true;
             const ratio = newDist / lastGiantCloudDistance;
             lastGiantCloudDistance = newDist;
             const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
-            const px = typeof playerGrp !== 'undefined' ? playerGrp.position.x : 0;
-            const pz = typeof playerGrp !== 'undefined' ? playerGrp.position.z : 0;
             megaMeshes.forEach(mesh => {
                 const totalSlots = (mesh.instanceMatrix ? mesh.instanceMatrix.count : mesh.count);
                 for (let i = 0; i < totalSlots; i++) {
                     mesh.getMatrixAt(i, m);
                     m.decompose(p, q, sc);
-                    p.x = px + (p.x - px) * ratio;
-                    p.z = pz + (p.z - pz) * ratio;
+                    p.x = p.x * ratio;
+                    p.z = p.z * ratio;
+                    m.compose(p, q, sc);
+                    mesh.setMatrixAt(i, m);
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+            });
+        }
+
+        let lastLowTowerCloudDistance = params.cloudsLowTowerDistance || 2200;
+        function updateLowTowerCloudDistance(newDist) {
+            if (!lastLowTowerCloudDistance || lastLowTowerCloudDistance === newDist) {
+                lastLowTowerCloudDistance = newDist;
+                return;
+            }
+            const ratio = newDist / lastLowTowerCloudDistance;
+            lastLowTowerCloudDistance = newDist;
+            const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+            const px = typeof playerGrp !== 'undefined' ? playerGrp.position.x : 0;
+            const pz = typeof playerGrp !== 'undefined' ? playerGrp.position.z : 0;
+            const totalSlots = (instLowTowerClouds.instanceMatrix ? instLowTowerClouds.instanceMatrix.count : instLowTowerClouds.count);
+            for (let i = 0; i < totalSlots; i++) {
+                instLowTowerClouds.getMatrixAt(i, m);
+                m.decompose(p, q, sc);
+                p.x = px + (p.x - px) * ratio;
+                p.z = pz + (p.z - pz) * ratio;
+                m.compose(p, q, sc);
+                instLowTowerClouds.setMatrixAt(i, m);
+            }
+            instLowTowerClouds.instanceMatrix.needsUpdate = true;
+        }
+
+        function updateLowBankCloudDensity(density) {
+            params.cloudsLowBankDensity = density;
+            const dummy = new THREE.Object3D();
+            const baseDist = params.cloudsLowBankDistance || 3400;
+            const baseSize = params.cloudsLowBankSize || 1.0;
+            const baseAlt = params.cloudsLowBankAltitude !== undefined ? params.cloudsLowBankAltitude : -20;
+            const widthBoost = Math.min(2.2, Math.max(0.6, 0.75 + density * 0.35));
+
+            for (let i = 0; i < MEGA_CLOUD_COUNT; i++) {
+                const variantIdx = i % MEGA_VARIANTS;
+                const slotInVariant = Math.floor(i / MEGA_VARIANTS);
+                const ang = (i * 2.399963 / Math.max(0.2, density) + 2.4) + (Math.sin(i * 1.7) * 0.1);
+                const depthLayer = (i % 2 === 0) ? (baseDist - 250) : (baseDist + 250);
+                const altOffset = cloudAltitudeOffsets[i % cloudAltitudeOffsets.length] || 0;
+
+                dummy.position.set(Math.cos(ang) * depthLayer, baseAlt + altOffset, Math.sin(ang) * depthLayer);
+                const tangentAng = ang + Math.PI * 0.5 + (Math.cos(i * 2.1) * 0.2);
+                dummy.rotation.set(0, tangentAng + (i % 2 === 0 ? 0 : Math.PI), 0);
+
+                const s = 0.95 + (i % 3) * 0.1;
+                const sx = s * 1.15 * (0.88 + (i % 4) * 0.09) * widthBoost * (i % 2 === 0 ? 1 : -1);
+                const sy = s * (0.90 + ((i + 1) % 4) * 0.08);
+                const sz = s * (0.92 + ((i + 2) % 3) * 0.08) * widthBoost;
+
+                lowBankCloudBaseScale[variantIdx][slotInVariant * 3 + 0] = sx;
+                lowBankCloudBaseScale[variantIdx][slotInVariant * 3 + 1] = sy;
+                lowBankCloudBaseScale[variantIdx][slotInVariant * 3 + 2] = sz;
+
+                dummy.scale.set(sx, sy, sz).multiplyScalar(baseSize);
+                dummy.updateMatrix();
+                lowBankMeshes[variantIdx].setMatrixAt(slotInVariant, dummy.matrix);
+            }
+            lowBankMeshes.forEach(m => { m.instanceMatrix.needsUpdate = true; });
+        }
+
+        let lastLowBankCloudDistance = params.cloudsLowBankDistance || 3400;
+        function updateLowBankCloudDistance(newDist) {
+            if (!lastLowBankCloudDistance || lastLowBankCloudDistance === newDist) {
+                lastLowBankCloudDistance = newDist;
+                return;
+            }
+            const ratio = newDist / lastLowBankCloudDistance;
+            lastLowBankCloudDistance = newDist;
+            const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+            lowBankMeshes.forEach(mesh => {
+                const totalSlots = (mesh.instanceMatrix ? mesh.instanceMatrix.count : mesh.count);
+                for (let i = 0; i < totalSlots; i++) {
+                    mesh.getMatrixAt(i, m);
+                    m.decompose(p, q, sc);
+                    p.x = p.x * ratio;
+                    p.z = p.z * ratio;
                     m.compose(p, q, sc);
                     mesh.setMatrixAt(i, m);
                 }
@@ -6079,9 +8100,60 @@ let isInitializingGui = true;
 
         const cloudFolder = gui.addFolder('Clouds');
 
+        function updateAllCloudVisibility() {
+            const master = params.showClouds !== false;
+            if (typeof instClouds !== 'undefined') instClouds.visible = master && !!params.cloudsLow;
+            if (typeof instHighClouds !== 'undefined') instHighClouds.visible = master && !!params.cloudsHigh;
+            if (typeof instLowTowerClouds !== 'undefined') instLowTowerClouds.visible = master && !!params.cloudsLowTower;
+            if (typeof instMegaClouds !== 'undefined') {
+                instMegaClouds.visible = master && !!params.cloudsGiant;
+                if (typeof megaMeshes !== 'undefined') megaMeshes.forEach(m => { m.visible = instMegaClouds.visible; });
+            }
+            if (typeof instLowBankClouds !== 'undefined') {
+                instLowBankClouds.visible = master && !!params.cloudsLowBank;
+                if (typeof lowBankMeshes !== 'undefined') lowBankMeshes.forEach(m => { m.visible = instLowBankClouds.visible; });
+            }
+            if (typeof instBillboardClouds !== 'undefined') {
+                instBillboardClouds.visible = master && !!params.cloudsBillboard;
+                if (typeof cirroMeshes !== 'undefined') cirroMeshes.forEach(m => { m.visible = instBillboardClouds.visible; });
+            }
+        }
+        window.updateAllCloudVisibility = updateAllCloudVisibility;
+
+        // Top-Level Instant Cloud Toggles
+        cloudFolder.add(params, 'showClouds').name('All Clouds (Master)').onChange(updateAllCloudVisibility).listen();
+        cloudFolder.add(params, 'showCloudDebug').name('Debug: Show Cloud Types (U)').listen().onChange(v => setCloudDebugMode(v));
+        cloudFolder.add(params, 'cloudDebugTargetMode', { 'Every Visible Cloud': 'visible', 'Single Cloud (Aim Only)': 'single', 'Nearest 3 Visible': 'nearest3' }).name('Debug Targeting Mode').listen();
+        cloudFolder.add(params, 'debugCloudTint').name('Debug: Color Tint Clouds').listen().onChange(() => updateCloudDebugTints());
+        cloudFolder.add(params, 'cloudsLow').name('1. Low Clouds (Nearby)').onChange(updateAllCloudVisibility).listen();
+        cloudFolder.add(params, 'cloudsHigh').name('2. Distant Cumulus Towers').onChange(updateAllCloudVisibility).listen();
+        cloudFolder.add(params, 'cloudsLowTower').name('3. Low Horizon Towers').onChange(updateAllCloudVisibility).listen();
+        cloudFolder.add(params, 'cloudsGiant').name('4. Distant Horizon Banks').onChange(updateAllCloudVisibility).listen();
+        cloudFolder.add(params, 'cloudsBillboard').name('5. Distant High Clouds').onChange(updateAllCloudVisibility).listen();
+        cloudFolder.add(params, 'cloudsMinDistance', 0, 3000, 25).name('Minimum Camera Clearance').onChange(v => enforceCloudMinDistance(v)).listen();
+        updateAllCloudVisibility();
+
+        // 0. Sky Dome Procedural Clouds
+        const domeCloudsFolder = cloudFolder.addFolder('Sky Dome Clouds (Procedural)');
+        domeCloudsFolder.add(params, 'domeClouds').name('Enable Dome Clouds').onChange(v => {
+            skyUniforms.uEnableProceduralClouds.value = v ? 1.0 : 0.0;
+        });
+        domeCloudsFolder.add(params, 'domeCloudCoverage', 0.1, 0.9, 0.02).name('Coverage').onChange(v => {
+            skyUniforms.uCloudCoverage.value = v;
+        });
+        domeCloudsFolder.add(params, 'domeCloudEdge', 0.01, 0.25, 0.01).name('Soft Edge').onChange(v => {
+            skyUniforms.uCloudEdge.value = v;
+        });
+        domeCloudsFolder.add(params, 'domeCloudSpeed', 0.001, 0.08, 0.002).name('Drift Speed').onChange(v => {
+            skyUniforms.uCloudSpeed.value = v;
+        });
+        domeCloudsFolder.add(params, 'domeCloudOpacity', 0.1, 1.0, 0.05).name('Dome Cloud Opacity').onChange(v => {
+            skyUniforms.uCloudOpacity.value = v;
+        });
+
         // 1. Low Nearby Clouds
         const lowFolder = cloudFolder.addFolder('Low Clouds (Nearby)');
-        lowFolder.add(params, 'cloudsLow').name('Show Low Clouds').onChange(v => { instClouds.visible = v; });
+        lowFolder.add(params, 'cloudsLow').name('Show Low Clouds').onChange(updateAllCloudVisibility).listen();
         lowFolder.add(params, 'cloudsLowCount', 0, 250, 1).name('How Many').onChange(v => setCloudCount(instClouds, v));
         lowFolder.add(params, 'cloudsLowSize', 0.2, 3, 0.05).name('Scale / Size').onChange(v => setCloudSize(instClouds, v));
         lowFolder.add(params, 'cloudsLowAltitude', -300, 2000, 5).name('Height (from Ground)').onChange(v => {
@@ -6090,18 +8162,20 @@ let isInitializingGui = true;
         lowFolder.add(params, 'cloudsLowDistance', 100, 4000, 25).name('Distance from Camera').onChange(v => {
             updateLowCloudDistance(v);
         }).listen();
+        lowFolder.add(params, 'cloudsMinDistance', 0, 3000, 25).name('Min Camera Clearance').onChange(v => enforceCloudMinDistance(v)).listen();
         lowFolder.add(params, 'cloudsLowOpacity', 0.1, 1.0, 0.02).name('Opacity').onChange(v => {
-            matCloud.opacity = v;
-            if (matCloud.userData.shader) matCloud.userData.shader.uniforms.uCloudOpacity.value = v;
+            setMaterialOpacity(matCloud, v);
         });
         lowFolder.add(params, 'cloudsLowBottomBlur', 0.0, 0.9, 0.01).name('Bottom Blur / Feather').onChange(v => {
-            if (matCloud.userData.shader) matCloud.userData.shader.uniforms.uBottomBlur.value = v;
+            if (matCloud.userData && matCloud.userData.shader && matCloud.userData.shader.uniforms.uBottomBlur) {
+                matCloud.userData.shader.uniforms.uBottomBlur.value = v;
+            }
         });
         lowFolder.addColor(params, 'cloudsLowColor').name('Color Tint');
 
         // 2. Distant Cumulus Towers
         const highFolder = cloudFolder.addFolder('Distant Cumulus Towers');
-        highFolder.add(params, 'cloudsHigh').name('Show Towers').onChange(v => { instHighClouds.visible = v; });
+        highFolder.add(params, 'cloudsHigh').name('Show Towers').onChange(updateAllCloudVisibility).listen();
         highFolder.add(params, 'cloudsHighCount', 0, 28, 1).name('How Many').onChange(v => setCloudCount(instHighClouds, v));
         highFolder.add(params, 'cloudsHighSize', 0.2, 3, 0.05).name('Scale / Size').onChange(v => setCloudSize(instHighClouds, v));
         highFolder.add(params, 'cloudsHighAltitude', -500, 500, 2).name('Altitude / Height').onChange(v => {
@@ -6110,7 +8184,7 @@ let isInitializingGui = true;
             for (let i = 0; i < totalSlots; i++) {
                 instHighClouds.getMatrixAt(i, m);
                 m.decompose(p, q, sc);
-                p.y = v + (highAltitudeOffsets[i] || 0);
+                p.y = v + (highAltitudeOffsets[i % highAltitudeOffsets.length] || 0);
                 m.compose(p, q, sc);
                 instHighClouds.setMatrixAt(i, m);
             }
@@ -6120,10 +8194,7 @@ let isInitializingGui = true;
             updateHighCloudDistance(v);
         }).listen();
         highFolder.add(params, 'cloudsHighOpacity', 0.1, 1.0, 0.02).name('Opacity').onChange(v => {
-            highCloudMat.opacity = v;
-            if (highCloudMat.userData && highCloudMat.userData.shader && highCloudMat.userData.shader.uniforms.uCloudOpacity) {
-                highCloudMat.userData.shader.uniforms.uCloudOpacity.value = v;
-            }
+            setMaterialOpacity(highCloudMat, v);
         });
         highFolder.add(params, 'cloudsHighBottomBlur', 0.05, 0.8, 0.02).name('Bottom Blur / Feather').onChange(v => {
             if (highCloudMat.userData && highCloudMat.userData.shader && highCloudMat.userData.shader.uniforms.uBottomBlur) {
@@ -6132,9 +8203,39 @@ let isInitializingGui = true;
         });
         highFolder.addColor(params, 'cloudsHighColor').name('Color Tint');
 
+        // 2b. Low Horizon Towers
+        const lowTowerFolder = cloudFolder.addFolder('Low Horizon Towers');
+        lowTowerFolder.add(params, 'cloudsLowTower').name('Show Towers').onChange(updateAllCloudVisibility).listen();
+        lowTowerFolder.add(params, 'cloudsLowTowerCount', 0, 28, 1).name('How Many').onChange(v => setCloudCount(instLowTowerClouds, v));
+        lowTowerFolder.add(params, 'cloudsLowTowerSize', 0.2, 3, 0.05).name('Scale / Size').onChange(v => setCloudSize(instLowTowerClouds, v));
+        lowTowerFolder.add(params, 'cloudsLowTowerAltitude', -500, 500, 2).name('Altitude / Height').onChange(v => {
+            const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+            const totalSlots = instLowTowerClouds.instanceMatrix ? instLowTowerClouds.instanceMatrix.count : instLowTowerClouds.count;
+            for (let i = 0; i < totalSlots; i++) {
+                instLowTowerClouds.getMatrixAt(i, m);
+                m.decompose(p, q, sc);
+                p.y = v + (lowTowerAltitudeOffsets[i % lowTowerAltitudeOffsets.length] || 0);
+                m.compose(p, q, sc);
+                instLowTowerClouds.setMatrixAt(i, m);
+            }
+            instLowTowerClouds.instanceMatrix.needsUpdate = true;
+        });
+        lowTowerFolder.add(params, 'cloudsLowTowerDistance', 800, 8000, 25).name('Distance from Camera').onChange(v => {
+            updateLowTowerCloudDistance(v);
+        }).listen();
+        lowTowerFolder.add(params, 'cloudsLowTowerOpacity', 0.1, 1.0, 0.02).name('Opacity').onChange(v => {
+            setMaterialOpacity(lowTowerCloudMat, v);
+        });
+        lowTowerFolder.add(params, 'cloudsLowTowerBottomBlur', 0.05, 0.8, 0.02).name('Bottom Blur / Feather').onChange(v => {
+            if (lowTowerCloudMat.userData && lowTowerCloudMat.userData.shader && lowTowerCloudMat.userData.shader.uniforms.uBottomBlur) {
+                lowTowerCloudMat.userData.shader.uniforms.uBottomBlur.value = v;
+            }
+        });
+        lowTowerFolder.addColor(params, 'cloudsLowTowerColor').name('Color Tint');
+
         // 3. Distant Horizon Banks
         const giantFolder = cloudFolder.addFolder('Distant Horizon Banks');
-        giantFolder.add(params, 'cloudsGiant').name('Show Horizon Banks').onChange(v => { instMegaClouds.visible = v; });
+        giantFolder.add(params, 'cloudsGiant').name('Show Horizon Banks').onChange(updateAllCloudVisibility).listen();
         giantFolder.add(params, 'cloudsGiantCount', 0, 28, 1).name('How Many').onChange(v => setCloudCount(instMegaClouds, v));
         giantFolder.add(params, 'cloudsGiantSize', 0.2, 3, 0.05).name('Scale / Size').onChange(v => setCloudSize(instMegaClouds, v));
         giantFolder.add(params, 'cloudsGiantAltitude', -500, 500, 2).name('Altitude / Height').onChange(v => {
@@ -6156,10 +8257,7 @@ let isInitializingGui = true;
             updateGiantCloudDistance(v);
         }).listen();
         giantFolder.add(params, 'cloudsGiantOpacity', 0.1, 1.0, 0.02).name('Opacity').onChange(v => {
-            megaCloudMat.opacity = v;
-            if (megaCloudMat.userData && megaCloudMat.userData.shader && megaCloudMat.userData.shader.uniforms.uCloudOpacity) {
-                megaCloudMat.userData.shader.uniforms.uCloudOpacity.value = v;
-            }
+            setMaterialOpacity(megaCloudMat, v);
         });
         giantFolder.add(params, 'cloudsGiantBottomBlur', 0.05, 0.8, 0.02).name('Bottom Blur / Feather').onChange(v => {
             if (megaCloudMat.userData && megaCloudMat.userData.shader && megaCloudMat.userData.shader.uniforms.uBottomBlur) {
@@ -6168,12 +8266,64 @@ let isInitializingGui = true;
         });
         giantFolder.addColor(params, 'cloudsGiantColor').name('Color Tint');
 
+
+        // 3c. Distant High Clouds (3D Procedural Meshes)
+        const billboardFolder = cloudFolder.addFolder('Distant High Clouds');
+        billboardFolder.add(params, 'cloudsBillboard').name('Show High Clouds').onChange(updateAllCloudVisibility).listen();
+        billboardFolder.add(params, 'cloudsBillboardCount', 0, 36, 1).name('How Many').onChange(v => setCloudCount(instBillboardClouds, v));
+        billboardFolder.add(params, 'cloudsBillboardSize', 0.2, 3, 0.05).name('Scale / Size').onChange(v => setCloudSize(instBillboardClouds, v));
+        billboardFolder.add(params, 'cloudsBillboardAltitude', 400, 3000, 25).name('Altitude / Height').onChange(v => {
+            const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+            cirroMeshes.forEach((mesh, vIdx) => {
+                const totalSlots = mesh.instanceMatrix ? mesh.instanceMatrix.count : mesh.count;
+                for (let i = 0; i < totalSlots; i++) {
+                    mesh.getMatrixAt(i, m);
+                    m.decompose(p, q, sc);
+                    const cloudIdx = vIdx * CIRRO_PER_VARIANT + i;
+                    p.y = v + ((cloudIdx % 5 - 2) * 80);
+                    m.compose(p, q, sc);
+                    mesh.setMatrixAt(i, m);
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+            });
+        });
+        billboardFolder.add(params, 'cloudsBillboardDistance', 2000, 9000, 50).name('Distance from Camera').onChange(v => {
+            const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+            cirroMeshes.forEach(mesh => {
+                const totalSlots = mesh.instanceMatrix ? mesh.instanceMatrix.count : mesh.count;
+                for (let i = 0; i < totalSlots; i++) {
+                    mesh.getMatrixAt(i, m);
+                    m.decompose(p, q, sc);
+                    const hDist = Math.sqrt(p.x * p.x + p.z * p.z) || 1.0;
+                    const angle = Math.atan2(p.z, p.x);
+                    const mult = hDist / (params.cloudsBillboardDistance || 5200);
+                    p.x = Math.cos(angle) * v * mult;
+                    p.z = Math.sin(angle) * v * mult;
+                    m.compose(p, q, sc);
+                    mesh.setMatrixAt(i, m);
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+            });
+        });
+        billboardFolder.add(params, 'cloudsBillboardOpacity', 0.1, 1.0, 0.02).name('Opacity').onChange(v => {
+            setMaterialOpacity(cirroCloudMat, v);
+        });
+        billboardFolder.addColor(params, 'cloudsBillboardColor').name('Color Tint').onChange(v => {
+            cirroCloudMat.color.set(v);
+        });
+
         // 4. Lighting & Ghibli Shading Colors
         const lightFolder = cloudFolder.addFolder('Lighting & Shading');
         lightFolder.addColor(params, 'cloudsDayLitColor').name('Day Sunlit Tops');
         lightFolder.addColor(params, 'cloudsDayShadowColor').name('Day Sky Shadows');
         lightFolder.addColor(params, 'cloudsNightLitColor').name('Night Moonlit Tops');
         lightFolder.addColor(params, 'cloudsNightShadowColor').name('Night Sky Shadows');
+
+        // 5. Cloud Dynamics & Mist
+        const dynamicFolder = cloudFolder.addFolder('Cloud Dynamics & Mist');
+        dynamicFolder.add(params, 'cloudsBillowAmount', 0.0, 3.0, 0.05).name('Billow Motion');
+        dynamicFolder.add(params, 'cloudsBillowSpeed', 0.05, 1.5, 0.02).name('Billow Speed');
+        dynamicFolder.add(params, 'cloudMistEffect').name('Exit Mist Haze');
 
         // Tree Editor
         let oldTreeColors = [...treeGreenVariations];
@@ -6196,31 +8346,38 @@ let isInitializingGui = true;
                 }
                 if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
             });
+            treeNearMeshes.forEach(mesh => {
+                const count = mesh.maxCount || mesh.count;
+                for (let i = 0; i < count; i++) {
+                    mesh.getColorAt(i, temp);
+                    if (Math.abs(temp.r - oldColor.r) < 0.01 && Math.abs(temp.g - oldColor.g) < 0.01 && Math.abs(temp.b - oldColor.b) < 0.01) {
+                        mesh.setColorAt(i, newColor);
+                    }
+                }
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+            });
             oldTreeColors[idx] = newHexVal;
         }
 
         const treeFolder = gui.addFolder('Trees');
-        window.treeFolder = treeFolder;
-        treeFolder.add(params, 'treeScale', 0.5, 8.0).name('Tree Scale').onChange(v => {
-            treeUniforms.uTreeScale.value = v;
-            if (matTree.userData.shader && matTree.userData.shader.uniforms.uTreeScale) {
-                matTree.userData.shader.uniforms.uTreeScale.value = v;
-            }
+        treeFolder.addColor(params, 'treeColor0').name('Forest Top (Light)').onChange(v => updateTreeColorForIndex(0, v));
+        treeFolder.addColor(params, 'treeColor1').name('Forest Sunlit (Warm)').onChange(v => updateTreeColorForIndex(1, v));
+        treeFolder.addColor(params, 'treeColor2').name('Forest Mid (Soft)').onChange(v => updateTreeColorForIndex(2, v));
+        treeFolder.addColor(params, 'treeColor3').name('Forest Deep (Olive)').onChange(v => updateTreeColorForIndex(3, v));
+        treeFolder.addColor(params, 'treeColor4').name('Field Bright (Spring)').onChange(v => updateTreeColorForIndex(4, v));
+        treeFolder.addColor(params, 'treeColor5').name('Field Mid (Sage)').onChange(v => updateTreeColorForIndex(5, v));
+        treeFolder.addColor(params, 'treeColor6').name('Field Shadow (Dark)').onChange(v => updateTreeColorForIndex(6, v));
+        treeFolder.add(params, 'treeScale', 1.0, 10.0, 0.25).name('Scale / Size').onChange(v => {
+            params.treeScale = v;
+            lastTerrainGridX = -9999;
         });
-        treeFolder.addColor(params, 'treeColor0').name('Color 1').onChange(v => updateTreeColorForIndex(0, v));
-        treeFolder.addColor(params, 'treeColor1').name('Color 2').onChange(v => updateTreeColorForIndex(1, v));
-        treeFolder.addColor(params, 'treeColor2').name('Color 3').onChange(v => updateTreeColorForIndex(2, v));
-        treeFolder.addColor(params, 'treeColor3').name('Color 4').onChange(v => updateTreeColorForIndex(3, v));
-        treeFolder.addColor(params, 'treeColor4').name('Color 5').onChange(v => updateTreeColorForIndex(4, v));
-        treeFolder.addColor(params, 'treeColor5').name('Color 6').onChange(v => updateTreeColorForIndex(5, v));
-        treeFolder.addColor(params, 'treeColor6').name('Color 7').onChange(v => updateTreeColorForIndex(6, v));
 
         // ==========================================
         // DEV & SYSTEM
         // ==========================================
         const sysFolder = gui.addFolder('Dev & System');
 
-        // Editor launchers (moved from old "Editor" folder)
+        // Editor launchers
         sysFolder.add({ openTerrainEditor: () => {
             const btn = document.getElementById('editor-toggle');
             if (btn) btn.click();
@@ -6230,20 +8387,8 @@ let isInitializingGui = true;
             if (crystalEditor) crystalEditor.style.display = crystalEditor.style.display === 'none' ? 'block' : 'none';
         }}, 'openCrystalEditor').name('Crystal Editor');
 
-        // 20-seed acceptance test (moved from World folder)
+        // 20-seed acceptance test
         sysFolder.add(worldParams, 'runAcceptanceTests').name('Run 20-Seed Tests');
-
-        // Show / Hide toggles (moved from old "Debug Render" folder)
-        const debugFolder = sysFolder.addFolder('Show / Hide');
-        debugFolder.add(params, 'showTerrain').name('Terrain').onChange(v => { terrain.visible = v; });
-        debugFolder.add(params, 'showWater').name('Water').onChange(v => { waterMesh.visible = v; });
-        debugFolder.add(params, 'showTrees').name('Trees').onChange(v => { [...treeMeshes, ...treeNearMeshes].forEach(m => m.visible = v); });
-        debugFolder.add(params, 'showClouds').name('Clouds').onChange(v => { instClouds.visible = v; if(typeof instHighClouds !== 'undefined') instHighClouds.visible = v; if(typeof instMegaClouds !== 'undefined') instMegaClouds.visible = v; });
-        debugFolder.add(params, 'showBirds').name('Birds').onChange(v => { if(typeof instBirds !== 'undefined') instBirds.visible = v; if(typeof flockGrp !== 'undefined') flockGrp.visible = v; });
-        debugFolder.add(params, 'showFogPlanes').name('Fog Planes').onChange(v => { if(typeof window.fogGroup !== 'undefined') window.fogGroup.visible = v; });
-        debugFolder.add(params, 'showCrystals').name('Crystals').onChange(v => { instCrystals.visible = v; });
-        debugFolder.add(params, 'showMap').name('World Map').onChange(v => { const f = document.getElementById('map-frame'); if(f) f.style.display = v ? '' : 'none'; const el = document.getElementById('world-map'); if(el) el.classList.toggle('map-no-compass', !v); });
-        debugFolder.add(params, 'showGUI').name('Hide Panel').onChange(v => toggleGUI(v));
 
         // Save & Reset
         sysFolder.add({
@@ -6264,13 +8409,135 @@ let isInitializingGui = true;
             }
         }, 'resetSettings').name('Reset to Default');
 
+        // ==========================================
+        // DEBUG MODE (Ported from Wanderlust-II)
+        // ==========================================
+        const debugFolder = gui.addFolder('Debug Mode');
+        debugFolder.add(params, 'godMode').name('God Mode (Free Cam) [G]').listen().onChange(v => setGodMode(v));
+        debugFolder.add(params, 'cameraFov', 5, 100, 1).name('Camera FOV / Zoom [Z]').listen().onChange(v => {
+            camera.fov = v;
+            camera.updateProjectionMatrix();
+            if (godCamera) {
+                godCamera.fov = v;
+                godCamera.updateProjectionMatrix();
+            }
+        });
+        debugFolder.add(params, 'normalizeSun').name('Normalize Sun').listen().onChange(v => setNormalizeSun(v));
+        debugFolder.add(params, 'showTerrain').name('Terrain').onChange(v => { terrain.visible = v; });
+        debugFolder.add(params, 'showWater').name('Water').onChange(v => { waterMesh.visible = v; });
+        debugFolder.add(params, 'showTrees').name('Trees').onChange(v => { [...treeMeshes, ...treeNearMeshes].forEach(m => m.visible = v); });
+        debugFolder.add(params, 'showClouds').name('Clouds').onChange(updateAllCloudVisibility).listen();
+        debugFolder.add(params, 'showCloudDebug').name('Cloud Type Overlays (U)').listen().onChange(v => setCloudDebugMode(v));
+        debugFolder.add(params, 'cloudDebugTargetMode', { 'Every Visible Cloud': 'visible', 'Single Cloud (Aim Only)': 'single', 'Nearest 3 Visible': 'nearest3' }).name('Cloud Debug Mode').listen();
+        debugFolder.add(params, 'debugCloudTint').name('Cloud Color Coding').listen().onChange(() => updateCloudDebugTints());
+        debugFolder.add(params, 'showFog').name('All Fog').listen().onChange(v => setAllFogEnabled(v));
+        debugFolder.add(params, 'showFogPlanes').name('Fog Planes').listen().onChange(v => {
+            if (typeof window.fogGroup !== 'undefined') window.fogGroup.visible = v && params.showFog;
+        });
+        debugFolder.add(params, 'godRays').name('God Rays').listen().onChange(v => { godRaysPass.enabled = v; });
+        debugFolder.add(params, 'showBirds').name('Birds').onChange(v => { if(typeof instBirds !== 'undefined') instBirds.visible = v; if(typeof flockGrp !== 'undefined') flockGrp.visible = v; });
+        debugFolder.add(params, 'showCrystals').name('Crystals').onChange(v => { instCrystals.visible = v; });
+        debugFolder.add(params, 'showMap').name('World Map').onChange(v => { const f = document.getElementById('map-frame'); if(f) f.style.display = v ? '' : 'none'; const el = document.getElementById('world-map'); if(el) el.classList.toggle('map-no-compass', !v); });
+        debugFolder.add(params, 'showGUI').name('Hide Panel').onChange(v => toggleGUI(v));
+
+        function collapseAllGUI(g) {
+            if (!g) return;
+            if (typeof g.foldersRecursive === 'function') {
+                g.foldersRecursive().forEach(f => {
+                    if (typeof f.close === 'function') f.close();
+                });
+            } else if (g.folders && Array.isArray(g.folders)) {
+                g.folders.forEach(f => collapseAllGUI(f));
+            }
+            if (typeof g.close === 'function') g.close();
+        }
+
         // Load settings if they exist
         try {
             const savedData = localStorage.getItem('flightSettings');
-            if (savedData) gui.load(JSON.parse(savedData));
+            if (savedData) {
+                const parsed = JSON.parse(savedData);
+                if (parsed && parsed.controllers) {
+                    if (parsed.controllers.showFog !== undefined) {
+                        params.showFog = parsed.controllers.showFog;
+                        params.showFogPlanes = parsed.controllers.showFog;
+                    } else if (parsed.controllers.showFogPlanes !== undefined) {
+                        parsed.controllers.showFog = parsed.controllers.showFogPlanes;
+                        params.showFog = parsed.controllers.showFogPlanes;
+                        params.showFogPlanes = parsed.controllers.showFogPlanes;
+                    }
+                    if (parsed.controllers.cameraFov !== undefined) {
+                        params.cameraFov = parsed.controllers.cameraFov;
+                    }
+                    if (parsed.controllers.normalizeSun !== undefined) {
+                        params.normalizeSun = parsed.controllers.normalizeSun;
+                    }
+                    // Sanitize oversized cloud parameters from older sessions
+                    if (parsed.controllers.cloudsHighSize > 1.8) parsed.controllers.cloudsHighSize = 1.1;
+                    if (parsed.controllers.cloudsGiantSize === undefined || parsed.controllers.cloudsGiantSize < 1.3 || parsed.controllers.cloudsGiantSize > 2.2) parsed.controllers.cloudsGiantSize = 1.5;
+                    if (parsed.controllers.cloudsLowCount === undefined || parsed.controllers.cloudsLowCount > 70) parsed.controllers.cloudsLowCount = 50;
+                    if (parsed.controllers.cloudsLowDistance === undefined || parsed.controllers.cloudsLowDistance < 1800) parsed.controllers.cloudsLowDistance = 2000;
+                    if (parsed.controllers.cloudsLowAltitude === undefined || parsed.controllers.cloudsLowAltitude < 90) parsed.controllers.cloudsLowAltitude = 130;
+                    params.cloudsLowAltitude = parsed.controllers.cloudsLowAltitude;
+                    if (parsed.controllers.cloudsLowBottomBlur === undefined || parsed.controllers.cloudsLowBottomBlur < 0.28) parsed.controllers.cloudsLowBottomBlur = 0.35;
+                    if (parsed.controllers.cloudsLowTowerAltitude === undefined || parsed.controllers.cloudsLowTowerAltitude > -25) parsed.controllers.cloudsLowTowerAltitude = -35;
+                    params.cloudsLowTowerAltitude = parsed.controllers.cloudsLowTowerAltitude;
+                    if (parsed.controllers.cloudsLowTowerBottomBlur === undefined || parsed.controllers.cloudsLowTowerBottomBlur < 0.28) parsed.controllers.cloudsLowTowerBottomBlur = 0.35;
+                    if (parsed.controllers.cloudsLowBankBottomBlur === undefined || parsed.controllers.cloudsLowBankBottomBlur < 0.30) parsed.controllers.cloudsLowBankBottomBlur = 0.40;
+                    if (parsed.controllers.cloudsLowTowerSize > 1.8) parsed.controllers.cloudsLowTowerSize = 1.1;
+                    if (parsed.controllers.cloudsLowBankSize > 1.8) parsed.controllers.cloudsLowBankSize = 1.1;
+                    if (parsed.controllers.cloudsGiantDistance === undefined || parsed.controllers.cloudsGiantDistance < 5500) parsed.controllers.cloudsGiantDistance = 6000;
+                    params.cloudsGiantDistance = parsed.controllers.cloudsGiantDistance;
+                    if (parsed.controllers.cloudsHighDistance < 2000) parsed.controllers.cloudsHighDistance = 2600;
+                    if (parsed.controllers.cloudsLowTowerDistance < 2600) parsed.controllers.cloudsLowTowerDistance = 3200;
+                    if (parsed.controllers.cloudsLowBankDistance < 3600) parsed.controllers.cloudsLowBankDistance = 4400;
+                    if (parsed.controllers.cloudsGiantCount > 18) parsed.controllers.cloudsGiantCount = 14;
+                    if (parsed.controllers.cloudsLowBankCount > 18) parsed.controllers.cloudsLowBankCount = 14;
+                    if (parsed.controllers.cloudsHighCount > 18) parsed.controllers.cloudsHighCount = 14;
+                    if (parsed.controllers.cloudsLowTowerCount > 18) parsed.controllers.cloudsLowTowerCount = 12;
+                    if (parsed.controllers.cloudsMinDistance === undefined || parsed.controllers.cloudsMinDistance < 100) parsed.controllers.cloudsMinDistance = 300;
+                    delete parsed.controllers.showCloudDebug;
+                    params.showCloudDebug = false;
+                    delete parsed.controllers.cloudDebugTargetMode;
+                    params.cloudDebugTargetMode = 'visible';
+                    delete parsed.controllers.debugCloudTint;
+                    params.debugCloudTint = false;
+                    delete parsed.controllers.modelVisible;
+                    params.modelVisible = true;
+                    isModelVisible = true;
+                }
+                gui.load(parsed);
+                setCloudSize(instClouds, params.cloudsLowSize);
+                setCloudSize(instHighClouds, params.cloudsHighSize);
+                setCloudSize(instLowTowerClouds, params.cloudsLowTowerSize);
+                setCloudSize(instMegaClouds, params.cloudsGiantSize);
+                setCloudSize(instLowBankClouds, params.cloudsLowBankSize);
+                if (typeof instBillboardClouds !== 'undefined') setCloudSize(instBillboardClouds, params.cloudsBillboardSize);
+                setCloudCount(instClouds, params.cloudsLowCount);
+                setCloudCount(instHighClouds, params.cloudsHighCount);
+                setCloudCount(instLowTowerClouds, params.cloudsLowTowerCount);
+                setCloudCount(instMegaClouds, params.cloudsGiantCount);
+                setCloudCount(instLowBankClouds, params.cloudsLowBankCount);
+                if (typeof instBillboardClouds !== 'undefined') setCloudCount(instBillboardClouds, params.cloudsBillboardCount);
+                setMaterialOpacity(matCloud, params.cloudsLowOpacity);
+                setMaterialOpacity(highCloudMat, params.cloudsHighOpacity);
+                setMaterialOpacity(lowTowerCloudMat, params.cloudsLowTowerOpacity);
+                setMaterialOpacity(megaCloudMat, params.cloudsGiantOpacity);
+                setMaterialOpacity(lowBankCloudMat, params.cloudsLowBankOpacity);
+                if (typeof cirroCloudMat !== 'undefined') setMaterialOpacity(cirroCloudMat, params.cloudsBillboardOpacity);
+                setAllFogEnabled(params.showFog);
+                setNormalizeSun(params.normalizeSun);
+                params.modelVisible = true;
+                isModelVisible = true;
+                updateModelVisibility();
+                updateAllCloudVisibility();
+            }
         } catch(e) {
             console.error('Failed to load settings', e);
         }
+
+        // Always collapse GUI on load
+        collapseAllGUI(gui);
 
         // Top-Left Save Menu (Wanderlust-II per-biome and global scene saves)
         const saveGui = new GUI({
@@ -6369,7 +8636,8 @@ let isInitializingGui = true;
         const globalFolder = saveGui.addFolder('Global Scene Saves');
         globalFolder.add(saveActions, 'saveGlobal').name('Save Global Preset');
         globalFolder.add(saveActions, 'loadFile').name('Load File from Disk');
-        globalFolder.open();
+        globalFolder.close();
+        collapseAllGUI(saveGui);
 
         const topSaveBtn = document.getElementById('top-save-setting-btn');
         if (topSaveBtn) {

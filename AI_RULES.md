@@ -2,7 +2,7 @@
 
 ## 1. Stay in THIS folder only
 - You work ONLY inside this exact folder:
-  E:\X Flight\New folder\ghibli-flight
+  E:\X Flight\Stage 01 - Initial Base
 - Before you change anything, print the full path of the folder you are about to edit and confirm it matches the line above.
 - Never edit, or read-in-order-to-change, or run anything in any other folder.
 - If a task seems to need another folder, STOP and ask me in plain words.
@@ -22,7 +22,7 @@
 - Always tell me the port number you are using.
 
 ## 4. Always give me the FULL folder path, never a short version
-- Any time you mention a folder or file location, write the COMPLETE path from the drive letter onward, exactly as it is, so I can copy and paste it. For example: E:\X Flight\New folder\ghibli-flight
+- Any time you mention a folder or file location, write the COMPLETE path from the drive letter onward, exactly as it is, so I can copy and paste it. For example: E:\X Flight\Stage 01 - Initial Base
 - Never abbreviate or shorten it. Never write "the folder", "this folder", or "...\Wanderlust-V". I need the whole thing, copy-paste ready, every time.
 
 ## 5. Sandboxes are bare and ugly on purpose
@@ -46,7 +46,7 @@
 
 ## 9. When a task is done, PROVE it — do not just say "done"
 - Every time you finish a task, end your message with TWO confirmations:
-    1. The FULL folder path you applied the change to (complete, copy-paste ready), so I can see it landed in the right place. For example: E:\X Flight\New folder\ghibli-flight
+    1. The FULL folder path you applied the change to (complete, copy-paste ready), so I can see it landed in the right place. For example: E:\X Flight\Stage 01 - Initial Base
     2. Confirmation that the change is ACTUALLY showing, live, on the running server. Check it yourself FIRST — look at the real result. Do not assume, do not guess.
 - Give me the server links again (computer + phone) and tell me in one plain line what I should now see (for example: "the background is now yellow").
 - If the change is NOT showing, or it looks wrong, tell me plainly and fix it BEFORE you say the task is done.

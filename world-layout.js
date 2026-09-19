@@ -532,6 +532,7 @@ export class WorldLayout {
         const candidates = this.getCandidateIslands(worldX, worldZ);
         let maxElevation = -999;
         let maxIslandMask = 0;
+        let bestIsland = null;
 
         // Base ocean floor with gentle deep submarine relief
         const oceanRelief = snoise(worldX * INV_WORLD * 0.0006, worldZ * INV_WORLD * 0.0006) * 3.5 - 6.0;
@@ -543,7 +544,8 @@ export class WorldLayout {
                 // Pass island-centered local coordinates to get natural mountain massifs and valleys
                 const lx = worldX - isl.centerX;
                 const lz = worldZ - isl.centerZ;
-                const rawH = isl.biome.module.getHeight(lx * INV_HILL, lz * INV_HILL, snoise) * HILL_HEIGHT;
+                const mod = isl.biome.module;
+                const rawH = (mod.getElevation ? mod.getElevation(lx * INV_HILL, lz * INV_HILL, 1.0 - mask, snoise) : mod.getHeight(lx * INV_HILL, lz * INV_HILL, snoise)) * HILL_HEIGHT;
 
                 // Natural island elevation profile:
                 // Shoreline meets water smoothly at y = 2.8m above sea level (y = 0)
@@ -556,6 +558,7 @@ export class WorldLayout {
                 }
                 if (mask > maxIslandMask) {
                     maxIslandMask = mask;
+                    bestIsland = isl;
                 }
             }
         }
@@ -564,16 +567,21 @@ export class WorldLayout {
             return oceanRelief; // Open ocean base depth
         }
 
-        return this.applyLandforms(maxElevation, worldX, worldZ, maxIslandMask, snoise);
+        return this.applyLandforms(maxElevation, worldX, worldZ, maxIslandMask, snoise, bestIsland ? bestIsland.biomeId : null);
     }
 
     /**
-     * Shared landforms on top of every biome: ridges, cliff bands, rivers and ponds.
+     * Shared landforms on top of biomes: ridges, cliff bands, rivers and ponds.
      * Water sits at y = 2.4, so rivers and ponds just carve the ground below it.
      */
-    applyLandforms(h, x, z, landMask, snoise) {
+    applyLandforms(h, x, z, landMask, snoise, biomeId = null) {
         const inland = smoothstep(0.12, 0.5, landMask);
         if (inland <= 0) return h;
+
+        // Specialized biomes with custom mathematical landforms manage their own features
+        if (biomeId === 'lotus_grove' || biomeId === 'mycelium_forest' || biomeId === 'magical_sanctuary' || biomeId === 'sakura_realm') {
+            return h;
+        }
 
         // Rounded ridgelines on higher ground (squared noise keeps the crest soft, not a knife edge)
         const rq = snoise(x * 0.0026 + 311.0, z * 0.0026 - 127.0);
@@ -611,7 +619,7 @@ export class WorldLayout {
     /**
      * Compute composite 2D vertex color at (worldX, worldZ).
      */
-    getColor(h, worldX, worldZ, snoise, targetColor, blendColor1, blendColor2) {
+    getColor(h, worldX, worldZ, snoise, targetColor, blendColor1, blendColor2, slope = 0, normal = null) {
         const candidates = this.getCandidateIslands(worldX, worldZ);
         let maxMask = 0;
         let secondMask = 0;
@@ -633,21 +641,37 @@ export class WorldLayout {
         }
 
         if (bestIsl && maxMask > 0.01) {
+            const mod1 = bestIsl.biome.module;
             if (secondIsl && secondMask > 0.15) {
                 // Smooth transition between neighboring islets
                 const totalW = maxMask + secondMask;
                 const w1 = maxMask / totalW;
                 const w2 = secondMask / totalW;
+                const mod2 = secondIsl.biome.module;
 
-                bestIsl.biome.module.getColor(h, worldX * INV_HILL, worldZ * INV_HILL, snoise, blendColor1, smoothstep);
-                secondIsl.biome.module.getColor(h, worldX * INV_HILL, worldZ * INV_HILL, snoise, blendColor2, smoothstep);
+                if (mod1.getBiomeColor) {
+                    blendColor1.copy(mod1.getBiomeColor(worldX * INV_HILL, worldZ * INV_HILL, h, slope, normal, snoise));
+                } else {
+                    mod1.getColor(h, worldX * INV_HILL, worldZ * INV_HILL, snoise, blendColor1, smoothstep, slope, normal);
+                }
+
+                if (mod2.getBiomeColor) {
+                    blendColor2.copy(mod2.getBiomeColor(worldX * INV_HILL, worldZ * INV_HILL, h, slope, normal, snoise));
+                } else {
+                    mod2.getColor(h, worldX * INV_HILL, worldZ * INV_HILL, snoise, blendColor2, smoothstep, slope, normal);
+                }
+
                 targetColor.copy(blendColor1).lerp(blendColor2, w2);
             } else {
-                bestIsl.biome.module.getColor(h, worldX * INV_HILL, worldZ * INV_HILL, snoise, targetColor, smoothstep);
+                if (mod1.getBiomeColor) {
+                    targetColor.copy(mod1.getBiomeColor(worldX * INV_HILL, worldZ * INV_HILL, h, slope, normal, snoise));
+                } else {
+                    mod1.getColor(h, worldX * INV_HILL, worldZ * INV_HILL, snoise, targetColor, smoothstep, slope, normal);
+                }
             }
         } else {
             // Open Ocean shallow-to-deep vertex coloring
-            OCEAN_BIOME.module.getColor(h, worldX, worldZ, snoise, targetColor, smoothstep);
+            OCEAN_BIOME.module.getColor(h, worldX, worldZ, snoise, targetColor, smoothstep, slope, normal);
         }
     }
 

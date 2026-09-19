@@ -6,3 +6,5 @@ coverage/
 *.log
 .env*
 !.env.example
+*.before_revert
+*.saved_state

@@ -1,53 +1,140 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 
-const colorDeepWater = new THREE.Color(0x23142e);
-const colorPastelWater = new THREE.Color(0x6b21a8);
-const colorBlossomSand = new THREE.Color(0xfce7f3);
-const colorWhiteEarth = new THREE.Color(0xfdf2f8);
-const colorPetalPink = new THREE.Color(0xf472b6);
-const colorCoralBlush = new THREE.Color(0xfb7185);
-const colorRoseRock = new THREE.Color(0x9f1239);
-const colorDeepLoam = new THREE.Color(0x4c0519);
+// Palette Definitions
+const colorPastelWater    = new THREE.Color(0xa2d2ff); // Pastel Water
+const colorBlossomSand    = new THREE.Color(0xffcad4); // Blossom Sand
+const colorBleachedEarth  = new THREE.Color(0xf8f9fa); // Bleached Earth / Terrace Margins
+const colorLowPetalTurf   = new THREE.Color(0xffb4a2); // Lowland Petal Turf
+const colorHighPetalTurf  = new THREE.Color(0xe5989b); // Upper Tier Petal Turf
+const colorCoralRoseRock  = new THREE.Color(0xb56576); // Exposed Terrace Steps & Coral Rose Rock
 
+function smoothstep(edge0, edge1, x) {
+    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+    return t * t * (3.0 - 2.0 * t);
+}
+
+/**
+ * Procedural Elevation for Sakura Realm
+ * Generates stepped rice terraces, soft river bluffs, and sweeping cherry knolls.
+ * 
+ * @param {number} x - Local X coordinate
+ * @param {number} z - Local Z coordinate
+ * @param {number} islandDist - Normalized distance from island center (optional)
+ * @param {function} noise - Simplex noise function (snoise)
+ * @returns {number} Elevation in meters
+ */
+export function getElevation(x, z, islandDist = 0, noise) {
+    if (!noise) return 4.0;
+
+    // 1. Domain Warping (f = 0.0015, alpha = 80.0)
+    const wx = x + 80.0 * noise(x * 0.0015, z * 0.0015);
+    const wz = z + 80.0 * noise((x + 52.3) * 0.0015, (z + 13.7) * 0.0015);
+
+    // 2. Soft Bluffs & Macro Rolling Hills
+    const nBase = noise(wx * 0.00065, wz * 0.00065) * 0.5 + 0.5;
+    const hBase = nBase * 34.0 + 5.0;
+
+    // 3. Terracing Profile: Large horizontal expanses (30m–50m) dropping abruptly by 2.5m to 4.0m
+    // H = h_base + deltaH * (floor(h_detail * k) + smoothstep(0.85, 1.0, fract(h_detail * k)))
+    const deltaH = 3.2;
+    const k = 1.0 / deltaH;
+    const nDetail1 = noise(wx * 0.0012 + 60.0, wz * 0.0012 - 60.0) * 0.5 + 0.5;
+    const nDetail2 = noise(wx * 0.0028 + 120.0, wz * 0.0028 - 120.0) * 0.5 + 0.5;
+    const hDetail = (nDetail1 * 0.75 + nDetail2 * 0.25) * 26.0;
+
+    const t = hDetail * k;
+    const fl = Math.floor(t);
+    const fr = t - fl;
+    const hTerraces = deltaH * (fl + smoothstep(0.85, 1.0, fr));
+
+    const totalH = hBase + hTerraces;
+    // Smooth shoreline termination (sea level at y = 2.4m to 2.8m)
+    return Math.max(2.5, totalH);
+}
+
+/**
+ * Procedural Slope-Aware Coloring for Sakura Realm
+ * 
+ * @param {number} x - Local X coordinate
+ * @param {number} z - Local Z coordinate
+ * @param {number} height - Elevation in meters
+ * @param {number} slope - Slope factor (1.0 - normal.y)
+ * @param {object} normal - Normal vector { x, y, z } (optional)
+ * @param {function} noise - Simplex noise function
+ * @returns {THREE.Color} Normalized RGB color
+ */
+export function getBiomeColor(x, z, height, slope = 0, normal = null, noise = null) {
+    const outColor = new THREE.Color();
+
+    const ny = normal ? normal.y : (1.0 - slope);
+
+    // 1. Slope Awareness: Slopes steeper than 35 deg (normal.y < 0.819) sharply transition to Coral Rose Rock
+    if (ny < 0.819 && height > 3.2) {
+        outColor.copy(colorCoralRoseRock);
+        return outColor;
+    }
+
+    // 2. Shoreline & Water Transitions
+    if (height < 2.0) {
+        outColor.copy(colorPastelWater);
+        return outColor;
+    }
+
+    if (height < 3.8) {
+        // Blossom Sand
+        const tSand = smoothstep(2.0, 2.08, height);
+        const tTurf = smoothstep(3.72, 3.8, height);
+        outColor.copy(colorPastelWater).lerp(colorBlossomSand, tSand);
+        outColor.lerp(colorLowPetalTurf, tTurf);
+        return outColor;
+    }
+
+    // 3. Terrace Margins: Bleached Earth at step edges
+    // Recalculate terrace fraction at (x, z) if noise is available
+    if (noise) {
+        const wx = x + 80.0 * noise(x * 0.0015, z * 0.0015);
+        const wz = z + 80.0 * noise((x + 52.3) * 0.0015, (z + 13.7) * 0.0015);
+        const deltaH = 3.2;
+        const k = 1.0 / deltaH;
+        const nDetail1 = noise(wx * 0.0012 + 60.0, wz * 0.0012 - 60.0) * 0.5 + 0.5;
+        const nDetail2 = noise(wx * 0.0028 + 120.0, wz * 0.0028 - 120.0) * 0.5 + 0.5;
+        const hDetail = (nDetail1 * 0.75 + nDetail2 * 0.25) * 26.0;
+        const fr = (hDetail * k) - Math.floor(hDetail * k);
+
+        // Terrace edge rim highlighted with bleached earth
+        if (fr > 0.78 && fr < 0.86) {
+            outColor.copy(colorBleachedEarth);
+            return outColor;
+        }
+    }
+
+    // 4. Petal Turf: Dual-tone pinks (#FFB4A2 lowlands, shifting to #E5989B on upper tiers)
+    if (height < 26.0) {
+        const tTier = smoothstep(18.0, 26.0, height);
+        outColor.copy(colorLowPetalTurf).lerp(colorHighPetalTurf, tTier);
+    } else {
+        outColor.copy(colorHighPetalTurf);
+    }
+
+    return outColor;
+}
+
+// Module default export for world generator pipeline
 export default {
     name: "🌸 Sakura Realm",
     shoreName: "░ Blossom Shore",
-    getHeight(x, z, snoise) {
-        // Gentle terraced rolling hills and soft cherry mounds
-        const wx = x + snoise(x * 0.0007 + 88.0, z * 0.0007 + 88.0) * 320.0;
-        const wz = z + snoise(x * 0.0007 - 44.0, z * 0.0007 + 44.0) * 320.0;
+    getElevation,
+    getBiomeColor,
 
-        let y = snoise(wx * 0.00065, wz * 0.00065) * 42.0;
-        y += snoise(wx * 0.0019 + 20.0, wz * 0.0019 - 20.0) * 14.0;
-        y += Math.abs(snoise(x * 0.006, z * 0.006)) * 4.0;
-
-        const bluff = snoise(x * 0.003, z * 0.003);
-        if (bluff > 0.2) {
-            y += Math.pow(bluff - 0.2, 1.8) * 45.0;
-        }
-
-        return Math.max(3.0, y + 18.0);
+    // Backwards-compatible adapter for existing pipeline calls
+    getHeight(x, z, snoise, islandDist) {
+        return getElevation(x, z, islandDist || 0, snoise);
     },
-    getColor(h, x, z, snoise, tempColor, smoothstep) {
-        const petalScatter = snoise(x * 0.015 + 800, z * 0.015 + 800) * 0.5 + 0.5;
-
-        if (h < 1.0) {
-            tempColor.copy(colorDeepWater);
-        } else if (h < 2.35) {
-            tempColor.lerpColors(colorDeepWater, colorPastelWater, smoothstep(1.0, 2.35, h));
-        } else if (h < 4.2) {
-            tempColor.copy(colorBlossomSand);
-        } else if (h < 6.2) {
-            tempColor.lerpColors(colorBlossomSand, colorWhiteEarth, smoothstep(4.2, 6.2, h));
-        } else if (h < 26.0) {
-            tempColor.lerpColors(colorWhiteEarth, colorPetalPink, smoothstep(6.2, 26.0, h));
-            if (petalScatter > 0.62) {
-                tempColor.lerp(colorCoralBlush, (petalScatter - 0.62) * 2.0);
-            }
-        } else if (h < 42.0) {
-            tempColor.lerpColors(colorPetalPink, colorRoseRock, smoothstep(26.0, 42.0, h));
-        } else {
-            tempColor.lerpColors(colorRoseRock, colorDeepLoam, smoothstep(42.0, 65.0, h));
+    getColor(h, x, z, snoise, tempColor, smoothstepFn, slope, normal) {
+        const c = getBiomeColor(x, z, h, slope || 0, normal || null, snoise);
+        if (tempColor && tempColor.copy) {
+            tempColor.copy(c);
         }
+        return c;
     }
 };
