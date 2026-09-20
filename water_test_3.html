@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+  <title>Shader 3 - Water Foam Sandbox</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #1e485e;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    }
+    #info-box {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(15, 23, 42, 0.85);
+      color: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.4;
+      pointer-events: none;
+      z-index: 999;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.111.0/build/three.module.js",
+        "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.111.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <div id="info-box">
+    <strong>Shader 3: Water Foam</strong> (Powered by FoamWater.js)<br />
+    Rotate: Left Click / Drag &bull; Pan: Right Click &bull; Zoom: Scroll / Pinch
+  </div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+    import { GUI } from "three/examples/jsm/libs/dat.gui.module.js";
+    import { FoamWater } from "./FoamWater.js";
+
+    var camera, scene, renderer, clock, controls, water;
+
+    var params = {
+      foamColor: 0xffffff,
+      waterColor: 0x14c6a5,
+      threshold: 0.1
+    };
+
+    init();
+    animate();
+
+    function init() {
+      clock = new THREE.Clock();
+
+      camera = new THREE.PerspectiveCamera(
+        70,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        100
+      );
+      camera.position.set(0, 7, 10);
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1e485e);
+
+      // Lights
+      var ambientLight = new THREE.AmbientLight(0xcccccc, 0.4);
+      scene.add(ambientLight);
+
+      var dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(0, 5, 5);
+      scene.add(dirLight);
+
+      // Border walls
+      var boxGeometry = new THREE.BoxBufferGeometry(10, 1, 1);
+      var boxMaterial = new THREE.MeshLambertMaterial({ color: 0xea4d10 });
+
+      var box1 = new THREE.Mesh(boxGeometry, boxMaterial);
+      box1.position.z = 4.5;
+      scene.add(box1);
+
+      var box2 = new THREE.Mesh(boxGeometry, boxMaterial);
+      box2.position.z = -4.5;
+      scene.add(box2);
+
+      var box3 = new THREE.Mesh(boxGeometry, boxMaterial);
+      box3.position.x = -5;
+      box3.rotation.y = Math.PI * 0.5;
+      scene.add(box3);
+
+      var box4 = new THREE.Mesh(boxGeometry, boxMaterial);
+      box4.position.x = 5;
+      box4.rotation.y = Math.PI * 0.5;
+      scene.add(box4);
+
+      // Center floating cube
+      var box5 = new THREE.Mesh(new THREE.BoxBufferGeometry(), boxMaterial);
+      box5.rotation.y = Math.PI * 0.1;
+      box5.rotation.x = Math.PI * 0.05;
+      scene.add(box5);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.gammaOutput = true;
+      document.body.appendChild(renderer.domElement);
+
+      // Reusable FoamWater shader instance
+      water = new FoamWater({
+        renderer: renderer,
+        scene: scene,
+        camera: camera,
+        width: 10,
+        height: 10,
+        foamColor: params.foamColor,
+        waterColor: params.waterColor,
+        threshold: params.threshold,
+        dudvMap: "./water_dudv.png"
+      });
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.minDistance = 1;
+      controls.maxDistance = 50;
+
+      var gui = new GUI();
+      gui.addColor(params, "foamColor").onChange(function (val) {
+        water.setFoamColor(val);
+      });
+      gui.addColor(params, "waterColor").onChange(function (val) {
+        water.setWaterColor(val);
+      });
+      gui.add(params, "threshold", 0.01, 1, 0.01).onChange(function (val) {
+        water.setThreshold(val);
+      });
+      gui.open();
+
+      window.addEventListener("resize", onWindowResize, false);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      if (water) water.resize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      var time = clock.getElapsedTime();
+
+      // FoamWater automatically handles the depth pass and shader uniforms
+      water.update(time);
+
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+</html>

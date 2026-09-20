@@ -1,0 +1,317 @@
+:root { color-scheme: dark; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      overflow: hidden; background: #62b1e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      touch-action: none;
+      user-select: none;
+    }
+    #app { position: fixed; inset: 0; touch-action: none; }
+    canvas { display: block; touch-action: none; }
+
+    #touch-controls {
+      position: fixed; inset: 0; z-index: 20; pointer-events: none;
+    }
+
+    #joystick-base {
+      position: absolute; left: 40px; bottom: 40px;
+      width: 100px; height: 100px; border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);
+      pointer-events: auto;
+    }
+
+    #joystick-knob {
+      position: absolute; left: 50%; top: 50%;
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    #boost-btn {
+      position: fixed; right: 20px; bottom: 25px;
+      width: 75px; height: 75px; border-radius: 50%;
+      color: white; font-weight: bold; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none; pointer-events: auto;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      backdrop-filter: blur(4px);
+      background: rgba(59, 130, 246, 0.75); border: 2px solid rgba(96, 165, 250, 0.9);
+      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 20;
+    }
+
+    #world-map {
+      position: fixed; left: 14px; bottom: 14px; z-index: 15;
+      padding: 5px 5px 3px; border-radius: 10px;
+      background: #efe4c8; box-shadow: 0 2px 8px rgba(40, 30, 10, 0.28);
+      opacity: 0.82; transition: opacity 0.2s;
+    }
+    #world-map:hover, #world-map.map-open { opacity: 1; }
+    #world-map.map-open {
+      left: 50%; bottom: 50%; transform: translate(-50%, 50%);
+      z-index: 40; padding: 8px 8px 5px;
+      box-shadow: 0 10px 40px rgba(40, 30, 10, 0.45);
+    }
+    #map-frame { position: relative; }
+    #map-toggle-btn {
+      position: absolute; top: 4px; right: 4px; z-index: 2;
+      width: 22px; height: 22px; padding: 0;
+      background: rgba(0,0,0,0.38); border: none; border-radius: 5px;
+      color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.15s;
+    }
+    #map-frame:hover #map-toggle-btn,
+    #world-map.map-open #map-toggle-btn { opacity: 1; }
+    #world-map.map-open #map-toggle-btn { top: 6px; right: 6px; width: 26px; height: 26px; background: rgba(0,0,0,0.5); }
+    #map-canvas {
+      display: block; width: 150px; height: 150px;
+      border-radius: 50%; cursor: pointer;
+    }
+    #world-map.map-open #map-canvas {
+      width: min(460px, 82vw, 76vh); height: min(460px, 82vw, 76vh);
+      border-radius: 10px; cursor: crosshair;
+    }
+    #world-map.map-compass {
+      background: none; box-shadow: none; padding: 0;
+      overflow: visible;
+    }
+    #world-map.map-compass #map-frame { display: none; }
+    #world-map.map-compass #map-place { display: none; }
+    #world-map.map-compass #bottom-left-hud {
+      pointer-events: auto; cursor: pointer;
+    }
+    #world-map.map-compass #bottom-location {
+      color: #fffef7; text-shadow: 0 2px 5px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.5);
+    }
+    #world-map.map-compass #fps-counter {
+      color: rgba(255,255,255,0.9); text-shadow: 0 1px 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.4);
+    }
+    #map-place {
+      font: italic 600 11px Georgia, 'Times New Roman', serif; color: #5b4a30;
+      text-align: center; margin-top: 2px; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; max-width: 150px;
+    }
+    #world-map.map-open #map-place { display: block; max-width: none; font-size: 13px; }
+    #map-tooltip {
+      position: absolute; display: none; pointer-events: none;
+      transform: translate(-50%, -135%); white-space: nowrap;
+      background: #fbf6e8; color: #4a3b24; border-radius: 5px; padding: 3px 7px;
+      font: 600 12px Georgia, 'Times New Roman', serif;
+      box-shadow: 0 2px 6px rgba(40, 30, 10, 0.3);
+    }
+    @media (max-width: 768px) {
+      #map-canvas { width: 110px; height: 110px; }
+      #map-place { display: none; }
+    }
+
+    #ui-stack {
+      position: fixed; right: 16px; top: 16px;
+      z-index: 10; pointer-events: auto;
+      display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+    }
+    #ui-stack button {
+      color: rgba(60, 50, 70, 0.9); background: rgba(255, 255, 255, 0.65);
+      backdrop-filter: blur(8px); padding: 8px 14px;
+      border-radius: 8px; font-size: 13px; cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.4); font-weight: bold; width: fit-content;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #ui-stack button:hover {
+      background: rgba(255, 255, 255, 0.85);
+    }
+
+
+    @media (hover: hover) and (pointer: fine) {
+      #touch-controls { display: none; }
+    }
+
+    /* ── Wanderlust-II top-bar ──────────────────────────────────────────── */
+    #top-bar {
+      position: fixed; top: 14px; left: 16px; right: 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      z-index: 10; pointer-events: none;
+      gap: 10px;
+    }
+    #top-bar > * { pointer-events: auto; }
+    .top-bar-left {
+      display: flex; align-items: center; gap: 10px; pointer-events: none; flex-shrink: 0;
+    }
+    .top-bar-left > * { pointer-events: auto; }
+    .top-bar-right {
+      display: flex; align-items: center; gap: 10px; pointer-events: none;
+    }
+    .top-bar-right > * { pointer-events: auto; }
+    .top-action-buttons {
+      display: flex; align-items: center; gap: 4px; pointer-events: auto;
+      background: rgba(15, 20, 28, 0.55); backdrop-filter: blur(6px);
+      border-radius: 10px; padding: 3px 6px;
+    }
+    /* ── Bottom-Left HUD (inside compass widget) ───────── */
+    #bottom-left-hud {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+      user-select: none;
+      margin-top: 2px;
+    }
+    #bottom-left-hud-text {
+      display: flex; flex-direction: column; align-items: flex-start;
+    }
+    #hud-map-icon {
+      width: 28px; height: 28px; pointer-events: auto; cursor: pointer;
+      opacity: 0.85; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+      transition: opacity 0.2s;
+    }
+    #hud-map-icon:hover { opacity: 1; }
+    #bottom-location {
+      font-family: 'Dancing Script', 'Satisfy', 'Caveat', 'Brush Script MT', 'Segoe Script', cursive, Georgia, serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: #5b4a30;
+      letter-spacing: 0.4px;
+      line-height: 1.15;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #fps-counter {
+      color: #8a7a5e;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      user-select: none;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #world-map.map-open #bottom-left-hud { display: none; }
+    #god-model-hud-marker {
+      position: fixed;
+      left: 50%; top: 50%;
+      z-index: 120;
+      display: none;
+      width: 22px;
+      height: 34px;
+      align-items: center;
+      flex-direction: column;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+    }
+    #god-model-hud-marker.is-visible { display: flex; }
+    .god-marker-dot {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 8px;
+      border-radius: 50%;
+      background: #ff2fa8;
+      box-shadow: 0 0 7px #ff2fa8, 0 0 14px rgba(180, 45, 255, 0.88);
+    }
+    .god-marker-stem {
+      width: 2px;
+      height: 13px;
+      flex: 0 0 13px;
+      background: #ff2fa8;
+      box-shadow: 0 0 6px #ff2fa8;
+    }
+    .god-marker-heading {
+      color: #ff2fa8;
+      font: 700 12px/1 system-ui, sans-serif;
+      line-height: 12px;
+      text-shadow: 0 0 6px #ff2fa8, 0 0 12px rgba(180, 45, 255, 0.85);
+      transform-origin: 50% 50%;
+    }
+    #world-map.map-no-compass { background: none; box-shadow: none; padding: 0; }
+    #world-map.map-no-compass #bottom-location {
+      color: #fffef7; text-shadow: 0 2px 5px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.5);
+    }
+    #world-map.map-no-compass #fps-counter {
+      color: rgba(255,255,255,0.9); text-shadow: 0 1px 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.4);
+    }
+    #top-model-select, #top-biome-select {
+      background: transparent; border: none;
+      padding: 2px 4px; color: rgba(255,255,255,0.92);
+      font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      font-size: 12px; font-weight: 600; box-shadow: none;
+      cursor: pointer; outline: none; transition: color 0.2s ease; max-width: 140px;
+      -webkit-appearance: none; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.5)' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 2px center; padding-right: 16px;
+    }
+    #top-model-select:hover, #top-biome-select:hover { color: #38bdf8; }
+    #top-model-select option, #top-biome-select option { background: #0f141c; color: #fff; font-size: 12px; }
+    .top-bar-divider {
+      width: 1px; height: 18px; background: rgba(255,255,255,0.15); flex-shrink: 0;
+    }
+    .top-save-container {
+      display: flex; align-items: center; gap: 6px; pointer-events: auto;
+    }
+    #top-bar #top-save-setting-btn,
+    #top-bar #top-save-all-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(15, 20, 28, 0.94); border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px; padding: 4px 10px; color: rgba(255, 255, 255, 0.92);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.4px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); cursor: pointer; pointer-events: auto;
+      user-select: none; transition: all 0.2s ease; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      line-height: 1; white-space: nowrap;
+    }
+    #top-bar #top-save-setting-btn:hover,
+    #top-bar #top-save-all-btn:hover {
+      background: rgba(30, 41, 59, 0.95); border-color: rgba(56, 189, 248, 0.5);
+      color: #38bdf8; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    }
+    #top-bar #top-save-setting-btn:active,
+    #top-bar #top-save-all-btn:active {
+      transform: translateY(0px) scale(0.96); background: rgba(15, 20, 28, 0.98);
+    }
+    .save-gui-menu.lil-gui.root {
+      position: fixed !important; top: 58px !important; left: 16px !important; right: auto !important;
+      max-width: min(280px, 92vw) !important; width: 250px !important;
+      max-height: calc(100vh - 78px) !important; overflow-y: auto !important;
+      border-radius: 12px !important; background: rgba(15, 20, 28, 0.96) !important;
+      border: 1px solid rgba(255, 255, 255, 0.15) !important; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6) !important;
+      z-index: 95 !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+    #top-bar button {
+      background: none; border: none; color: rgba(255,255,255,0.95); cursor: pointer;
+      font-size: 19px; padding: 4px; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.35); transition: transform 0.15s ease, opacity 0.15s ease, color 0.15s ease;
+      user-select: none; outline: none; -webkit-tap-highlight-color: transparent;
+    }
+    #top-bar button:hover { opacity: 1; transform: scale(1.08); }
+    #top-bar button:active { transform: scale(0.88); opacity: 0.7; }
+    .lil-gui.root {
+      position: fixed !important; top: 58px !important; right: 20px !important; left: auto !important;
+      max-width: min(360px, 92vw) !important; max-height: calc(100vh - 78px) !important; overflow-y: auto !important;
+      border-radius: 12px !important; background: rgba(15,20,28,0.96) !important;
+      border: 1px solid rgba(255,255,255,0.15) !important; box-shadow: 0 16px 40px rgba(0,0,0,0.6) !important;
+      z-index: 95 !important; font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif !important;
+      /* Larger, touch-friendlier controls */
+      --font-size: 14px;
+      --input-font-size: 14px;
+      --widget-height: 28px;
+      --title-height: 36px;
+      --padding: 5px;
+      --spacing: 5px;
+      --folder-indent: 10px;
+      width: 320px !important;
+    }
+    /* Mobile */
+    @media (max-width: 768px), (orientation: portrait) {
+      #top-bar { left:10px; right:10px; top:10px; flex-direction:column; align-items:stretch; gap:6px; }
+      .top-bar-left { display:flex; align-items:center; }
+      .top-bar-right { width:100%; display:flex; justify-content:space-between; align-items:center; }
+      .top-action-buttons { gap:4px; }
+      #top-bar #top-save-setting-btn,
+      #top-bar #top-save-all-btn { font-size:10px !important; padding:3px 5px !important; }
+      #bottom-left-hud { left: 88px; bottom: 12px; gap: 1px; }
+      #bottom-location { font-size: 22px !important; }
+      #fps-counter { font-size: 11px !important; }
+      #top-model-select, #top-biome-select { font-size:10px !important; padding:2px 14px 2px 2px !important; max-width:90px; }
+      #top-bar button { padding:2px !important; }
+    }

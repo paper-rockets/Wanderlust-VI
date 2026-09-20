@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Water Shader Gallery - Multi-Shader Sandbox</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #fcffdc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      color: #1a202c;
+      user-select: none;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+
+    /* Top Tab Bar */
+    #tab-bar {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.92);
+      padding: 6px 10px;
+      border-radius: 8px;
+      z-index: 1000;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    }
+    .tab-btn {
+      background: #334155;
+      color: #cbd5e1;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      padding: 9px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tab-btn:hover {
+      background: #475569;
+      color: #ffffff;
+    }
+    .tab-btn.active {
+      background: #0284c7;
+      color: #ffffff;
+      border-color: #38bdf8;
+      box-shadow: 0 0 12px rgba(2, 132, 199, 0.6);
+    }
+
+    /* Floating UI Control Panel */
+    #ui-panel {
+      position: absolute;
+      top: 66px;
+      left: 12px;
+      background: rgba(255, 255, 255, 0.96);
+      border: 2px solid #1e293b;
+      border-radius: 8px;
+      padding: 12px 14px;
+      width: 320px;
+      max-height: calc(100vh - 84px);
+      overflow-y: auto;
+      font-size: 12px;
+      z-index: 999;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+    #ui-panel h3 {
+      margin: 0 0 4px 0;
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    #ui-panel .sub {
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 10px;
+    }
+    .panel-section {
+      display: none;
+    }
+    .panel-section.active {
+      display: block;
+    }
+
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 7px;
+    }
+    .control-row label {
+      font-weight: 600;
+      color: #334155;
+    }
+    .control-row input[type="range"] {
+      width: 135px;
+    }
+    .control-row input[type="color"] {
+      width: 44px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid #94a3b8;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .val-badge {
+      font-family: monospace;
+      font-size: 11px;
+      color: #0284c7;
+      min-width: 34px;
+      text-align: right;
+    }
+
+    .divider {
+      border-top: 1px solid #cbd5e1;
+      margin: 10px 0;
+    }
+    .notes-box {
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.4;
+      background: #f1f5f9;
+      padding: 8px;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+    .standalone-links {
+      margin-top: 10px;
+      display: flex;
+      gap: 6px;
+    }
+    .standalone-links a {
+      flex: 1;
+      text-align: center;
+      padding: 4px 6px;
+      background: #e2e8f0;
+      color: #1e293b;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      border: 1px solid #cbd5e1;
+    }
+    .standalone-links a:hover {
+      background: #cbd5e1;
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <!-- Top Tab Bar -->
+  <div id="tab-bar">
+    <button id="btn-tab-1" class="tab-btn" onclick="setTab(1)">1: Stylized Anime</button>
+    <button id="btn-tab-2" class="tab-btn active" onclick="setTab(2)">2: Codrops Water</button>
+    <button id="btn-tab-3" class="tab-btn" onclick="setTab(3)">3: Depth Foam (Shader 3)</button>
+  </div>
+
+  <!-- Unified Control Panel -->
+  <div id="ui-panel">
+    <div class="control-row">
+      <label for="common-level">Global Water Level:</label>
+      <input id="common-level" type="range" min="0.2" max="3.0" step="0.05" value="1.0" />
+      <span id="val-common-level" class="val-badge">1.00</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Section 1: Stylized Anime Water -->
+    <div id="section-tab-1" class="panel-section">
+      <h3>1. Stylized Anime Water</h3>
+      <div class="sub">Vibrant anime blue sky, clean turquoise refraction, 3D swell</div>
+
+      <div class="control-row">
+        <label for="s1-shallow">Water Color:</label>
+        <input id="s1-shallow" type="color" value="#4ef2d2" />
+      </div>
+      <div class="control-row">
+        <label for="s1-edge">Edge Foam Width:</label>
+        <input id="s1-edge" type="range" min="0.1" max="1.5" step="0.05" value="0.65" />
+        <span id="val-s1-edge" class="val-badge">0.65</span>
+      </div>
+      <div class="control-row">
+        <label for="s1-lapping">Wave Lapping:</label>
+        <input id="s1-lapping" type="range" min="0.0" max="0.8" step="0.02" value="0.22" />
+        <span id="val-s1-lapping" class="val-badge">0.22</span>
+      </div>
+      <div class="control-row">
+        <label for="s1-disp">Wave Height:</label>
+        <input id="s1-disp" type="range" min="0.0" max="0.6" step="0.02" value="0.25" />
+        <span id="val-s1-disp" class="val-badge">0.25</span>
+      </div>
+    </div>
+
+    <!-- Section 2: Codrops Stylized Water -->
+    <div id="section-tab-2" class="panel-section active">
+      <h3>2. Codrops Stylized Water</h3>
+      <div class="sub">Soft cream lighting, procedural simplex waves, shore stripe</div>
+
+      <div class="control-row">
+        <label for="s2-speed">Wave Speed:</label>
+        <input id="s2-speed" type="range" min="0.1" max="3.0" step="0.05" value="1.2" />
+        <span id="val-s2-speed" class="val-badge">1.20</span>
+      </div>
+      <div class="control-row">
+        <label for="s2-amp">Wave Height:</label>
+        <input id="s2-amp" type="range" min="0.0" max="0.6" step="0.02" value="0.28" />
+        <span id="val-s2-amp" class="val-badge">0.28</span>
+      </div>
+      <div class="control-row">
+        <label for="s2-tex">Texture Size:</label>
+        <input id="s2-tex" type="range" min="10" max="120" step="1" value="45" />
+        <span id="val-s2-tex" class="val-badge">45</span>
+      </div>
+      <div class="control-row">
+        <label for="s2-foam">Shore Foam Stripe:</label>
+        <input id="s2-foam" type="range" min="0.02" max="0.4" step="0.01" value="0.14" />
+        <span id="val-s2-foam" class="val-badge">0.14</span>
+      </div>
+      <div class="control-row">
+        <label for="s2-near">Water Near:</label>
+        <input id="s2-near" type="color" value="#00fccd" />
+      </div>
+      <div class="control-row">
+        <label for="s2-far">Water Far:</label>
+        <input id="s2-far" type="color" value="#1ceeff" />
+      </div>
+      <div class="control-row">
+        <label for="s2-sand">Sand:</label>
+        <input id="s2-sand" type="color" value="#ff9900" />
+      </div>
+      <div class="control-row">
+        <label for="s2-grass">Grass:</label>
+        <input id="s2-grass" type="color" value="#85a02b" />
+      </div>
+    </div>
+
+    <!-- Section 3: Depth Foam Water -->
+    <div id="section-tab-3" class="panel-section">
+      <h3>3. Depth Foam Water</h3>
+      <div class="sub">Deep oceanic atmosphere, smooth anti-aliased shoreline contact foam</div>
+
+      <div class="control-row">
+        <label for="s3-water-col">Water Color:</label>
+        <input id="s3-water-col" type="color" value="#14c6a5" />
+      </div>
+      <div class="control-row">
+        <label for="s3-foam-col">Foam Color:</label>
+        <input id="s3-foam-col" type="color" value="#ffffff" />
+      </div>
+      <div class="control-row">
+        <label for="s3-threshold">Foam Thickness:</label>
+        <input id="s3-threshold" type="range" min="0.02" max="0.5" step="0.01" value="0.14" />
+        <span id="val-s3-threshold" class="val-badge">0.14</span>
+      </div>
+      <div class="control-row">
+        <label for="s3-uv">Wave Scale:</label>
+        <input id="s3-uv" type="range" min="10" max="60" step="2" value="30" />
+        <span id="val-s3-uv" class="val-badge">30</span>
+      </div>
+    </div>
+
+    <div class="notes-box">
+      Left Drag: Orbit &bull; Right Drag / 2-finger: Pan &bull; Scroll / Pinch: Zoom.<br>
+      Each tab tunes lighting, sky colors, and foam to match that shader's native look.
+    </div>
+
+    <div class="standalone-links">
+      <a href="water_test.html" target="_blank">Open #1 Standalone</a>
+      <a href="codrops_water_test.html" target="_blank">Open #2 Standalone</a>
+      <a href="water_test_3.html" target="_blank">Open #3 Standalone</a>
+    </div>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+    import { StylizedWater } from './StylizedWater.js';
+    import { FoamWater } from './FoamWater.js';
+
+    // ------------------------------------------------------------
+    // 1. Scene & Camera Setup
+    // ------------------------------------------------------------
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#fcffdc');
+    scene.fog = new THREE.Fog('#fcffdc', 80, 150);
+
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      250
+    );
+    camera.position.set(0, 14, 25);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: true
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 1.5, 0);
+    controls.maxPolarAngle = Math.PI / 2.2;
+    controls.minDistance = 6;
+    controls.maxDistance = 75;
+
+    const ambientLight = new THREE.AmbientLight(0xfff8ee, 1.2);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfffae6, 2.5);
+    sunLight.position.set(13, 18, 12);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.bias = -0.0003;
+    scene.add(sunLight);
+
+    // Deep seabed plane
+    const seabedGeo = new THREE.PlaneGeometry(256, 256);
+    seabedGeo.rotateX(-Math.PI / 2);
+    const seabedMat = new THREE.MeshStandardMaterial({ color: 0x118a4f, roughness: 0.9 });
+    const seabedMesh = new THREE.Mesh(seabedGeo, seabedMat);
+    seabedMesh.position.y = -0.05;
+    seabedMesh.receiveShadow = true;
+    scene.add(seabedMesh);
+
+    // ------------------------------------------------------------
+    // 2. Global State & Parameters
+    // ------------------------------------------------------------
+    let activeTab = 2; // Start with Codrops (as requested in screenshot)
+
+    const params = {
+      waterLevel: 1.0,
+      // Tab 2 parameters
+      waveSpeed: 1.2,
+      waveAmplitude: 0.28,
+      foamDepth: 0.14,
+      textureSize: 45,
+      colorNear: new THREE.Color('#00fccd'),
+      colorFar: new THREE.Color('#1ceeff'),
+      sandColor: new THREE.Color('#ff9900'),
+      grassColor: new THREE.Color('#85a02b'),
+      underwaterColor: new THREE.Color('#118a4f'),
+      // Tab 3 parameters
+      s3WaterColor: 0x14c6a5,
+      s3FoamColor: 0xffffff,
+      s3Threshold: 0.14,
+      s3UvScale: 30.0
+    };
+
+    const commonUniforms = {
+      uTime: { value: 0 },
+      uWaterLevel: { value: params.waterLevel },
+      uWaveSpeed: { value: params.waveSpeed },
+      uWaveAmplitude: { value: params.waveAmplitude },
+      uFoamDepth: { value: params.foamDepth }
+    };
+
+    // ------------------------------------------------------------
+    // 3. Island Terrain Material
+    // ------------------------------------------------------------
+    const terrainUniforms = {
+      ...commonUniforms,
+      uGrassColor: { value: params.grassColor },
+      uUnderwaterColor: { value: params.underwaterColor }
+    };
+
+    const terrainMat = new THREE.MeshStandardMaterial({
+      color: params.sandColor,
+      roughness: 0.85,
+      metalness: 0.02
+    });
+
+    terrainMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = terrainUniforms.uTime;
+      shader.uniforms.uWaterLevel = terrainUniforms.uWaterLevel;
+      shader.uniforms.uWaveSpeed = terrainUniforms.uWaveSpeed;
+      shader.uniforms.uWaveAmplitude = terrainUniforms.uWaveAmplitude;
+      shader.uniforms.uFoamDepth = terrainUniforms.uFoamDepth;
+      shader.uniforms.uGrassColor = terrainUniforms.uGrassColor;
+      shader.uniforms.uUnderwaterColor = terrainUniforms.uUnderwaterColor;
+
+      shader.vertexShader = `varying vec3 vWorldPos;\n` + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace(
+        `#include <begin_vertex>`,
+        `#include <begin_vertex>\nvWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;\n`
+      );
+
+      shader.fragmentShader = `
+        uniform float uTime;
+        uniform float uWaterLevel;
+        uniform float uWaveSpeed;
+        uniform float uWaveAmplitude;
+        uniform float uFoamDepth;
+        uniform vec3 uGrassColor;
+        uniform vec3 uUnderwaterColor;
+        varying vec3 vWorldPos;
+      ` + shader.fragmentShader;
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        `#include <color_fragment>`,
+        `#include <color_fragment>
+        vec3 baseColor = diffuseColor.rgb;
+
+        // Darken sand near water level for wet beach look
+        float heightFactor = smoothstep(uWaterLevel + 0.9, uWaterLevel, vWorldPos.y);
+        baseColor = mix(baseColor, baseColor * 0.52, heightFactor);
+
+        // Underwater deep bottom color blend
+        float oceanFactor = smoothstep(min(uWaterLevel - 0.4, 0.2), 0.0, vWorldPos.y);
+        baseColor = mix(baseColor, uUnderwaterColor, oceanFactor);
+
+        // Grass on higher elevations
+        float grassFactor = smoothstep(uWaterLevel + 0.8, max(uWaterLevel + 1.8, 3.2), vWorldPos.y);
+        baseColor = mix(baseColor, uGrassColor, grassFactor);
+
+        // Synchronized shore foam stripe (active on Codrops Tab 2)
+        if (uFoamDepth > 0.001) {
+          float waveAtShore =
+              sin(vWorldPos.x * 0.28 + vWorldPos.z * 0.18 + uTime * uWaveSpeed) * uWaveAmplitude +
+              cos(vWorldPos.x * 0.45 - vWorldPos.z * 0.32 + uTime * (uWaveSpeed * 1.3)) * (uWaveAmplitude * 0.55) +
+              sin((vWorldPos.x + vWorldPos.z) * 0.14 + uTime * (uWaveSpeed * 0.8)) * (uWaveAmplitude * 0.35);
+
+          float currentWaterHeight = uWaterLevel + waveAtShore;
+          float stripe = smoothstep(currentWaterHeight + 0.02, currentWaterHeight - 0.02, vWorldPos.y)
+                       - smoothstep(currentWaterHeight + uFoamDepth + 0.02, currentWaterHeight + uFoamDepth - 0.02, vWorldPos.y);
+
+          diffuseColor.rgb = mix(baseColor - stripe * 0.5, vec3(1.0), stripe);
+        } else {
+          diffuseColor.rgb = baseColor;
+        }
+        `
+      );
+    };
+
+    // Load Island & Rocks
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setDRACOLoader(dracoLoader);
+
+    gltfLoader.load('./public/models/codrops_terrain.glb', (gltf) => {
+      const model = gltf.scene;
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.material = terrainMat;
+          child.receiveShadow = true;
+          child.castShadow = true;
+        }
+      });
+      scene.add(model);
+    });
+
+    gltfLoader.load('./public/models/codrops_rocks.glb', (gltf) => {
+      const rocks = gltf.scene;
+      const rockMat = new THREE.MeshStandardMaterial({ color: 0x718096, roughness: 0.8 });
+      rocks.traverse((child) => {
+        if (child.isMesh) {
+          child.material = rockMat;
+          child.receiveShadow = true;
+          child.castShadow = true;
+        }
+      });
+      scene.add(rocks);
+    });
+
+    // ------------------------------------------------------------
+    // 4. INSTANTIATE THE THREE WATER SHADERS
+    // ------------------------------------------------------------
+
+    // === SHADER 1: Stylized Anime Water (StylizedWater.js) ===
+    const water1 = new StylizedWater({
+      renderer,
+      scene,
+      camera,
+      size: 200,
+      segments: 160,
+      caustics: true,
+      fresnel: true,
+      playerWaves: false,
+      displacement: true,
+      ssr: false
+    });
+    water1.mesh.position.y = params.waterLevel;
+    water1.material.uniforms.uShallowColor.value.set('#4ef2d2');
+    water1.material.uniforms.uAbsorptionColor.value.set(0.85, 0.22, 0.0);
+    water1.material.uniforms.uEdgeThickness.value = 0.65;
+    water1.material.uniforms.uWaveLapping.value = 0.22;
+    water1.material.uniforms.uSurfaceFoamStrength.value = 0.0; // Strictly NO polka dots
+    water1.material.uniforms.uDisplacementStrength.value = 0.25;
+    water1.material.uniforms.uRefractionStrength.value = 1.2;
+    scene.add(water1.mesh);
+
+    // === SHADER 2: Codrops Stylized Water (Simplex Noise Shader) ===
+    const simplexNoiseGLSL = `
+      vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+      vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+      vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+      float snoise(vec2 v) {
+          const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+          vec2 i  = floor(v + dot(v, C.yy) );
+          vec2 x0 = v - i + dot(i, C.xx);
+          vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+          vec4 x12 = x0.xyxy + C.xxzz;
+          x12.xy -= i1;
+          i = mod289(i);
+          vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0 ));
+          vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+          m = m*m; m = m*m;
+          vec3 x = 2.0 * fract(p * C.www) - 1.0;
+          vec3 h = abs(x) - 0.5;
+          vec3 ox = floor(x + 0.5);
+          vec3 a0 = x - ox;
+          m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+          vec3 g;
+          g.x  = a0.x  * x0.x  + h.x  * x0.y;
+          g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+          return 130.0 * dot(m, g);
+      }
+    `;
+
+    const waterUniforms2 = {
+      ...commonUniforms,
+      uColorNear: { value: params.colorNear },
+      uColorFar: { value: params.colorFar },
+      uTextureSize: { value: params.textureSize }
+    };
+
+    const waterMat2 = new THREE.MeshStandardMaterial({
+      color: params.colorNear,
+      roughness: 0.15,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0.95
+    });
+
+    waterMat2.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = waterUniforms2.uTime;
+      shader.uniforms.uColorNear = waterUniforms2.uColorNear;
+      shader.uniforms.uColorFar = waterUniforms2.uColorFar;
+      shader.uniforms.uTextureSize = waterUniforms2.uTextureSize;
+      shader.uniforms.uWaveSpeed = waterUniforms2.uWaveSpeed;
+      shader.uniforms.uWaveAmplitude = waterUniforms2.uWaveAmplitude;
+
+      shader.vertexShader = `
+        varying vec3 vWorldPos;
+        varying vec2 vUvCoord;
+        uniform float uTime;
+        uniform float uWaveSpeed;
+        uniform float uWaveAmplitude;
+        ${simplexNoiseGLSL}
+      ` + shader.vertexShader;
+
+      shader.vertexShader = shader.vertexShader.replace(
+        `#include <begin_vertex>`,
+        `#include <begin_vertex>
+        vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+        vUvCoord = uv;
+        float wave = snoise(vec2(vWorldPos.x * 0.05 + uTime * uWaveSpeed * 0.2, vWorldPos.z * 0.05)) * uWaveAmplitude;
+        transformed.y += wave;
+        `
+      );
+
+      shader.fragmentShader = `
+        uniform float uTime;
+        uniform vec3 uColorNear;
+        uniform vec3 uColorFar;
+        uniform float uTextureSize;
+        uniform float uWaveSpeed;
+        varying vec3 vWorldPos;
+        varying vec2 vUvCoord;
+        ${simplexNoiseGLSL}
+      ` + shader.fragmentShader;
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        `#include <color_fragment>`,
+        `#include <color_fragment>
+        vec2 noiseUV = vWorldPos.xz * (1.0 / uTextureSize);
+        float n = snoise(noiseUV + vec2(uTime * uWaveSpeed * 0.08, uTime * uWaveSpeed * 0.04));
+        float n2 = snoise(noiseUV * 2.2 - vec2(uTime * uWaveSpeed * 0.06));
+        float foamPattern = smoothstep(0.35, 0.75, n * 0.6 + n2 * 0.4);
+
+        float dist = length(vWorldPos.xz);
+        float depthFactor = clamp(dist / 40.0, 0.0, 1.0);
+        vec3 col = mix(uColorNear, uColorFar, depthFactor);
+        col = mix(col, vec3(1.0), foamPattern * 0.45);
+        diffuseColor.rgb = col;
+        `
+      );
+    };
+
+    const waterGeo2 = new THREE.PlaneGeometry(180, 180, 128, 128);
+    waterGeo2.rotateX(-Math.PI / 2);
+    const waterMesh2 = new THREE.Mesh(waterGeo2, waterMat2);
+    waterMesh2.position.y = params.waterLevel;
+    scene.add(waterMesh2);
+
+    // === SHADER 3: Depth Foam Water (FoamWater.js) ===
+    const water3 = new FoamWater({
+      renderer,
+      scene,
+      camera,
+      width: 180,
+      height: 180,
+      foamColor: params.s3FoamColor,
+      waterColor: params.s3WaterColor,
+      threshold: params.s3Threshold,
+      uvScale: params.s3UvScale,
+      dudvMap: './water_dudv.png'
+    });
+    water3.mesh.position.y = params.waterLevel;
+
+    // ------------------------------------------------------------
+    // 5. Environmental Profiles (Tuned for each shader's native look!)
+    // ------------------------------------------------------------
+    const PROFILES = {
+      1: {
+        background: '#8ae0fc',
+        fogColor: '#8ae0fc',
+        fogNear: 45,
+        fogFar: 140,
+        sunColor: 0xfff3d6,
+        sunIntensity: 1.8,
+        ambientColor: 0xffffff,
+        ambientIntensity: 0.95,
+        sandColor: '#f7c873',
+        grassColor: '#5fb828',
+        underwaterColor: '#0b5c3b',
+        exposure: 1.05
+      },
+      2: {
+        background: '#fcffdc',
+        fogColor: '#fcffdc',
+        fogNear: 80,
+        fogFar: 150,
+        sunColor: 0xfffae6,
+        sunIntensity: 2.5,
+        ambientColor: 0xfff8ee,
+        ambientIntensity: 1.2,
+        sandColor: '#ff9900',
+        grassColor: '#85a02b',
+        underwaterColor: '#118a4f',
+        exposure: 1.15
+      },
+      3: {
+        background: '#1e485e',
+        fogColor: '#1e485e',
+        fogNear: 50,
+        fogFar: 130,
+        sunColor: 0xffffff,
+        sunIntensity: 1.6,
+        ambientColor: 0xcccccc,
+        ambientIntensity: 0.75,
+        sandColor: '#e07a38',
+        grassColor: '#289a7a',
+        underwaterColor: '#0c3546',
+        exposure: 1.0
+      }
+    };
+
+    // ------------------------------------------------------------
+    // 6. Tab Switching Logic
+    // ------------------------------------------------------------
+    window.setTab = function(tabIndex) {
+      activeTab = tabIndex;
+
+      // Update button styles
+      document.querySelectorAll('.tab-btn').forEach((b, idx) => {
+        b.classList.toggle('active', (idx + 1) === tabIndex);
+      });
+
+      // Update panel visibility
+      document.querySelectorAll('.panel-section').forEach((s, idx) => {
+        s.classList.toggle('active', (idx + 1) === tabIndex);
+      });
+
+      // Apply tuned environmental profile
+      const prof = PROFILES[tabIndex];
+      scene.background.set(prof.background);
+      scene.fog.color.set(prof.fogColor);
+      scene.fog.near = prof.fogNear;
+      scene.fog.far = prof.fogFar;
+      sunLight.color.set(prof.sunColor);
+      sunLight.intensity = prof.sunIntensity;
+      ambientLight.color.set(prof.ambientColor);
+      ambientLight.intensity = prof.ambientIntensity;
+      renderer.toneMappingExposure = prof.exposure;
+
+      // Update island terrain palette
+      terrainMat.color.set(prof.sandColor);
+      terrainUniforms.uGrassColor.value.set(prof.grassColor);
+      terrainUniforms.uUnderwaterColor.value.set(prof.underwaterColor);
+      seabedMat.color.set(prof.underwaterColor);
+
+      // Visibility toggles
+      if (water1 && water1.mesh) {
+        water1.mesh.visible = (activeTab === 1);
+      }
+      if (waterMesh2) {
+        waterMesh2.visible = (activeTab === 2);
+      }
+      if (water3 && water3.mesh) {
+        water3.mesh.visible = (activeTab === 3);
+      }
+
+      // Shore stripe on island is specific to Codrops (Shader 2)
+      if (activeTab === 2) {
+        terrainUniforms.uFoamDepth.value = params.foamDepth;
+      } else {
+        terrainUniforms.uFoamDepth.value = 0.0;
+      }
+    };
+
+    // Initialize with Tab 2 (Codrops)
+    setTab(2);
+
+    document.getElementById('btn-tab-1').addEventListener('click', () => setTab(1));
+    document.getElementById('btn-tab-2').addEventListener('click', () => setTab(2));
+    document.getElementById('btn-tab-3').addEventListener('click', () => setTab(3));
+
+    // ------------------------------------------------------------
+    // 7. UI Event Bindings
+    // ------------------------------------------------------------
+    const commonLevelInput = document.getElementById('common-level');
+    const valCommonLevel = document.getElementById('val-common-level');
+    commonLevelInput.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      params.waterLevel = val;
+      valCommonLevel.textContent = val.toFixed(2);
+      commonUniforms.uWaterLevel.value = val;
+      terrainUniforms.uWaterLevel.value = val;
+      if (water1 && water1.mesh) water1.mesh.position.y = val;
+      if (waterMesh2) waterMesh2.position.y = val;
+      if (water3 && water3.mesh) water3.mesh.position.y = val;
+    });
+
+    // Tab 1 controls
+    document.getElementById('s1-shallow').addEventListener('input', (e) => {
+      if (water1) water1.material.uniforms.uShallowColor.value.set(e.target.value);
+    });
+    const s1Edge = document.getElementById('s1-edge');
+    const valS1Edge = document.getElementById('val-s1-edge');
+    s1Edge.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      valS1Edge.textContent = val.toFixed(2);
+      if (water1) water1.material.uniforms.uEdgeThickness.value = val;
+    });
+    const s1Lap = document.getElementById('s1-lapping');
+    const valS1Lap = document.getElementById('val-s1-lapping');
+    s1Lap.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      valS1Lap.textContent = val.toFixed(2);
+      if (water1) water1.material.uniforms.uWaveLapping.value = val;
+    });
+    const s1Disp = document.getElementById('s1-disp');
+    const valS1Disp = document.getElementById('val-s1-disp');
+    s1Disp.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      valS1Disp.textContent = val.toFixed(2);
+      if (water1) water1.material.uniforms.uDisplacementStrength.value = val;
+    });
+
+    // Tab 2 controls
+    const s2Speed = document.getElementById('s2-speed');
+    const valS2Speed = document.getElementById('val-s2-speed');
+    s2Speed.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      params.waveSpeed = val;
+      valS2Speed.textContent = val.toFixed(2);
+      commonUniforms.uWaveSpeed.value = val;
+      terrainUniforms.uWaveSpeed.value = val;
+      waterUniforms2.uWaveSpeed.value = val;
+    });
+
+    const s2Amp = document.getElementById('s2-amp');
+    const valS2Amp = document.getElementById('val-s2-amp');
+    s2Amp.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      params.waveAmplitude = val;
+      valS2Amp.textContent = val.toFixed(2);
+      commonUniforms.uWaveAmplitude.value = val;
+      terrainUniforms.uWaveAmplitude.value = val;
+      waterUniforms2.uWaveAmplitude.value = val;
+    });
+
+    const s2Tex = document.getElementById('s2-tex');
+    const valS2Tex = document.getElementById('val-s2-tex');
+    s2Tex.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      params.textureSize = val;
+      valS2Tex.textContent = val;
+      waterUniforms2.uTextureSize.value = val;
+    });
+
+    const s2Foam = document.getElementById('s2-foam');
+    const valS2Foam = document.getElementById('val-s2-foam');
+    s2Foam.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      params.foamDepth = val;
+      valS2Foam.textContent = val.toFixed(2);
+      if (activeTab === 2) {
+        terrainUniforms.uFoamDepth.value = val;
+      }
+    });
+
+    document.getElementById('s2-near').addEventListener('input', (e) => {
+      waterUniforms2.uColorNear.value.set(e.target.value);
+    });
+    document.getElementById('s2-far').addEventListener('input', (e) => {
+      waterUniforms2.uColorFar.value.set(e.target.value);
+    });
+    document.getElementById('s2-sand').addEventListener('input', (e) => {
+      terrainMat.color.set(e.target.value);
+    });
+    document.getElementById('s2-grass').addEventListener('input', (e) => {
+      terrainUniforms.uGrassColor.value.set(e.target.value);
+    });
+
+    // Tab 3 controls
+    document.getElementById('s3-water-col').addEventListener('input', (e) => {
+      if (water3) water3.setWaterColor(e.target.value);
+    });
+    document.getElementById('s3-foam-col').addEventListener('input', (e) => {
+      if (water3) water3.setFoamColor(e.target.value);
+    });
+    const s3Threshold = document.getElementById('s3-threshold');
+    const valS3Threshold = document.getElementById('val-s3-threshold');
+    s3Threshold.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      params.s3Threshold = val;
+      valS3Threshold.textContent = val.toFixed(2);
+      if (water3) water3.setThreshold(val);
+    });
+    const s3Uv = document.getElementById('s3-uv');
+    const valS3Uv = document.getElementById('val-s3-uv');
+    s3Uv.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      valS3Uv.textContent = val.toFixed(0);
+      if (water3) water3.setUvScale(val);
+    });
+
+    // ------------------------------------------------------------
+    // 8. Window Resize & Render Loop
+    // ------------------------------------------------------------
+    window.addEventListener('resize', onWindowResize);
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      if (water1 && water1.resize) water1.resize();
+      if (water3 && water3.resize) water3.resize(window.innerWidth, window.innerHeight);
+    }
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+
+      const time = clock.getElapsedTime();
+
+      // Only execute updates and depth passes for the active shader
+      if (activeTab === 1) {
+        if (water1) {
+          water1.update(time);
+          water1.captureBackground();
+        }
+      } else if (activeTab === 2) {
+        commonUniforms.uTime.value = time;
+        terrainUniforms.uTime.value = time;
+        waterUniforms2.uTime.value = time;
+      } else if (activeTab === 3) {
+        if (water3) {
+          water3.update(time);
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

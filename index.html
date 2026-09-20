@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Ghibli Flight</title>
+  <meta name="description" content="High-performance procedural flight simulator with rich biomes, dynamic terrain, vegetation, volumetric clouds, and sun god rays." />
+  <meta property="og:title" content="Ghibli Flight" />
+  <meta property="og:description" content="High-performance procedural flight simulator with rich biomes, dynamic terrain, vegetation, volumetric clouds, and sun god rays." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Dancing+Script:wght@600;700&family=Satisfy&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<div id="debug-overlay" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #b91c1c; color: #ffffff; padding: 16px 24px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 90%; display: none;"></div>
+<script>
+function showError(msg) {
+    var overlay = document.getElementById('debug-overlay');
+    overlay.style.display = 'block';
+    overlay.innerHTML += msg + '<br><br>';
+}
+window.onerror = function(msg, url, line, col, error) {
+    showError('Error: ' + msg + ' at line ' + line);
+};
+window.addEventListener("unhandledrejection", function(event) {
+    showError('Unhandled Promise Rejection: ' + (event.reason ? event.reason.message || event.reason : "unknown"));
+});
+const origConsoleError = console.error;
+console.error = function(...args) {
+    showError('Console Error: ' + args.join(' '));
+    origConsoleError.apply(console, args);
+};
+</script>
+  <div id="app"></div>
+
+
+  <div id="top-bar">
+    <div class="top-bar-left"></div>
+    <div class="top-bar-right">
+      <div class="top-action-buttons">
+        <select id="top-biome-select" title="Go To Biome" aria-label="Go To Biome"></select>
+        <select id="top-model-select" title="Flight Model" aria-label="Flight Model">
+          <option value="0">Kiki</option>
+          <option value="1">Whale</option>
+          <option value="2">Savoia</option>
+          <option value="3">B2M2</option>
+          <option value="4">Sopwith</option>
+          <option value="5">Sikorsky</option>
+          <option value="6">Robin</option>
+          <option value="7">Pewee</option>
+          <option value="8">Bittern</option>
+          <option value="9">Macaw</option>
+          <option value="10">Flock</option>
+          <option value="11">Morpho</option>
+          <option value="12">Monarch</option>
+          <option value="13">Charizard</option>
+        </select>
+        <div class="top-bar-divider"></div>
+        <button id="top-music-btn" title="Toggle Music" aria-label="Toggle Music" style="opacity:0.65;transition:all 0.2s ease"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
+        <button id="top-engine-btn" title="Toggle Engine Sound" aria-label="Toggle Engine Sound" style="display:none;opacity:1;color:#4ade80;transition:all 0.2s ease"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 9V3c2.5 0 3.5 2 3.5 3.5S14.5 9 12 9z"/><path d="M12 15v6c-2.5 0-3.5-2-3.5-3.5S10.5 15 12 15z"/><path d="M9 12H3c0-2.5 2-3.5 3.5-3.5S9 9.5 9 12z"/><path d="M15 12h6c0 2.5-2 3.5-3.5 3.5S15 14.5 15 12z"/></svg></button>
+        <button id="pause-toggle" title="Pause / Resume Flight" aria-label="Pause / Resume"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg></button>
+        <button id="time-toggle" title="Cycle Time of Day" aria-label="Cycle Time of Day"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg></button>
+        <button id="top-tree-btn" title="Tree & Vegetation Loader" aria-label="Tree & Vegetation Loader"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-7"/><path d="M9 18l3-3 3 3"/><path d="M12 15a6 6 0 0 1-6-6c0-3.5 3-7 6-7s6 3.5 6 7a6 6 0 0 1-6 6z"/></svg></button>
+        <button id="gui-toggle-btn" title="Settings (H)" aria-label="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mini-map: small paper map in the corner; click (or M) opens the big map, click a spot there to fly -->
+  <div id="world-map" title="Map (M)">
+    <div id="map-frame">
+      <canvas id="map-canvas" width="150" height="150"></canvas>
+      <div id="map-tooltip"></div>
+      <button id="map-toggle-btn" title="Expand map" aria-label="Expand map">
+        <svg id="map-toggle-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div id="map-place"><span id="map-biome-badge"></span><span id="map-coords-text" hidden></span></div>
+    <div id="bottom-left-hud">
+      <div id="bottom-left-hud-text">
+        <div id="bottom-location">Archipelago</div>
+        <div id="fps-counter">0 FPS | ALT: 0m</div>
+      </div>
+      <svg id="hud-map-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" fill="rgba(255,255,255,0.15)"/>
+        <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+      </svg>
+    </div>
+  </div>
+
+
+
+  <div id="hidden-ui" style="display: none;">
+      <button id="editor-toggle">Terrain Editor</button>
+      <button id="crystal-edit-toggle">Edit Crystals</button>
+      <button id="char-prev">◀ Model</button>
+      <button id="char-name" style="min-width:80px;pointer-events:none;">Kiki</button>
+      <button id="char-next">Model ▶</button>
+      <button id="invis-toggle">Model: VISIBLE</button>
+      <button id="summer-toggle">Summer Filter: ON</button>
+      <button id="music-toggle">Music</button>
+      <button id="track-toggle">Track: Valley Wind</button>
+      <button id="wind-toggle">Wind: ON</button>
+      <button id="fullscreen-toggle">Fullscreen</button>
+  </div>
+
+
+
+
+  <div id="photo-mode-ui">
+    <span>Photo Mode</span>
+    <button id="photo-capture">Capture</button>
+    <button id="photo-exit">Exit</button>
+  </div>
+
+  <!-- Screen Condensation / Cloud Exit Mist Overlay (Disabled) -->
+  <div id="cloud-mist-overlay" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:99;opacity:0;"></div>
+  <canvas id="cloud-fog-canvas" width="1" height="1" style="display:none;position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:98;opacity:0;"></canvas>
+  <canvas id="cloud-debug-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:25;display:none;"></canvas>
+  <div id="god-model-hud-marker" aria-hidden="true"><span class="god-marker-dot"></span><span class="god-marker-stem"></span><span class="god-marker-heading">▲</span></div>
+  <div id="crystal-editor" style="display: none; position: fixed; left: 20px; top: 20px; width: 240px; box-sizing: border-box; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); color: white; padding: 15px; border-radius: 10px; font-family: sans-serif; z-index: 100; max-height: 80vh; overflow-y: auto; border: 1px solid rgba(255,255,255,0.2);">
+    <h3 style="margin-top:0; margin-bottom:10px; font-size:16px;">Crystal & Env Editor</h3>
+    <div style="margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid #444;">
+      <strong style="font-size:13px; display:block; margin-bottom:5px; color:#aaa;">Flying Crystals</strong>
+      <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom: 5px;">
+        <input type="color" id="c-f-col0" value="#6a00ff" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+        <input type="color" id="c-f-col1" value="#ff0066" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+        <input type="color" id="c-f-col2" value="#ff6600" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+        <input type="color" id="c-f-col3" value="#ffcc00" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+        <input type="color" id="c-f-col4" value="#00ffaa" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+        <input type="color" id="c-f-col5" value="#00aaff" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+      </div>
+      <label style="font-size:12px; display:block; margin-bottom:4px;">Opacity <input type="range" id="c-fly-opacity" min="0" max="1" step="0.05" value="0.82" style="width:100%; box-sizing:border-box; display:block;"></label>
+      <label style="font-size:12px; display:block; margin-bottom:4px;">Contrast <input type="range" id="c-fly-contrast" min="0.1" max="3" step="0.1" value="1.0" style="width:100%; box-sizing:border-box; display:block;"></label>
+      <label style="font-size:12px; display:block; margin-bottom:4px;">Hue Shift <input type="range" id="c-fly-hue" min="0" max="1" step="0.01" value="0.0" style="width:100%; box-sizing:border-box; display:block;"></label>
+      <label style="font-size:12px; display:block; margin-bottom:4px;">Base Glow <input type="range" id="c-baseGlow" min="0" max="3" step="0.1" value="1.2" style="width:100%; box-sizing:border-box; display:block;"></label>
+      <label style="font-size:12px; display:block; margin-bottom:4px;">Night Glow <input type="range" id="c-nightGlow" min="0" max="5" step="0.1" value="1.5" style="width:100%; box-sizing:border-box; display:block;"></label>
+      <label style="font-size:12px; display:block; margin-bottom:4px;">Roughness <input type="range" id="c-roughness" min="0" max="1" step="0.05" value="0.08" style="width:100%; box-sizing:border-box; display:block;"></label>
+      <label style="font-size:12px; display:block; margin-bottom:4px;">Metalness <input type="range" id="c-metalness" min="0" max="1" step="0.05" value="0.15" style="width:100%; box-sizing:border-box; display:block;"></label>
+      <label style="font-size:12px; display:block; margin-bottom:4px;">Transmission <input type="range" id="c-transmission" min="0" max="1" step="0.05" value="0.0" style="width:100%; box-sizing:border-box; display:block;"></label>
+      <label style="font-size:12px; display:block; margin-bottom:4px;">Thickness <input type="range" id="c-thickness" min="0" max="20" step="0.5" value="10.0" style="width:100%; box-sizing:border-box; display:block;"></label>
+    </div>
+    <div style="margin-bottom: 5px;">
+      <strong style="font-size:13px; display:block; margin-bottom:5px; color:#aaa;">Ground Crystals (Colors)</strong>
+      <div style="display:flex; flex-wrap:wrap; gap:5px;">
+        <input type="color" id="c-col0" value="#aa00ff" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+        <input type="color" id="c-col1" value="#00ccff" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+        <input type="color" id="c-col2" value="#ff0088" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+        <input type="color" id="c-col3" value="#00ff88" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+        <input type="color" id="c-col4" value="#ffaa00" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+        <input type="color" id="c-col5" value="#ff00cc" style="width:25px;height:25px;padding:0;border:none;cursor:pointer;">
+      </div>
+    </div>
+    <button id="c-close" style="margin-top: 15px; width: 100%; padding: 6px; cursor:pointer; background: #333; color: white; border: 1px solid #555; border-radius: 4px; font-weight: bold; box-sizing: border-box;">Close Editor</button>
+  </div>
+
+  <div id="touch-controls">
+    <div id="joystick-base"><div id="joystick-knob"></div></div>
+    <div id="boost-btn">BOOST</div>
+  </div>
+
+  <div id="pc-controls-hint" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.5); color: white; padding: 10px 20px; border-radius: 8px; font-family: sans-serif; pointer-events: none; z-index: 100;">
+    Controls: WASD/Arrows to move, Shift to Boost, Space to Brake, Scroll Wheel to Zoom
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

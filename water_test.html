@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stylized Anime Water Sandbox</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #7bd5f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      color: #1a202c;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    #ui-panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 2px solid #1e293b;
+      border-radius: 8px;
+      padding: 12px 14px;
+      max-width: 320px;
+      font-size: 12px;
+      z-index: 100;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+    #ui-panel h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .preset-btns {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .preset-btn {
+      flex: 1;
+      padding: 6px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1.5px solid #0f766e;
+      background: #f0fdfa;
+      color: #0f766e;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .preset-btn.active {
+      background: #0f766e;
+      color: #ffffff;
+    }
+    .control-row {
+      margin-bottom: 7px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .control-row label {
+      font-weight: 600;
+      color: #334155;
+    }
+    .control-row input[type="range"] {
+      width: 130px;
+      cursor: pointer;
+    }
+    .color-row {
+      margin-bottom: 7px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .color-row input[type="color"] {
+      border: 1px solid #94a3b8;
+      border-radius: 4px;
+      width: 42px;
+      height: 24px;
+      cursor: pointer;
+      padding: 0;
+      background: none;
+    }
+    #instructions {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed #cbd5e1;
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.4;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <div id="ui-panel">
+    <h3>Stylized Anime Water</h3>
+
+    <div class="preset-btns">
+      <button id="btn-preset-ghibli" class="preset-btn active">1. Green Shore</button>
+      <button id="btn-preset-pond" class="preset-btn">2. Sand Pond</button>
+    </div>
+
+    <div class="control-row">
+      <label for="slider-foam">Shore Foam:</label>
+      <input id="slider-foam" type="range" min="0.1" max="1.5" step="0.05" value="0.55" />
+    </div>
+    <div class="control-row">
+      <label for="slider-lap">Wave Lapping:</label>
+      <input id="slider-lap" type="range" min="0.0" max="0.35" step="0.02" value="0.16" />
+    </div>
+    <div class="control-row">
+      <label for="slider-flecks">Surface Flecks:</label>
+      <input id="slider-flecks" type="range" min="0.0" max="1.0" step="0.05" value="0.0" />
+    </div>
+    <div class="control-row">
+      <label for="slider-disp">Wave Height:</label>
+      <input id="slider-disp" type="range" min="0" max="0.8" step="0.02" value="0.25" />
+    </div>
+    <div class="control-row">
+      <label for="slider-refract">Refraction:</label>
+      <input id="slider-refract" type="range" min="0" max="3.0" step="0.1" value="1.1" />
+    </div>
+    <div class="color-row">
+      <label for="color-shallow">Shallow Tint:</label>
+      <input id="color-shallow" type="color" value="#48f0df" />
+    </div>
+    <div class="color-row">
+      <label for="color-absorb">Deep Color:</label>
+      <input id="color-absorb" type="color" value="#1a5599" />
+    </div>
+
+    <div id="instructions">
+      <b>Controls:</b><br>
+      • Left Drag: Orbit camera<br>
+      • Right Drag: Pan | Scroll: Zoom<br>
+      • WASD: Move capsule / lifebuoy
+    </div>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { StylizedWater } from './StylizedWater.js';
+
+    // ------------------------------------------------------------
+    // 1. Scene & Renderer Setup
+    // ------------------------------------------------------------
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    const skyColor = new THREE.Color(0x8ae0fc);
+    scene.background = skyColor;
+    scene.fog = new THREE.Fog(0x8ae0fc, 45, 130);
+
+    const camera = new THREE.PerspectiveCamera(
+      38,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+    // Camera angle matching Image 1: looking down at 45 degrees, water on left, grass on right
+    camera.position.set(-1.8, 4.8, 5.2);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: true
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0.2, 0.35, -0.1);
+    controls.maxPolarAngle = Math.PI / 2.1; // Keep camera above water
+    controls.minDistance = 2.5;             // Prevent zooming through character
+    controls.maxDistance = 14.0;            // Prevent zooming out into the sky void
+
+    // ------------------------------------------------------------
+    // 2. Anime / Ghibli Style Lighting (Sun high on right, casting shadow left)
+    // ------------------------------------------------------------
+    const ambientLight = new THREE.AmbientLight(0xe5f6ff, 1.5);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfffbeb, 2.3);
+    sunLight.position.set(16, 32, 18);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 1;
+    sunLight.shadow.camera.far = 80;
+    sunLight.shadow.camera.left = -16;
+    sunLight.shadow.camera.right = 16;
+    sunLight.shadow.camera.top = 16;
+    sunLight.shadow.camera.bottom = -16;
+    sunLight.shadow.bias = -0.0003;
+    scene.add(sunLight);
+
+    // ------------------------------------------------------------
+    // 3. Terrain & Shoreline Geometry (Large 250x250 mesh, no visible edges)
+    // ------------------------------------------------------------
+    const terrainGeo = new THREE.PlaneGeometry(240, 240, 160, 160);
+    terrainGeo.rotateX(-Math.PI / 2);
+
+    // Vertex colors for smooth grass-to-sand transition
+    const count = terrainGeo.attributes.position.count;
+    const colors = new Float32Array(count * 3);
+    terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const terrainMat = new THREE.MeshStandardMaterial({
+      roughness: 0.8,
+      metalness: 0.02,
+      vertexColors: true
+    });
+    const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+    terrainMesh.receiveShadow = true;
+    scene.add(terrainMesh);
+
+    // Color definitions matching Image 1 & Image 2
+    const cGrass = new THREE.Color('#8de63d'); // vibrant anime lime grass
+    const cSand = new THREE.Color('#fdedb0');  // soft golden beach sand
+    const cDeepSand = new THREE.Color('#dfc888');
+
+    function buildTerrainPreset(isGhibli) {
+      const pos = terrainGeo.attributes.position;
+      const col = terrainGeo.attributes.color;
+
+      for (let i = 0; i < count; i++) {
+        const x = pos.getX(i);
+        const z = pos.getZ(i);
+        let y = 0;
+        let c = cSand;
+
+        if (isGhibli) {
+          // Preset 1: Diagonal Shoreline matching Image 1
+          // x > 0 slopes up into grass hill, x < 0 slopes down into clear turquoise water
+          const shoreFactor = (x * 0.7 + z * 0.45);
+          y = shoreFactor * 0.32 + Math.sin(z * 0.2) * 0.15;
+
+          if (y > 0.18) {
+            c = cGrass;
+          } else if (y > -0.08) {
+            const blend = (y + 0.08) / 0.26;
+            c = cSand.clone().lerp(cGrass, blend);
+          } else {
+            c = cSand.clone().lerp(cDeepSand, Math.min(1, -y * 0.35));
+          }
+        } else {
+          // Preset 2: Circular Sand Pond matching Image 2
+          const dist = Math.hypot(x, z);
+          // Center is water pond, outer is warm sand dunes
+          y = -2.2 + Math.smoothstep(dist, 2.5, 9.0) * 3.2;
+          c = cSand;
+        }
+
+        pos.setY(i, y);
+        col.setXYZ(i, c.r, c.g, c.b);
+      }
+      terrainGeo.computeVertexNormals();
+      terrainGeo.attributes.position.needsUpdate = true;
+      terrainGeo.attributes.color.needsUpdate = true;
+    }
+
+    // Math.smoothstep polyfill
+    Math.smoothstep = (x, min, max) => {
+      if (x <= min) return 0;
+      if (x >= max) return 1;
+      x = (x - min) / (max - min);
+      return x * x * (3 - 2 * x);
+    };
+
+    buildTerrainPreset(true);
+
+    // ------------------------------------------------------------
+    // 4. Props (Matching Image 1 & Image 2)
+    // ------------------------------------------------------------
+    const propsGroup = new THREE.Group();
+    scene.add(propsGroup);
+
+    // --- Prop A: White Capsule character (Image 1) ---
+    const capsuleGeo = new THREE.CapsuleGeometry(0.48, 1.3, 20, 32);
+    const capsuleMat = new THREE.MeshStandardMaterial({
+      color: 0xeef2f7,
+      roughness: 0.2,
+      metalness: 0.05
+    });
+    const capsule = new THREE.Mesh(capsuleGeo, capsuleMat);
+    capsule.castShadow = true;
+    capsule.receiveShadow = true;
+    capsule.position.set(0.35, 0.78, 0.1);
+    propsGroup.add(capsule);
+
+    // --- Prop B: Red-and-White Lifebuoy Ring (Image 2) ---
+    const lifeRingGroup = new THREE.Group();
+    const torusGeo = new THREE.TorusGeometry(1.0, 0.32, 24, 48);
+    const ringTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 64;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 512, 64);
+      ctx.fillStyle = '#f43f5e';
+      ctx.fillRect(32, 0, 96, 64);
+      ctx.fillRect(160, 0, 96, 64);
+      ctx.fillRect(288, 0, 96, 64);
+      ctx.fillRect(416, 0, 96, 64);
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping;
+      return tex;
+    })();
+    const ringMat = new THREE.MeshStandardMaterial({
+      map: ringTex,
+      roughness: 0.3,
+      metalness: 0.05
+    });
+    const torusMesh = new THREE.Mesh(torusGeo, ringMat);
+    torusMesh.rotation.x = Math.PI / 2;
+    torusMesh.castShadow = true;
+    lifeRingGroup.add(torusMesh);
+    lifeRingGroup.position.set(-0.6, 0.05, -0.6);
+    propsGroup.add(lifeRingGroup);
+
+    // --- Prop C: Wooden Barrel / Log (Image 2) ---
+    const logGeo = new THREE.CylinderGeometry(0.38, 0.38, 1.1, 18);
+    logGeo.rotateZ(Math.PI / 2);
+    const logMat = new THREE.MeshStandardMaterial({
+      color: 0x9c6644,
+      roughness: 0.65
+    });
+    const woodLog = new THREE.Mesh(logGeo, logMat);
+    woodLog.position.set(1.2, -0.1, -1.6);
+    woodLog.rotation.y = 0.45;
+    woodLog.castShadow = true;
+    propsGroup.add(woodLog);
+
+    // --- Prop D: Small Stylized Shore Rocks (Image 1 & 2) ---
+    const rockMat = new THREE.MeshStandardMaterial({
+      color: 0x64748b,
+      roughness: 0.75,
+      flatShading: true
+    });
+    const rockGeo = new THREE.DodecahedronGeometry(0.32, 1);
+
+    // Submerged rock on bottom right (Image 1)
+    const rock1 = new THREE.Mesh(rockGeo, rockMat);
+    rock1.position.set(0.95, -0.22, 1.25);
+    rock1.scale.set(1.2, 0.75, 1.1);
+    rock1.castShadow = true;
+    propsGroup.add(rock1);
+
+    // Rock on grass bank (Image 1)
+    const rock2 = new THREE.Mesh(rockGeo, rockMat);
+    rock2.position.set(2.4, 1.1, -1.8);
+    rock2.scale.set(0.9, 0.7, 0.8);
+    rock2.castShadow = true;
+    propsGroup.add(rock2);
+
+    // --- Prop E: Shore Shrub / Bush in shallow water (Image 1) ---
+    const shrubGeo = new THREE.DodecahedronGeometry(0.55, 2);
+    const shrubMat = new THREE.MeshStandardMaterial({
+      color: 0x48c71d,
+      roughness: 0.6,
+      flatShading: true
+    });
+    const shrub = new THREE.Mesh(shrubGeo, shrubMat);
+    shrub.position.set(-1.6, -0.05, -1.8);
+    shrub.castShadow = true;
+    propsGroup.add(shrub);
+
+    // --- Prop F: Small yellow flower dots on grass (Image 1) ---
+    const flowerGroup = new THREE.Group();
+    const flowerMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.5 });
+    const flowerGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.05, 8);
+    const flowerPos = [
+      [1.4, 0.85, 0.2],
+      [1.6, 0.95, 0.35],
+      [1.8, 1.05, 0.22]
+    ];
+    flowerPos.forEach(([fx, fy, fz]) => {
+      const fl = new THREE.Mesh(flowerGeo, flowerMat);
+      fl.position.set(fx, fy, fz);
+      flowerGroup.add(fl);
+    });
+    propsGroup.add(flowerGroup);
+
+    // Configure initial visibility for Preset 1 (Ghibli Shore)
+    lifeRingGroup.visible = false;
+    woodLog.visible = false;
+
+    // ------------------------------------------------------------
+    // 5. Stylized Water Instance
+    // ------------------------------------------------------------
+    const water = new StylizedWater({
+      renderer,
+      scene,
+      camera,
+      size: 260,
+      segments: 160,
+      caustics: true,
+      fresnel: true,
+      playerWaves: true,
+      displacement: true,
+      ssr: false
+    });
+    water.mesh.position.y = 0.0;
+    scene.add(water.mesh);
+    window.__three = { scene, camera, renderer, water };
+
+    // Set initial anime colors (matching Image 1: Clean, vibrant turquoise, NO polka dots)
+    water.material.uniforms.uShallowColor.value.set('#4ef2d2');
+    water.material.uniforms.uAbsorptionColor.value.set(0.85, 0.22, 0.0);
+    water.material.uniforms.uEdgeThickness.value = 0.65;
+    water.material.uniforms.uWaveLapping.value = 0.22;
+    water.material.uniforms.uSurfaceFoamStrength.value = 0.0; // Clean open sea
+    water.material.uniforms.uDisplacementStrength.value = 0.25;
+    water.material.uniforms.uRefractionStrength.value = 1.2;
+
+    // ------------------------------------------------------------
+    // 6. Interactive Controls & UI Bindings
+    // ------------------------------------------------------------
+    const keys = {};
+    window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+    window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+    // Preset 1: Ghibli Shore (Image 1)
+    document.getElementById('btn-preset-ghibli').addEventListener('click', () => {
+      document.getElementById('btn-preset-ghibli').classList.add('active');
+      document.getElementById('btn-preset-pond').classList.remove('active');
+      buildTerrainPreset(true);
+
+      // Camera view matching Image 1
+      camera.position.set(-1.8, 4.8, 5.2);
+      controls.target.set(0.2, 0.35, -0.1);
+
+      capsule.visible = true;
+      capsule.position.set(0.35, 0.78, 0.1);
+      shrub.visible = true;
+      flowerGroup.visible = true;
+      rock1.visible = true;
+      rock1.position.set(0.95, -0.22, 1.25);
+      rock2.visible = true;
+      lifeRingGroup.visible = false;
+      woodLog.visible = false;
+
+      water.material.uniforms.uShallowColor.value.set('#4ef2d2');
+      water.material.uniforms.uAbsorptionColor.value.set(0.85, 0.22, 0.0);
+      water.material.uniforms.uEdgeThickness.value = 0.65;
+      water.material.uniforms.uWaveLapping.value = 0.22;
+      water.material.uniforms.uSurfaceFoamStrength.value = 0.0; // Clean open water
+
+      document.getElementById('color-shallow').value = '#4ef2d2';
+      document.getElementById('slider-foam').value = '0.65';
+      document.getElementById('slider-lap').value = '0.22';
+      document.getElementById('slider-flecks').value = '0.0';
+    });
+
+    // Preset 2: Sand Pond (Image 2)
+    document.getElementById('btn-preset-pond').addEventListener('click', () => {
+      document.getElementById('btn-preset-pond').classList.add('active');
+      document.getElementById('btn-preset-ghibli').classList.remove('active');
+      buildTerrainPreset(false);
+
+      // Camera view matching Image 2
+      camera.position.set(0, 6.8, 6.2);
+      controls.target.set(0, -0.6, -0.5);
+
+      capsule.visible = false;
+      shrub.visible = false;
+      flowerGroup.visible = false;
+      lifeRingGroup.visible = true;
+      lifeRingGroup.position.set(-0.6, 0.05, -0.6);
+      woodLog.visible = true;
+      woodLog.position.set(0.9, -0.15, -0.2);
+      rock1.visible = true;
+      rock1.position.set(1.1, 0.0, -1.5);
+      rock2.visible = false;
+
+      water.material.uniforms.uShallowColor.value.set('#6ee7b7');
+      water.material.uniforms.uAbsorptionColor.value.set(0.72, 0.18, 0.0);
+      water.material.uniforms.uEdgeThickness.value = 0.65;
+      water.material.uniforms.uWaveLapping.value = 0.08;
+      water.material.uniforms.uSurfaceFoamStrength.value = 0.85;
+
+      document.getElementById('color-shallow').value = '#6ee7b7';
+      document.getElementById('slider-foam').value = '0.65';
+      document.getElementById('slider-lap').value = '0.08';
+      document.getElementById('slider-flecks').value = '0.85';
+    });
+
+    // Sliders
+    document.getElementById('slider-foam').addEventListener('input', (e) => {
+      water.material.uniforms.uEdgeThickness.value = parseFloat(e.target.value);
+    });
+    document.getElementById('slider-lap').addEventListener('input', (e) => {
+      water.material.uniforms.uWaveLapping.value = parseFloat(e.target.value);
+    });
+    document.getElementById('slider-flecks').addEventListener('input', (e) => {
+      water.material.uniforms.uSurfaceFoamStrength.value = parseFloat(e.target.value);
+    });
+    document.getElementById('slider-disp').addEventListener('input', (e) => {
+      water.material.uniforms.uDisplacementStrength.value = parseFloat(e.target.value);
+    });
+    document.getElementById('slider-refract').addEventListener('input', (e) => {
+      water.material.uniforms.uRefractionStrength.value = parseFloat(e.target.value);
+    });
+    document.getElementById('color-shallow').addEventListener('input', (e) => {
+      water.material.uniforms.uShallowColor.value.set(e.target.value);
+    });
+    document.getElementById('color-absorb').addEventListener('input', (e) => {
+      const hex = e.target.value;
+      const c = new THREE.Color(hex);
+      // Convert target depth color to absorption complement
+      water.material.uniforms.uAbsorptionColor.value.set(1.0 - c.r, 1.0 - c.g, 1.0 - c.b);
+    });
+
+    // Resize handling
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      water.resize();
+    });
+
+    // ------------------------------------------------------------
+    // 7. Animation Loop
+    // ------------------------------------------------------------
+    let lastTime = performance.now() * 0.001;
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const now = performance.now() * 0.001;
+      const delta = Math.min(now - lastTime, 0.1);
+      lastTime = now;
+      const time = now;
+
+      // WASD / Arrow movement for capsule character
+      const speed = 7.0 * delta;
+      let activeMover = capsule.visible && capsule.position.y > -5 ? capsule : lifeRingGroup;
+
+      if (keys['KeyW'] || keys['ArrowUp']) activeMover.position.z -= speed;
+      if (keys['KeyS'] || keys['ArrowDown']) activeMover.position.z += speed;
+      if (keys['KeyA'] || keys['ArrowLeft']) activeMover.position.x -= speed;
+      if (keys['KeyD'] || keys['ArrowRight']) activeMover.position.x += speed;
+
+      // Gentle floating bob in sync with rolling waves
+      const dispStr = water.material.uniforms.uDisplacementStrength.value;
+      const getWaveY = (x, z) => {
+        const w1 = Math.sin(x * 0.28 + z * 0.18 + time * 1.5 * 0.65) * 0.35;
+        const w2 = Math.cos(x * 0.48 - z * 0.32 + time * 2.1 * 0.65) * 0.2;
+        const w3 = Math.sin((x + z) * 0.14 + time * 0.9 * 0.65) * 0.25;
+        return (w1 + w2 + w3) * (dispStr * 2.0 + 0.1);
+      };
+
+      if (capsule.visible) {
+        capsule.position.y = 0.75 + getWaveY(capsule.position.x, capsule.position.z) * 0.5;
+      }
+      torusMesh.position.y = getWaveY(lifeRingGroup.position.x, lifeRingGroup.position.z);
+      woodLog.position.y = getWaveY(woodLog.position.x, woodLog.position.z);
+      woodLog.rotation.z = Math.PI / 2 + Math.sin(time * 1.6) * 0.08;
+
+      controls.update();
+
+      // Water updates & ripples
+      water.update(time);
+      water.setPlayerPosition(activeMover.position);
+
+      // Pass 1: Capture scene without water
+      water.captureBackground();
+
+      // Pass 2: Render with water
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
