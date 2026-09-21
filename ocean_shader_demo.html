@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cartoon Ocean Shader Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #0f172a;
+      font-family: monospace;
+      color: #fff;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid #334155;
+      padding: 12px;
+      font-size: 11px;
+      z-index: 100;
+      width: 300px;
+      max-height: 95vh;
+      overflow-y: auto;
+    }
+    #controls h3 {
+      margin: 0 0 8px 0;
+      font-size: 13px;
+      border-bottom: 1px solid #475569;
+      padding-bottom: 4px;
+      color: #38bdf8;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .row label {
+      flex: 1;
+    }
+    .row input[type="range"] {
+      width: 110px;
+    }
+    .row input[type="color"] {
+      width: 40px;
+      height: 20px;
+      border: none;
+      cursor: pointer;
+    }
+    .row span {
+      width: 35px;
+      text-align: right;
+      color: #94a3b8;
+    }
+    #status {
+      margin-top: 8px;
+      padding: 6px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #4ade80;
+      font-size: 10px;
+      word-break: break-all;
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="controls">
+    <h3>Cartoon Ocean Shader</h3>
+    
+    <div class="row">
+      <label>Wave Height</label>
+      <input type="range" id="waveHeight" min="0" max="5" step="0.1" value="1.5">
+      <span id="waveHeight-val">1.5</span>
+    </div>
+    <div class="row">
+      <label>Wave Speed</label>
+      <input type="range" id="waveSpeed" min="0" max="3" step="0.1" value="1.2">
+      <span id="waveSpeed-val">1.2</span>
+    </div>
+    <div class="row">
+      <label>Choppiness</label>
+      <input type="range" id="choppiness" min="0" max="2" step="0.05" value="0.6">
+      <span id="choppiness-val">0.6</span>
+    </div>
+    <div class="row">
+      <label>Wave Count</label>
+      <input type="range" id="waveCount" min="1" max="20" step="1" value="10">
+      <span id="waveCount-val">10</span>
+    </div>
+    <div class="row">
+      <label>Wave Frequency</label>
+      <input type="range" id="waveFrequency" min="0.1" max="2" step="0.05" value="0.5">
+      <span id="waveFrequency-val">0.5</span>
+    </div>
+    <div class="row">
+      <label>Toon Steps</label>
+      <input type="range" id="toonSteps" min="1" max="10" step="1" value="4">
+      <span id="toonSteps-val">4</span>
+    </div>
+    <div class="row">
+      <label>Shallow Color</label>
+      <input type="color" id="shallowColor" value="#00ffff">
+    </div>
+    <div class="row">
+      <label>Deep Color</label>
+      <input type="color" id="deepColor" value="#003366">
+    </div>
+    <div class="row">
+      <label>Foam Color</label>
+      <input type="color" id="foamColor" value="#ffffff">
+    </div>
+    <div class="row">
+      <label>Foam Height Thresh</label>
+      <input type="range" id="foamHeightThreshold" min="0" max="3" step="0.1" value="0.5">
+      <span id="foamHeightThreshold-val">0.5</span>
+    </div>
+    <div class="row">
+      <label>Foam Steep Thresh</label>
+      <input type="range" id="foamSteepThreshold" min="0" max="1" step="0.05" value="0.3">
+      <span id="foamSteepThreshold-val">0.3</span>
+    </div>
+
+    <div id="status">Status: Initializing WebGL...</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    class OceanShader extends THREE.ShaderMaterial {
+      constructor(options = {}) {
+        // Create a procedural grayscale shore distance map if none provided
+        let shoreDistTexture = options.shoreDist;
+        if (!shoreDistTexture) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 512;
+          canvas.height = 512;
+          const ctx = canvas.getContext('2d');
+          
+          // White background (deep ocean)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, 512, 512);
+          
+          // Dark circle in middle (shore/island distance gradient)
+          const grad = ctx.createRadialGradient(256, 256, 10, 256, 256, 200);
+          grad.addColorStop(0, '#000000'); // Island center (black)
+          grad.addColorStop(0.3, '#333333');
+          grad.addColorStop(0.6, '#888888');
+          grad.addColorStop(1, '#ffffff'); // Deep water (white)
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(256, 256, 200, 0, Math.PI * 2);
+          ctx.fill();
+
+          shoreDistTexture = new THREE.CanvasTexture(canvas);
+          shoreDistTexture.wrapS = THREE.RepeatWrapping;
+          shoreDistTexture.wrapT = THREE.RepeatWrapping;
+        }
+
+        const uniforms = {
+          time: { value: 0 },
+          waveHeight: { value: options.waveHeight ?? 1.5 },
+          waveSpeed: { value: options.waveSpeed ?? 1.2 },
+          windDirection: { value: options.windDirection || new THREE.Vector3(0.5, 0.1, 0.3) },
+          crossSwellDirection: { value: options.crossSwellDirection || new THREE.Vector3(-0.3, 0.1, 0.8) },
+          choppiness: { value: options.choppiness ?? 0.6 },
+          shallowColor: { value: new THREE.Color(options.shallowColor || '#00ffff') },
+          deepColor: { value: new THREE.Color(options.deepColor || '#003366') },
+          foamColor: { value: new THREE.Color(options.foamColor || '#ffffff') },
+          toonSteps: { value: options.toonSteps ?? 4 },
+          lightDirection: { value: options.lightDirection || new THREE.Vector3(0.5, 1.0, 0.5) },
+          shoreDist: { value: shoreDistTexture },
+          shoreDistanceThreshold: { value: options.shoreDistanceThreshold ?? 0.3 },
+          shoreDistancePower: { value: options.shoreDistancePower ?? 2.0 },
+          waveCount: { value: options.waveCount ?? 10 },
+          waveFrequency: { value: options.waveFrequency ?? 0.5 },
+          foamBandMin: { value: options.foamBandMin ?? 0.25 },
+          foamBandMax: { value: options.foamBandMax ?? 0.75 },
+          foamHeightThreshold: { value: options.foamHeightThreshold ?? 0.5 },
+          foamSteepThreshold: { value: options.foamSteepThreshold ?? 0.3 }
+        };
+
+        super({
+          name: 'OceanShader',
+          glslVersion: THREE.GLSL3,
+          uniforms: uniforms,
+          side: THREE.DoubleSide,
+          vertexShader: `
+            uniform float time;
+            uniform vec3 windDirection;
+            uniform vec3 crossSwellDirection;
+            uniform float choppiness;
+            uniform float waveHeight;
+            uniform float waveSpeed;
+            uniform float waveFrequency;
+            uniform int waveCount;
+
+            uniform float shoreDistanceThreshold;
+            uniform float shoreDistancePower;
+            uniform sampler2D shoreDist;
+
+            out vec3 v_worldPos;
+            out vec3 v_normal;
+            out float v_height;
+            out vec2 v_uv;
+
+            float hash(vec2 p) {
+              return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+            }
+
+            vec3 getWaveDirection(int i) {
+              vec3 dir;
+              float fi = float(i);
+              if (i == 0) {
+                vec2 d = normalize(windDirection.xz);
+                dir = vec3(d.x, 0.0, d.y);
+              } else if (i == 1) {
+                vec2 d = normalize(crossSwellDirection.xz);
+                dir = vec3(d.x, 0.0, d.y);
+              } else if (i == 2) {
+                dir = vec3(0.7, 0.0, 0.7);
+              } else {
+                float angle = hash(vec2(fi, 0.0)) * 2.0 * 3.14159265;
+                dir = vec3(cos(angle), 0.0, sin(angle));
+              }
+              return normalize(dir);
+            }
+
+            float getWaveAmplitude(int i) {
+              float base = waveHeight;
+              float fi = float(i);
+              if (i == 0 || i == 1) {
+                return base * (0.8 + hash(vec2(fi, 1.0)) * 0.2);
+              } else if (i == 2) {
+                return base * 0.7;
+              } else {
+                return base * choppiness * (0.5 + hash(vec2(fi, 2.0)) * 0.5);
+              }
+            }
+
+            float getWaveNumber(int i) {
+              float base = waveFrequency;
+              float fi = float(i);
+              if (i == 0) {
+                return base * 0.5;
+              } else if (i == 1) {
+                return base * 0.7;
+              } else if (i == 2) {
+                return base * 0.9;
+              } else {
+                return base * (1.0 + hash(vec2(fi, 3.0)) * 2.0);
+              }
+            }
+
+            float getWaveSpeed(int i) {
+              return waveSpeed * getWaveNumber(i);
+            }
+
+            void main() {
+              vec3 worldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+              v_uv = uv;
+
+              float dist = texture(shoreDist, uv).r;
+              float calmFactor = pow(smoothstep(0.0, shoreDistanceThreshold, dist), shoreDistancePower);
+
+              float height = 0.0;
+              vec2 gradient = vec2(0.0);
+
+              for (int i = 0; i < waveCount; i++) {
+                vec3 dir = getWaveDirection(i);
+                float a = getWaveAmplitude(i) * calmFactor;
+                float k = getWaveNumber(i);
+                float w = getWaveSpeed(i);
+                float phase = dot(dir.xz, worldPos.xz) * k - w * time;
+                height += a * cos(phase);
+                gradient.x += -a * k * dir.x * sin(phase);
+                gradient.y += -a * k * dir.z * sin(phase);
+              }
+
+              v_height = height;
+              vec3 displacedPos = worldPos + vec3(0.0, height, 0.0);
+              vec3 calcNormal = normalize(vec3(-gradient.x, 1.0, -gradient.y));
+
+              v_worldPos = displacedPos;
+              v_normal = calcNormal;
+
+              gl_Position = projectionMatrix * viewMatrix * vec4(displacedPos, 1.0);
+            }
+          `,
+          fragmentShader: `
+            in vec3 v_worldPos;
+            in vec3 v_normal;
+            in float v_height;
+            in vec2 v_uv;
+
+            uniform vec3 deepColor;
+            uniform vec3 shallowColor;
+            uniform vec3 foamColor;
+            uniform float toonSteps;
+            uniform vec3 lightDirection;
+            uniform vec3 windDirection;
+            uniform vec3 crossSwellDirection;
+            uniform sampler2D shoreDist;
+            uniform float shoreDistanceThreshold;
+            uniform float shoreDistancePower;
+            uniform float waveHeight;
+            uniform float waveSpeed;
+            uniform float waveFrequency;
+            uniform int waveCount;
+            uniform float choppiness;
+            uniform float time;
+
+            uniform float foamBandMin;
+            uniform float foamBandMax;
+            uniform float foamHeightThreshold;
+            uniform float foamSteepThreshold;
+
+            out vec4 fragColor;
+
+            float hash(vec2 p) {
+              return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+            }
+
+            vec3 getWaveDirection(int i) {
+              vec3 dir;
+              float fi = float(i);
+              if (i == 0) {
+                vec2 d = normalize(windDirection.xz);
+                dir = vec3(d.x, 0.0, d.y);
+              } else if (i == 1) {
+                vec2 d = normalize(crossSwellDirection.xz);
+                dir = vec3(d.x, 0.0, d.y);
+              } else if (i == 2) {
+                dir = vec3(0.7, 0.0, 0.7);
+              } else {
+                float angle = hash(vec2(fi, 0.0)) * 2.0 * 3.14159265;
+                dir = vec3(cos(angle), 0.0, sin(angle));
+              }
+              return normalize(dir);
+            }
+
+            float getWaveAmplitude(int i) {
+              float base = waveHeight;
+              float fi = float(i);
+              if (i == 0 || i == 1) {
+                return base * (0.8 + hash(vec2(fi, 1.0)) * 0.2);
+              } else if (i == 2) {
+                return base * 0.7;
+              } else {
+                return base * choppiness * (0.5 + hash(vec2(fi, 2.0)) * 0.5);
+              }
+            }
+
+            float getWaveNumber(int i) {
+              float base = waveFrequency;
+              float fi = float(i);
+              if (i == 0) {
+                return base * 0.5;
+              } else if (i == 1) {
+                return base * 0.7;
+              } else if (i == 2) {
+                return base * 0.9;
+              } else {
+                return base * (1.0 + hash(vec2(fi, 3.0)) * 2.0);
+              }
+            }
+
+            float getWaveSpeed(int i) {
+              return waveSpeed * getWaveNumber(i);
+            }
+
+            void main() {
+              vec3 worldPos = v_worldPos;
+              vec3 normal = normalize(v_normal);
+
+              vec3 viewDir = normalize(cameraPosition - worldPos);
+              vec3 lightDir = normalize(lightDirection);
+
+              float NdotL = max(0.0, dot(normal, lightDir));
+              float NdotV = max(0.0, dot(normal, viewDir));
+
+              // Toon lighting
+              float steps = max(1.0, toonSteps);
+              float quant = NdotL * steps;
+              float band = floor(quant) / steps;
+              float nextBand = ceil(quant) / steps;
+              float frac = fract(quant);
+              float toon = mix(band, nextBand, smoothstep(0.0, 1.0, frac));
+              toon = clamp(toon, 0.2, 1.0);
+
+              // Water color: deep blue to turquoise crests
+              float crest = smoothstep(-waveHeight * 0.5, waveHeight * 0.8, v_height);
+              vec3 waterColor = mix(deepColor, shallowColor, crest);
+              vec3 finalColor = waterColor * toon;
+
+              // Fresnel rim highlight
+              float rim = pow(1.0 - NdotV, 3.0);
+              vec3 rimColor = vec3(1.0, 1.0, 1.0) * rim * 0.5;
+              finalColor = mix(finalColor, rimColor, rim * 0.4);
+
+              // Foam procedural
+              float dist = texture(shoreDist, v_uv).r;
+              float foamBand = smoothstep(foamBandMin, foamBandMax, dist) *
+                               (1.0 - smoothstep(0.0, 0.1, dist));
+              float steep = 1.0 - normal.y;
+              float foamWave = step(foamHeightThreshold, v_height) *
+                               step(foamSteepThreshold, steep);
+              float noise = hash(worldPos.xz + time * 10.0);
+              float foam = max(foamBand, foamWave) * smoothstep(0.3, 0.9, noise);
+              vec3 foamCol = mix(finalColor, foamColor, clamp(foam, 0.0, 1.0));
+
+              // Specular glints
+              vec3 halfVector = normalize(lightDir + viewDir);
+              float spec = pow(max(0.0, dot(normal, halfVector)), 32.0);
+              float specNoise = hash(worldPos.xz * 10.0 + time * 5.0);
+              float specMask = step(0.2, spec) * specNoise;
+
+              float glint = 0.0;
+              for (int i = 0; i < waveCount; i++) {
+                vec3 dir = getWaveDirection(i);
+                float a = getWaveAmplitude(i) * 0.5;
+                float k = getWaveNumber(i) * 5.0;
+                float w = getWaveSpeed(i) * 5.0;
+                float phase = dot(dir.xz, worldPos.xz) * k - w * time;
+                glint += a * cos(phase);
+              }
+              glint = smoothstep(0.0, 0.5, glint) * specMask;
+              vec3 specColor = vec3(1.0, 1.0, 1.0) * glint;
+              finalColor = mix(foamCol, specColor, clamp(glint, 0.0, 1.0));
+
+              fragColor = vec4(finalColor, 1.0);
+            }
+          `
+        });
+
+        this.waveHeight = options.waveHeight ?? 1.5;
+        this.waveSpeed = options.waveSpeed ?? 1.2;
+        this.windDirection = options.windDirection || new THREE.Vector3(0.5, 0.1, 0.3);
+        this.crossSwellDirection = options.crossSwellDirection || new THREE.Vector3(-0.3, 0.1, 0.8);
+        this.choppiness = options.choppiness ?? 0.6;
+        this.shallowColor = options.shallowColor || '#00ffff';
+        this.deepColor = options.deepColor || '#003366';
+        this.foamColor = options.foamColor || '#ffffff';
+        this.toonSteps = options.toonSteps ?? 4;
+        this.lightDirection = options.lightDirection || new THREE.Vector3(0.5, 1.0, 0.5);
+        this.shoreDist = shoreDistTexture;
+        this.shoreDistanceThreshold = options.shoreDistanceThreshold ?? 0.3;
+        this.shoreDistancePower = options.shoreDistancePower ?? 2.0;
+        this.waveCount = options.waveCount ?? 10;
+        this.waveFrequency = options.waveFrequency ?? 0.5;
+        this.foamBandMin = options.foamBandMin ?? 0.25;
+        this.foamBandMax = options.foamBandMax ?? 0.75;
+        this.foamHeightThreshold = options.foamHeightThreshold ?? 0.5;
+        this.foamSteepThreshold = options.foamSteepThreshold ?? 0.3;
+        this.time = 0;
+
+        this.updateUniforms();
+      }
+
+      update(timeInSeconds) {
+        this.time = timeInSeconds;
+        this.uniforms.time.value = timeInSeconds;
+      }
+
+      updateUniforms() {
+        if (!this.uniforms) return;
+        this.uniforms.waveHeight.value = this.waveHeight;
+        this.uniforms.waveSpeed.value = this.waveSpeed;
+        this.uniforms.windDirection.value = this.windDirection;
+        this.uniforms.crossSwellDirection.value = this.crossSwellDirection;
+        this.uniforms.choppiness.value = this.choppiness;
+        this.uniforms.shallowColor.value.set(this.shallowColor);
+        this.uniforms.deepColor.value.set(this.deepColor);
+        this.uniforms.foamColor.value.set(this.foamColor);
+        this.uniforms.toonSteps.value = Number(this.toonSteps);
+        this.uniforms.lightDirection.value = this.lightDirection;
+        this.uniforms.shoreDist.value = this.shoreDist;
+        this.uniforms.shoreDistanceThreshold.value = this.shoreDistanceThreshold;
+        this.uniforms.shoreDistancePower.value = this.shoreDistancePower;
+        this.uniforms.waveCount.value = this.waveCount;
+        this.uniforms.waveFrequency.value = this.waveFrequency;
+        this.uniforms.foamBandMin.value = this.foamBandMin;
+        this.uniforms.foamBandMax.value = this.foamBandMax;
+        this.uniforms.foamHeightThreshold.value = this.foamHeightThreshold;
+        this.uniforms.foamSteepThreshold.value = this.foamSteepThreshold;
+        this.uniforms.time.value = this.time;
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Scene Setup
+    // ------------------------------------------------------------------
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#0f172a');
+    scene.fog = new THREE.FogExp2('#0f172a', 0.001);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 3000);
+    camera.position.set(0, 40, 120);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02; // Don't go below ground
+
+    // Create Ocean
+    const ocean = new OceanShader({
+      waveHeight: 1.5,
+      waveSpeed: 1.2,
+      windDirection: new THREE.Vector3(0.5, 0.1, 0.3),
+      crossSwellDirection: new THREE.Vector3(-0.3, 0.1, 0.8),
+      choppiness: 0.6,
+      shallowColor: '#00ffff',
+      deepColor: '#003366',
+      foamColor: '#ffffff',
+      toonSteps: 4,
+      lightDirection: new THREE.Vector3(0.5, 1.0, 0.5),
+      waveCount: 10,
+      waveFrequency: 0.5,
+      foamHeightThreshold: 0.5,
+      foamSteepThreshold: 0.3
+    });
+
+    const planeGeo = new THREE.PlaneGeometry(1000, 1000, 256, 256);
+    planeGeo.rotateX(-Math.PI / 2);
+    const oceanMesh = new THREE.Mesh(planeGeo, ocean);
+    scene.add(oceanMesh);
+
+    // Island in center for shore visual test
+    const islandGeo = new THREE.ConeGeometry(30, 12, 16);
+    const islandMat = new THREE.MeshLambertMaterial({ color: '#854d0e', flatShading: true });
+    const islandMesh = new THREE.Mesh(islandGeo, islandMat);
+    islandMesh.position.y = 2;
+    scene.add(islandMesh);
+
+    // Directional Light
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(100, 200, 100);
+    scene.add(dirLight);
+
+    const ambientLight = new THREE.AmbientLight(0x38bdf8, 0.6);
+    scene.add(ambientLight);
+
+    // Resize Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // UI Input Binding
+    const statusEl = document.getElementById('status');
+    statusEl.textContent = 'Status: Ocean Shader Loaded & Running';
+
+    const bindInput = (id, prop, isColor = false, isFloat = true) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const valEl = document.getElementById(id + '-val');
+      el.addEventListener('input', (e) => {
+        let val = e.target.value;
+        if (isColor) {
+          ocean[prop] = val;
+        } else {
+          val = isFloat ? parseFloat(val) : parseInt(val, 10);
+          ocean[prop] = val;
+          if (valEl) valEl.textContent = val;
+        }
+        ocean.updateUniforms();
+      });
+    };
+
+    bindInput('waveHeight', 'waveHeight');
+    bindInput('waveSpeed', 'waveSpeed');
+    bindInput('choppiness', 'choppiness');
+    bindInput('waveCount', 'waveCount', false, false);
+    bindInput('waveFrequency', 'waveFrequency');
+    bindInput('toonSteps', 'toonSteps', false, false);
+    bindInput('shallowColor', 'shallowColor', true);
+    bindInput('deepColor', 'deepColor', true);
+    bindInput('foamColor', 'foamColor', true);
+    bindInput('foamHeightThreshold', 'foamHeightThreshold');
+    bindInput('foamSteepThreshold', 'foamSteepThreshold');
+
+    // Animation Loop
+    const startTime = performance.now();
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const elapsed = (performance.now() - startTime) / 1000;
+      ocean.update(elapsed);
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
