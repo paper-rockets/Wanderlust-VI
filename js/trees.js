@@ -241,14 +241,19 @@ export function setBiomeTreeConfig(biomeId, newConfig) {
 let activeTreeManager = null;
 
 export function refreshAllTrees() {
-    if (activeTreeManager && typeof activeTreeManager.refreshAllTrees === 'function') {
-        activeTreeManager.refreshAllTrees();
+    // During Vite hot reload this module can be replaced while the running
+    // scene still owns the previous manager. Keep the live manager on window
+    // so tree-picker buttons always control the instances the player sees.
+    const manager = activeTreeManager || (typeof window !== 'undefined' ? window.__treeInstanceManager : null);
+    if (manager && typeof manager.refreshAllTrees === 'function') {
+        manager.refreshAllTrees();
     }
 }
 
 export function refreshBiomeColors(biomeId) {
-    if (activeTreeManager && typeof activeTreeManager.refreshBiomeColors === 'function') {
-        activeTreeManager.refreshBiomeColors(biomeId);
+    const manager = activeTreeManager || (typeof window !== 'undefined' ? window.__treeInstanceManager : null);
+    if (manager && typeof manager.refreshBiomeColors === 'function') {
+        manager.refreshBiomeColors(biomeId);
     }
 }
 
@@ -999,6 +1004,7 @@ varying vec3 vBlendedNormal;
 
     if (typeof window !== 'undefined') {
         window.loadModelEntry = loadModelEntry;
+        window.__treeInstanceManager = activeTreeManager;
     }
 
     // ==========================================
