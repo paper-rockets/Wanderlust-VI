@@ -180,9 +180,12 @@ try {
             const parsed = JSON.parse(saved);
             Object.keys(parsed).forEach(k => {
                 if (biomeTreeConfigs[k]) {
-                    biomeTreeConfigs[k] = { ...biomeTreeConfigs[k], ...parsed[k] };
-                    // If activeModels was saved empty, restore default models
-                    if (!biomeTreeConfigs[k].activeModels || biomeTreeConfigs[k].activeModels.length === 0) {
+                    const savedConfig = parsed[k] || {};
+                    biomeTreeConfigs[k] = { ...biomeTreeConfigs[k], ...savedConfig };
+                    // Older saves did not always contain a model list.  In that
+                    // case retain the defaults, but an intentionally empty list
+                    // means “no trees” and must stay empty after a restart.
+                    if (!Array.isArray(savedConfig.activeModels)) {
                         biomeTreeConfigs[k].activeModels = [...(DEFAULT_BIOME_TREE_CONFIGS[k]?.activeModels || [])];
                     }
                     if (k === 'ghibli_land') {
