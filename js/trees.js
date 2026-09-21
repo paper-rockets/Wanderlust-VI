@@ -313,6 +313,7 @@ export function initTreesAndOctree(...args) {
         getMeshHeight,
         getPathStrength,
         getMeshSlope,
+        getTreeLightFactor = () => 1.0,
         matTree
     } = opts;
 
@@ -322,9 +323,12 @@ export function initTreesAndOctree(...args) {
     dummyMatrix.setPosition(0, -2000, 0);
 
     const tempFlowerColor = new THREE.Color();
-    const treeDist = 900;
+    // Keep the forest dense around the player, but stop drawing distant full
+    // tree models beyond the scene's useful fog range.
+    const treeDist = 520;
     let logicTimer = 0;
     let currentFrame = 0;
+    const treeLightUniform = { value: 1.0 };
 
     // Spatial cell hash map to enforce minimum distance between trees
     const treeGrid = new Map();
@@ -480,7 +484,111 @@ export function initTreesAndOctree(...args) {
         side: THREE.DoubleSide
     });
 
-    const MODEL_POOL_CAP = LOW_GFX ? 250 : 450;
+    function addNonPineNightFloor(material, strength, cacheKey) {
+        material.onBeforeCompile = (shader) => {
+            shader.uniforms.uTreeLightFactor = treeLightUniform;
+            shader.fragmentShader = `uniform float uTreeLightFactor;\n` + shader.fragmentShader;
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <dithering_fragment>',
+                `#include <dithering_fragment>
+                 // Preserve a dark trace of the editor colour when the world's
+                 // direct night lighting reaches zero; this avoids black cutouts.
+                 float nonPineNight = 1.0 - uTreeLightFactor;
+                 gl_FragColor.rgb = max(
+                     gl_FragColor.rgb,
+                     diffuseColor.rgb * nonPineNight * ${strength.toFixed(2)}
+                 );`
+            );
+        };
+        material.customProgramCacheKey = () => `non-pine-night-floor-${cacheKey}`;
+    }
+
+    addNonPineNightFloor(matTrunk, 0.22, 'trunk');
+    addNonPineNightFloor(matFoliage, 0.36, 'foliage');
+
+    // GLB pine foliage is built from alpha-cutout cards. Keep its own texture
+    // and alpha mask when converting it to an instanced material; replacing it
+    // with a blank colour material is what made the cards render as solid sheets.
+    function makeInstancedTreeMaterial(sourceMaterial, isFoliage = false, isPine = false, axialBillboard = false) {
+        const source = Array.isArray(sourceMaterial) ? sourceMaterial[0] : sourceMaterial;
+        const usesCutout = isPine && !!(source && (source.alphaTest > 0 || source.transparent || source.alphaMap));
+        const useAxialBillboard = axialBillboard && isFoliage && usesCutout;
+        const nightResponse = isPine ? 0.78 : 0.42;
+
+        // Keep the source GLB material for pines. It contains the authored
+        // texture/roughness response that the generic toon replacement lost.
+        // The existing shared toon materials remain the path for other models.
+        const material = isPine && source?.clone
+            ? source.clone()
+            : new THREE.MeshToonMaterial({
+                color: 0xffffff,
+                gradientMap: gradientMap,
+                dithering: true,
+                side: isFoliage ? THREE.DoubleSide : THREE.FrontSide
+            });
+        material.alphaTest = usesCutout ? Math.max(source?.alphaTest || 0, 0.45) : 0;
+        material.transparent = false;
+        material.depthWrite = true;
+        material.vertexColors = true;
+        material.side = isFoliage ? THREE.DoubleSide : THREE.FrontSide;
+
+        // One shared shader value darkens every instanced tree at night without
+        // duplicating materials or adding any draw calls.
+        material.onBeforeCompile = (shader) => {
+            shader.uniforms.uTreeLightFactor = treeLightUniform;
+            shader.vertexShader = `varying float vTreeTone;\nvarying vec3 vTreeInstanceColor;\n` + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                `#include <begin_vertex>
+                 vTreeInstanceColor = instanceColor;
+                 vTreeTone = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);`
+            );
+            if (useAxialBillboard) {
+                // Pine needle cards rotate only around world Y. This keeps the
+                // tree upright while preventing the foliage from turning edge-on.
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <project_vertex>',
+                    `vec3 instancePosition = instanceMatrix[3].xyz;
+                     vec2 cameraDirection = cameraPosition.xz - instancePosition.xz;
+                     float cameraDistance = max(length(cameraDirection), 0.0001);
+                     cameraDirection /= cameraDistance;
+                     vec3 billboardRight = vec3(cameraDirection.y, 0.0, -cameraDirection.x);
+                     vec3 billboardForward = vec3(cameraDirection.x, 0.0, cameraDirection.y);
+                     float instanceScaleX = length(instanceMatrix[0].xyz);
+                     float instanceScaleY = length(instanceMatrix[1].xyz);
+                     float instanceScaleZ = length(instanceMatrix[2].xyz);
+                     vec3 billboardPosition = instancePosition
+                         + billboardRight * transformed.x * instanceScaleX
+                         + vec3(0.0, transformed.y * instanceScaleY, 0.0)
+                         + billboardForward * transformed.z * instanceScaleZ;
+                     vec4 mvPosition = modelViewMatrix * vec4(billboardPosition, 1.0);
+                     gl_Position = projectionMatrix * mvPosition;`
+                );
+            }
+            shader.fragmentShader = `uniform float uTreeLightFactor;\nvarying float vTreeTone;\nvarying vec3 vTreeInstanceColor;\n` + shader.fragmentShader;
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <dithering_fragment>',
+                `#include <dithering_fragment>
+                 // Keep the toon style while breaking up identical flat foliage.
+                 float treeTone = mix(0.92, 1.06, vTreeTone);
+                 gl_FragColor.rgb *= mix(1.0, uTreeLightFactor, ${nightResponse.toFixed(2)}) * treeTone;
+                 // Keep authored pine colour barely visible when direct night
+                 // lighting reaches zero, without making distant trees glow.
+                 float pineNight = 1.0 - uTreeLightFactor;
+                 gl_FragColor.rgb = max(
+                     gl_FragColor.rgb,
+                     vTreeInstanceColor * pineNight * ${(isFoliage ? 0.55 : 0.32).toFixed(2)} * treeTone
+                 );`
+            );
+        };
+        material.customProgramCacheKey = () => `instanced-tree-${isPine ? 'pine' : 'standard'}-${isFoliage ? 'foliage' : 'trunk'}-${usesCutout ? 'cutout' : 'solid'}-${useAxialBillboard ? 'axial' : 'fixed'}`;
+        return material;
+    }
+
+    // Real-world editor use is 2–3 selected models per biome. A 220-instance
+    // pool per model keeps those forests dense while avoiding hundreds of
+    // invisible, empty instances for every model.
+    const MODEL_POOL_CAP = LOW_GFX ? 110 : 220;
     const loadedModels = new Map();
 
     function loadModelEntry(modelDef, onReady) {
@@ -510,6 +618,8 @@ export function initTreesAndOctree(...args) {
 
         gltfLoader.load('assets/trees/' + modelDef.file, (gltf) => {
             const childMeshes = [];
+            const isPine = modelDef.id.startsWith('pine_');
+            const axialBillboard = modelDef.id.startsWith('pine_c_');
             gltf.scene.traverse((child) => {
                 if (child.isMesh) childMeshes.push(child);
             });
@@ -521,8 +631,20 @@ export function initTreesAndOctree(...args) {
                 trunkGeo.computeVertexNormals();
                 leavesGeo.computeVertexNormals();
 
-                entry.instTrunk = new THREE.InstancedMesh(trunkGeo, matTrunk, MODEL_POOL_CAP);
-                entry.instLeaves = new THREE.InstancedMesh(leavesGeo, matFoliage, MODEL_POOL_CAP);
+                entry.instTrunk = new THREE.InstancedMesh(
+                    trunkGeo,
+                    isPine
+                        ? makeInstancedTreeMaterial(childMeshes[0].material, false, true, axialBillboard)
+                        : matTrunk,
+                    MODEL_POOL_CAP
+                );
+                entry.instLeaves = new THREE.InstancedMesh(
+                    leavesGeo,
+                    isPine
+                        ? makeInstancedTreeMaterial(childMeshes[1].material, true, true, axialBillboard)
+                        : matFoliage,
+                    MODEL_POOL_CAP
+                );
 
                 entry.instTrunk.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MODEL_POOL_CAP * 3).fill(1), 3);
                 entry.instLeaves.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MODEL_POOL_CAP * 3).fill(1), 3);
@@ -549,7 +671,13 @@ export function initTreesAndOctree(...args) {
                 const singleGeo = childMeshes[0].geometry.clone();
                 singleGeo.computeVertexNormals();
 
-                entry.instSingle = new THREE.InstancedMesh(singleGeo, matFoliage, MODEL_POOL_CAP);
+                entry.instSingle = new THREE.InstancedMesh(
+                    singleGeo,
+                    isPine
+                        ? makeInstancedTreeMaterial(childMeshes[0].material, true, true, axialBillboard)
+                        : matFoliage,
+                    MODEL_POOL_CAP
+                );
                 entry.instSingle.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MODEL_POOL_CAP * 3).fill(1), 3);
 
                 entry.instSingle.castShadow = false;
@@ -707,6 +835,7 @@ export function initTreesAndOctree(...args) {
     function updateInstances(playerX, playerZ, time, dt, playerYaw) {
         currentFrame++;
         const dist = treeDist;
+        treeLightUniform.value = Math.max(0.25, Math.min(1.0, getTreeLightFactor()));
 
         if (camera) {
             vegOctree.update(camera, playerX, playerZ, dist);

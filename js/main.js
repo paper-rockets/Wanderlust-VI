@@ -772,6 +772,7 @@ const { updateInstances, applyGLBPineTree } = initTreesAndOctree({
     getMeshHeight,
     getPathStrength,
     getMeshSlope,
+    getTreeLightFactor: () => timePhase === 2 ? 0.38 : (timePhase === 1 ? 0.78 : 1.0),
     instTree1,
     instTree2,
     instTree3,
