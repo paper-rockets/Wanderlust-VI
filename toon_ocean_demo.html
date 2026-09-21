@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Toon Ocean Shader Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #0b1528;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      color: #e2e8f0;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    #info-card {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 14px 18px;
+      max-width: 360px;
+      pointer-events: none;
+      z-index: 10;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+    #info-card h1 {
+      margin: 0 0 6px 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+    #info-card p {
+      margin: 0 0 10px 0;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #94a3b8;
+    }
+    .feature-tag {
+      display: inline-block;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #7dd3fc;
+      border-radius: 4px;
+      padding: 3px 7px;
+      font-size: 11px;
+      margin: 2px 2px 2px 0;
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm"
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <div id="info-card">
+    <h1>Toon Ocean Shader</h1>
+    <p>GPU Gerstner displacement, analytic surface normals, multi-step toon lighting, procedural crest glints &amp; shoreline distance foam.</p>
+    <div>
+      <span class="feature-tag">10 Gerstner Waves</span>
+      <span class="feature-tag">Toon Lighting</span>
+      <span class="feature-tag">Procedural Foam</span>
+      <span class="feature-tag">Shore Masking</span>
+    </div>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+    import { GUI } from "lil-gui";
+    import { ToonOcean } from "./ToonOcean.js";
+
+    // Create Renderer
+    const container = document.getElementById("canvas-container");
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    container.appendChild(renderer.domElement);
+
+    // Scene & Camera
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#8fc9e6");
+    scene.fog = new THREE.FogExp2("#8fc9e6", 0.00015);
+
+    const camera = new THREE.PerspectiveCamera(
+      55,
+      window.innerWidth / window.innerHeight,
+      1.0,
+      12000.0
+    );
+    camera.position.set(0, 700, 1400);
+
+    // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.target.set(0, 0, 0);
+
+    // Create procedural shoreline texture (island mask in center)
+    function createShorelineTexture() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext("2d");
+
+      // Fill white (open ocean = 1.0)
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Create central island gradient (center black = land, fading outward to white = ocean)
+      const grad = ctx.createRadialGradient(256, 256, 40, 256, 256, 180);
+      grad.addColorStop(0.0, "rgb(0,0,0)");
+      grad.addColorStop(0.3, "rgb(20,20,20)");
+      grad.addColorStop(0.7, "rgb(180,180,180)");
+      grad.addColorStop(1.0, "rgb(255,255,255)");
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(256, 256, 180, 0, Math.PI * 2);
+      ctx.fill();
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      return texture;
+    }
+
+    const shoreMap = createShorelineTexture();
+
+    // Create Toon Ocean
+    const ocean = new ToonOcean({
+      size: 6000,
+      resolution: 384,
+
+      waveHeight: 24.0,
+      waveSpeed: 1.0,
+      waveDirection: Math.PI * 0.15,
+      crossSwell: 0.9,
+      choppiness: 1.05,
+
+      deepColor: "#06357d",
+      shallowColor: "#18b8c8",
+      foamColor: "#f7ffff",
+
+      toonSteps: 4,
+      lightDirection: new THREE.Vector3(-0.4, 0.8, 0.25),
+
+      shorelineMap: shoreMap,
+      shoreMapScale: new THREE.Vector2(1 / 6000, 1 / 6000),
+      shoreMapOffset: new THREE.Vector2(0.5, 0.5),
+
+      shoreBandScale: 26.0,
+      shoreBandSpeed: 0.18,
+      shoreBandWidth: 0.13,
+      shoreFoamFalloff: 4.5
+    });
+
+    scene.add(ocean.mesh);
+
+    // Simple Island Mesh in center to match shoreline mask
+    const islandGeo = new THREE.ConeGeometry(700, 160, 32);
+    const islandMat = new THREE.MeshLambertMaterial({ color: 0x4d7c0f, flatShading: true });
+    const island = new THREE.Mesh(islandGeo, islandMat);
+    island.position.set(0, 30, 0);
+    scene.add(island);
+
+    // Directional & Ambient Lighting
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(-400, 800, 250);
+    scene.add(dirLight);
+
+    const ambientLight = new THREE.AmbientLight(0xdff0ff, 0.6);
+    scene.add(ambientLight);
+
+    // GUI Controls
+    const gui = new GUI({ width: 300 });
+    gui.domElement.style.marginRight = "10px";
+
+    const waveFolder = gui.addFolder("Wave Dynamics");
+    waveFolder.add(ocean.uniforms.uWaveHeight, "value", 0, 80, 1).name("Wave Height");
+    waveFolder.add(ocean.uniforms.uWaveSpeed, "value", 0, 3, 0.1).name("Wave Speed");
+    waveFolder.add(ocean.uniforms.uWaveDirection, "value", -Math.PI, Math.PI, 0.05).name("Wave Direction");
+    waveFolder.add(ocean.uniforms.uCrossSwell, "value", 0, 2, 0.05).name("Cross Swell");
+    waveFolder.add(ocean.uniforms.uChoppiness, "value", 0, 2, 0.05).name("Choppiness");
+    waveFolder.open();
+
+    const shadingFolder = gui.addFolder("Toon & Colors");
+    shadingFolder.add(ocean.uniforms.uToonSteps, "value", 3, 5, 1).name("Toon Steps");
+    
+    const colors = {
+      deep: "#06357d",
+      shallow: "#18b8c8",
+      foam: "#f7ffff"
+    };
+
+    shadingFolder.addColor(colors, "deep").name("Deep Color").onChange(v => ocean.setControls({ deepColor: v }));
+    shadingFolder.addColor(colors, "shallow").name("Shallow Color").onChange(v => ocean.setControls({ shallowColor: v }));
+    shadingFolder.addColor(colors, "foam").name("Foam Color").onChange(v => ocean.setControls({ foamColor: v }));
+    shadingFolder.open();
+
+    const shoreFolder = gui.addFolder("Shoreline Foam");
+    shoreFolder.add(ocean.uniforms.uUseShoreMap, "value").name("Use Shore Map");
+    shoreFolder.add(ocean.uniforms.uShoreBandScale, "value", 5, 50, 1).name("Shore Scale");
+    shoreFolder.add(ocean.uniforms.uShoreBandSpeed, "value", 0, 1, 0.02).name("Shore Speed");
+    shoreFolder.add(ocean.uniforms.uShoreBandWidth, "value", 0.01, 0.4, 0.01).name("Shore Width");
+    shoreFolder.add(ocean.uniforms.uShoreFoamFalloff, "value", 1, 10, 0.5).name("Foam Falloff");
+
+    // Animation Loop
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const elapsedTime = clock.getElapsedTime();
+      ocean.update(elapsedTime);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Window Resize Handler
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
