@@ -355,6 +355,11 @@ export function initTreesAndOctree(...args) {
     const treeDist = 380;
     let logicTimer = 0;
     let currentFrame = 0;
+    // Model-picker edits must be reflected as one atomic change.  Normal
+    // streaming spreads work over six frames, but that left a window where
+    // removed trees stayed visible and newly loaded models never received
+    // their first placement pass.
+    let forceFullTreeUpdate = false;
     const treeLightUniform = { value: 1.0 };
     const treeTimeUniform = { value: 0.0 };
 
@@ -899,6 +904,9 @@ varying vec3 vBlendedNormal;
             }
 
             entry.isLoaded = true;
+            // A checkbox can be enabled while its GLB is still downloading.
+            // Request a complete placement pass now that the mesh exists.
+            forceFullTreeUpdate = true;
             if (onReady) onReady(entry);
         }, undefined, (err) => {
             console.warn('Could not load tree GLB:', modelDef.file, err);
@@ -950,6 +958,9 @@ varying vec3 vBlendedNormal;
                 entry.instSingle.count = entry.poolCap;
             }
         });
+        // The very next simulation update repopulates every selected model
+        // instead of waiting for the usual six-frame streaming rotation.
+        forceFullTreeUpdate = true;
     }
 
     function doRefreshBiomeColors(targetBiomeId) {
@@ -1062,6 +1073,7 @@ varying vec3 vBlendedNormal;
         });
 
         if (shouldUpdateTerrain && !treesCulledByAlt && params.showTrees) {
+            const runFullTreeUpdate = forceFullTreeUpdate;
             loadedModels.forEach((entry, modelId) => {
                 if (!entry.isLoaded) return;
 
@@ -1107,7 +1119,9 @@ varying vec3 vBlendedNormal;
                     return;
                 }
 
-                for (let i = currentFrame % 6; i < count; i += 6) {
+                const slotStart = runFullTreeUpdate ? 0 : currentFrame % 6;
+                const slotStep = runFullTreeUpdate ? 1 : 6;
+                for (let i = slotStart; i < count; i += slotStep) {
                     const slotData = entry.slots[i];
                     let needsReposition = false;
 
@@ -1253,6 +1267,7 @@ varying vec3 vBlendedNormal;
                     }
                 }
             });
+            forceFullTreeUpdate = false;
 
             // Rocks
             if (instRocks && ROCK_COUNT > 0) {
