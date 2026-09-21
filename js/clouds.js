@@ -762,6 +762,7 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
         const highAvoidanceOffset = new Float32Array(HIGH_CLOUD_COUNT * 2);
         const lowTowerAvoidanceOffset = new Float32Array(LOW_TOWER_CLOUD_COUNT * 2);
         const megaAvoidanceOffset = new Float32Array(MEGA_CLOUD_COUNT * 2);
+        const lowBankAvoidanceOffset = new Float32Array(MEGA_CLOUD_COUNT * 2);
 
         const highCloudCurrentGrowth = new Float32Array(HIGH_CLOUD_COUNT);
         const highCloudTargetGrowth = new Float32Array(HIGH_CLOUD_COUNT);
@@ -794,7 +795,7 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
             depthTest: true,
             side: THREE.FrontSide
         });
-        setupToonCloudShader(cirroCloudMat, 0.35, 3000, 9000);
+        setupToonCloudShader(cirroCloudMat, params.cloudsBillboardBottomBlur !== undefined ? params.cloudsBillboardBottomBlur : 0.40);
     
         const cirroMeshes = [];
         const instBillboardClouds = new THREE.Group();
@@ -937,26 +938,19 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
             let targetX = 0;
             let targetZ = 0;
 
-            const stableInfluenceRadius = THREE.MathUtils.clamp(influenceRadius, 80, 1200);
+            const stableInfluenceRadius = THREE.MathUtils.clamp(influenceRadius, 80, 2400);
             if (speed > 0.5 && distance < stableInfluenceRadius && horizontalDistance > 0.001) {
                 const vx = velocityX / speed;
                 const vz = velocityZ / speed;
                 const headingCos = (vx * dx + vz * dz) / horizontalDistance;
                 if (headingCos > (params.cloudAvoidanceHeadingThreshold ?? 0.65)) {
-                    const projection = dx * vx + dz * vz;
-                    let nx = dx - projection * vx;
-                    let nz = dz - projection * vz;
-                    const nLength = Math.hypot(nx, nz);
-                    if (nLength < 0.001) {
-                        nx = -vz;
-                        nz = vx;
-                    } else {
-                        nx /= nLength;
-                        nz /= nLength;
-                    }
+                    const cross = vx * dz - vz * dx;
+                    const side = Math.abs(cross) > 0.001 ? Math.sign(cross) : ((index & 1) ? 1 : -1);
+                    const nx = -vz * side;
+                    const nz = vx * side;
                     const proximity = 1 - distance / stableInfluenceRadius;
                     const push = Math.min(
-                        280,
+                        stableInfluenceRadius * 0.42,
                         proximity * proximity * stableInfluenceRadius * (params.cloudAvoidanceStrength ?? 0.90)
                     );
                     targetX = nx * push;
@@ -984,6 +978,53 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
             // value into a multi-kilometre position shove that breaks the cloud's motion path.
             const scaleFactor = Math.sqrt(THREE.MathUtils.clamp(Math.abs(visualScale), 0.25, 6));
             return getMeshBoundingRadius(mesh) * scaleFactor;
+        }
+
+        function updateDistantCloudGroup(meshes, group, offsets, playerY, velocityX, velocityZ, dt, distanceSetting, layerSpeed, windAngle) {
+            const groupScaleX = Math.max(0.001, Math.abs(group.scale.x));
+            const groupScaleZ = Math.max(0.001, Math.abs(group.scale.z));
+            const windX = Math.cos(windAngle);
+            const windZ = Math.sin(windAngle);
+
+            meshes.forEach((mesh, variantIndex) => {
+                const totalSlots = mesh.count;
+                for (let slot = 0; slot < totalSlots; slot++) {
+                    mesh.getMatrixAt(slot, cloudDummy.matrix);
+                    cloudDummy.matrix.decompose(cloudDummy.position, cloudDummy.quaternion, cloudDummy.scale);
+
+                    const worldDistance = Math.hypot(
+                        cloudDummy.position.x * groupScaleX,
+                        cloudDummy.position.z * groupScaleZ
+                    );
+                    const drift = getLayerDrift(worldDistance) * layerSpeed;
+                    cloudDummy.position.x += windX * drift * dt / groupScaleX;
+                    cloudDummy.position.z += windZ * drift * dt / groupScaleZ;
+
+                    const cloudIndex = slot * meshes.length + variantIndex;
+                    const visualScale = Math.max(cloudDummy.scale.x, cloudDummy.scale.y, cloudDummy.scale.z);
+                    const sizeRadius = getStableAvoidanceRadius(mesh, visualScale) * 1.35;
+                    const influenceRadius = Math.min(
+                        Math.max(300, (Number(distanceSetting) || 1) * 0.42),
+                        Math.max(300, sizeRadius)
+                    );
+                    applySoftDrift(
+                        offsets,
+                        cloudIndex,
+                        cloudDummy.position,
+                        influenceRadius / Math.max(groupScaleX, groupScaleZ),
+                        0,
+                        playerY,
+                        0,
+                        velocityX / groupScaleX,
+                        velocityZ / groupScaleZ,
+                        dt
+                    );
+
+                    cloudDummy.updateMatrix();
+                    mesh.setMatrixAt(slot, cloudDummy.matrix);
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+            });
         }
 
         function redistributeLowClouds(playerX, playerZ, previousDistance, nextDistance) {
@@ -1221,7 +1262,7 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
         dummyInit.rotation.set(0, tangentAng + (i % 2 === 0 ? 0 : Math.PI), 0);
         const s = 0.95 + (i % 3) * 0.1;
         const widthBoost = Math.min(1.8, Math.max(0.7, 0.8 + density * 0.25));
-        const sx = s * 1.15 * (0.88 + (i % 4) * 0.09) * widthBoost * (i % 2 === 0 ? 1 : -1);
+        const sx = s * 1.15 * (0.88 + (i % 4) * 0.09) * widthBoost;
         const sy = s * (0.90 + ((i + 1) % 4) * 0.08);
         const sz = s * (0.92 + ((i + 2) % 3) * 0.08) * widthBoost;
         lowBankCloudBaseScale[variantIdx][slotInVariant * 3 + 0] = sx;
@@ -1248,7 +1289,7 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
         const tangentAng = ang + Math.PI * 0.5 + (Math.random() - 0.5) * 0.5;
         dummyInit.rotation.set(0, tangentAng + (i % 2 === 0 ? 0 : Math.PI), 0);
         const s = 1.0 + (i % 3) * 0.2;
-        const sx = s * (1.3 + (i % 4) * 0.15) * (i % 2 === 0 ? 1 : -1);
+        const sx = s * (1.3 + (i % 4) * 0.15);
         const sy = s * 0.75;
         const sz = s * (1.1 + ((i + 1) % 3) * 0.15);
         cirroBaseScale[variantIdx][slotInVariant * 3 + 0] = sx;
@@ -1827,7 +1868,7 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
             }
     
             const legW = 250;
-            const legH = 158;
+            const legH = 176;
             const lx = 20;
             const ly = 75;
     
@@ -1867,13 +1908,15 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
             const l3Count = instLowTowerClouds && instLowTowerClouds.visible ? instLowTowerClouds.count : 0;
             const l4Count = instMegaClouds && instMegaClouds.visible ? (params.cloudsGiantCount || 14) : 0;
             const l5Count = instLowBankClouds && instLowBankClouds.visible ? (params.cloudsLowBankCount || 14) : 0;
-    
+            const l6Count = instBillboardClouds && instBillboardClouds.visible ? (params.cloudsBillboardCount || 10) : 0;
+
             const legendItems = [
                 { color: '#4ade80', text: `Layer 1: Low Clouds (Nearby) [${l1Count}]` },
                 { color: '#f472b6', text: `Layer 2: Distant Towers [${l2Count}]` },
                 { color: '#facc15', text: `Layer 3: Low Horizon Towers [${l3Count}]` },
                 { color: '#38bdf8', text: `Layer 4: Distant Horizon Banks [${l4Count}]` },
-                { color: '#fb923c', text: `Layer 5: Low Horizon Banks [${l5Count}]` }
+                { color: '#fb923c', text: `Layer 5: Low Horizon Banks [${l5Count}]` },
+                { color: '#c084fc', text: `Layer 6: Distant High Clouds [${l6Count}]` }
             ];
     
             legendItems.forEach((it, idx) => {
@@ -1899,6 +1942,20 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
 
         function updateClouds(playerX, playerY, playerZ, dt, playerYaw = 0) {
             const dummy = cloudDummy;
+            const safeDt = THREE.MathUtils.clamp(Number(dt) || 0, 0, 0.1);
+            const playerStepX = playerX - lastCloudPlayerX;
+            const playerStepZ = playerZ - lastCloudPlayerZ;
+            const playerStep = Math.hypot(playerStepX, playerStepZ);
+            let playerVelocityX = safeDt > 0 && playerStep < 350 ? playerStepX / safeDt : 0;
+            let playerVelocityZ = safeDt > 0 && playerStep < 350 ? playerStepZ / safeDt : 0;
+            const measuredSpeed = Math.hypot(playerVelocityX, playerVelocityZ);
+            if (measuredSpeed > 220) {
+                const velocityScale = 220 / measuredSpeed;
+                playerVelocityX *= velocityScale;
+                playerVelocityZ *= velocityScale;
+            }
+            lastCloudPlayerX = playerX;
+            lastCloudPlayerZ = playerZ;
             // Calculate player forward horizontal flight heading and direction vector
             const _fwdX = -Math.sin(playerYaw);
             const _fwdZ = -Math.cos(playerYaw);
@@ -1950,12 +2007,20 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
                     ).multiplyScalar(params.cloudsLowSize);
                 }
                 dummy.position.y = getTerrainSafeAltitude(dummy.position.x, dummy.position.z, dummy.position.y);
-                dummy.position.x += 4.0 * dt;
-                dummy.position.z += 1.5 * dt;
+                const lowDistanceScale = getLayerDrift(Math.max(1, dist)) / Math.max(1, params.cloudWindBaseSpeed || 18);
+                dummy.position.x += lowCloudWindX[i] * lowDistanceScale * safeDt;
+                dummy.position.z += lowCloudWindZ[i] * lowDistanceScale * safeDt;
                 dummy.updateMatrix();
                 instClouds.setMatrixAt(i, dummy.matrix);
             }
             instClouds.instanceMatrix.needsUpdate = true;
+
+            // High altitude distance expansion for large clouds:
+            // When flying above 300m, the visual horizon expands outward.
+            // Pushing large clouds further out prevents empty sky while keeping clouds grand.
+            const playerAlt = Math.max(0, playerY);
+            const highAltFracLarge = Math.min(2.5, Math.max(0.0, (playerAlt - 300.0) / 900.0));
+            const largeCloudDistMult = 1.0 + highAltFracLarge * 0.85;
 
             // Distant Ghibli Towering Cumulus Clouds
             const highAltFrac = Math.min(1, Math.max(0, (playerY - 200) / 600));
@@ -1966,7 +2031,7 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
             if (highCloudMat.userData && highCloudMat.userData.shader) {
                 highCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsHighOpacity;
             }
-            const highCloudDist = Math.max(3500, params.cloudsHighDistance || 8000);
+            const highCloudDist = Math.max(3500, (params.cloudsHighDistance || 8000) * (1.0 + highAltFracLarge * 0.65));
             const targetHighCount = (params.cloudsHighCount !== undefined) ? params.cloudsHighCount : (LOW_GFX ? 0 : 14);
             setCloudCount(instHighClouds, targetHighCount);
             if (highCloudMat.userData && highCloudMat.userData.shader) {
@@ -1982,6 +2047,8 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
                 const hdotFwd = hdx * _fwdX + hdz * _fwdZ;
 
                 if (hdotFwd < -2000 || hDist > highCloudDist * 1.45 || dummy.position.y < -500) {
+                    highAvoidanceOffset[i * 2] = 0;
+                    highAvoidanceOffset[i * 2 + 1] = 0;
                     const fanSpread = (Math.random() - 0.5) * (Math.PI * 0.90);
                     const spawnAngle = _fwdAngle + fanSpread;
                     const r = highCloudDist * (0.85 + Math.random() * 0.45);
@@ -1999,7 +2066,18 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
                         highCloudBaseScale[i * 3 + 2]
                     ).multiplyScalar(params.cloudsHighSize);
                 }
-                dummy.position.x += 1.0 * dt;
+                const highDrift = getLayerDrift(Math.max(1, hDist)) * 0.55;
+                dummy.position.x += Math.cos(0.30) * highDrift * safeDt;
+                dummy.position.z += Math.sin(0.30) * highDrift * safeDt;
+                applySoftDrift(
+                    highAvoidanceOffset,
+                    i,
+                    dummy.position,
+                    Math.min(highCloudDist * 0.42, Math.max(300, 520 * Math.max(0.5, params.cloudsHighSize || 1))),
+                    playerX, playerY, playerZ,
+                    playerVelocityX, playerVelocityZ,
+                    safeDt
+                );
                 dummy.updateMatrix();
                 instHighClouds.setMatrixAt(i, dummy.matrix);
             }
@@ -2011,7 +2089,7 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
             if (lowTowerCloudMat.userData && lowTowerCloudMat.userData.shader) {
                 lowTowerCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsLowTowerOpacity;
             }
-            const lowTowerCloudDist = Math.max(3200, params.cloudsLowTowerDistance || 3200);
+            const lowTowerCloudDist = Math.max(3200, (params.cloudsLowTowerDistance || 3200) * (1.0 + highAltFracLarge * 0.50));
 
             for (let i = 0; i < targetLowTowerCount; i++) {
                 instLowTowerClouds.getMatrixAt(i, dummy.matrix);
@@ -2023,6 +2101,8 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
                 const tdotFwd = tdx * _fwdX + tdz * _fwdZ;
 
                 if (tdotFwd < -1800 || hDist > lowTowerCloudDist * 1.45 || dummy.position.y < -500) {
+                    lowTowerAvoidanceOffset[i * 2] = 0;
+                    lowTowerAvoidanceOffset[i * 2 + 1] = 0;
                     const spawnFan = (Math.random() - 0.5) * (Math.PI * 0.90);
                     const spawnAngle = _fwdAngle + spawnFan;
                     const r = lowTowerCloudDist * (0.85 + Math.random() * 0.40);
@@ -2042,7 +2122,18 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
                         lowTowerCloudBaseScale[i * 3 + 2]
                     ).multiplyScalar(params.cloudsLowTowerSize);
                 }
-                dummy.position.x += 0.8 * dt;
+                const towerDrift = getLayerDrift(Math.max(1, hDist)) * 0.45;
+                dummy.position.x += Math.cos(0.42) * towerDrift * safeDt;
+                dummy.position.z += Math.sin(0.42) * towerDrift * safeDt;
+                applySoftDrift(
+                    lowTowerAvoidanceOffset,
+                    i,
+                    dummy.position,
+                    Math.min(lowTowerCloudDist * 0.42, Math.max(280, 440 * Math.max(0.5, params.cloudsLowTowerSize || 1))),
+                    playerX, playerY, playerZ,
+                    playerVelocityX, playerVelocityZ,
+                    safeDt
+                );
                 dummy.updateMatrix();
                 instLowTowerClouds.setMatrixAt(i, dummy.matrix);
             }
@@ -2069,7 +2160,10 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
                     dummy.rotation.set(0, Math.random() * Math.PI, 0);
                     dummy.scale.set(2.0 + Math.random() * 1.5, 0.4 + Math.random() * 0.4, 1.8 + Math.random() * 1.5);
                 }
-                dummy.position.x += 5.0 * dt;
+                const wispyDistance = Math.hypot(wdx, wdz);
+                const wispyDrift = getLayerDrift(Math.max(1, wispyDistance)) * 0.52;
+                dummy.position.x += Math.cos(0.24) * wispyDrift * safeDt;
+                dummy.position.z += Math.sin(0.24) * wispyDrift * safeDt;
                 dummy.updateMatrix();
                 instWispyClouds.setMatrixAt(i, dummy.matrix);
             }
@@ -2080,20 +2174,51 @@ export function initClouds(scene, params, LOW_GFX, spawnX, spawnZ, camera, instC
                 megaCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsGiantOpacity;
             }
             instMegaClouds.position.set(playerX, 0, playerZ);
-            instMegaClouds.rotation.y += 0.0008 * dt;
+            instMegaClouds.scale.set(largeCloudDistMult, 1.0 + highAltFracLarge * 0.25, largeCloudDistMult);
+            instMegaClouds.rotation.y += 0.0008 * safeDt;
+            updateDistantCloudGroup(
+                megaMeshes, instMegaClouds, megaAvoidanceOffset,
+                playerY, playerVelocityX, playerVelocityZ, safeDt,
+                params.cloudsGiantDistance, 0.35, 0.36
+            );
 
             // 3b. Low Horizon Banks
             if (lowBankCloudMat.userData && lowBankCloudMat.userData.shader) {
                 lowBankCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsLowBankOpacity;
             }
             instLowBankClouds.position.set(playerX, 0, playerZ);
-            instLowBankClouds.rotation.y += 0.0006 * dt;
+            instLowBankClouds.scale.set(largeCloudDistMult, 1.0 + highAltFracLarge * 0.20, largeCloudDistMult);
+            instLowBankClouds.rotation.y += 0.0006 * safeDt;
+            updateDistantCloudGroup(
+                lowBankMeshes, instLowBankClouds, lowBankAvoidanceOffset,
+                playerY, playerVelocityX, playerVelocityZ, safeDt,
+                params.cloudsLowBankDistance, 0.40, 0.43
+            );
 
             // 3c. Distant High Clouds
             if (typeof instBillboardClouds !== 'undefined') {
+                if (cirroCloudMat.userData && cirroCloudMat.userData.shader) {
+                    cirroCloudMat.userData.shader.uniforms.uCloudOpacity.value = params.cloudsBillboardOpacity !== undefined ? params.cloudsBillboardOpacity : 1.0;
+                }
                 instBillboardClouds.position.set(playerX, 0, playerZ);
-                instBillboardClouds.rotation.y += 0.0005 * dt;
+                instBillboardClouds.scale.set(largeCloudDistMult, 1.0 + highAltFracLarge * 0.15, largeCloudDistMult);
+                instBillboardClouds.rotation.y += 0.0005 * safeDt;
+                updateDistantCloudGroup(
+                    cirroMeshes, instBillboardClouds, cirroAvoidanceOffset,
+                    playerY, playerVelocityX, playerVelocityZ, safeDt,
+                    params.cloudsBillboardDistance, 0.25, 0.28
+                );
             }
+
+            // Dynamic atmospheric haze distances so distant expanded clouds don't dissolve
+            const dynamicFarHaze = (params.cloudsFarHaze || 14000) * Math.max(1.0, largeCloudDistMult * 0.90);
+            const dynamicNearSolid = (params.cloudsNearSolid || 2000) * Math.max(1.0, largeCloudDistMult * 0.75);
+            [highCloudMat, lowTowerCloudMat, megaCloudMat, lowBankCloudMat, cirroCloudMat].forEach(mat => {
+                if (mat && mat.userData && mat.userData.shader && mat.userData.shader.uniforms) {
+                    if (mat.userData.shader.uniforms.uFarHaze) mat.userData.shader.uniforms.uFarHaze.value = dynamicFarHaze;
+                    if (mat.userData.shader.uniforms.uNearSolid) mat.userData.shader.uniforms.uNearSolid.value = dynamicNearSolid;
+                }
+            });
         }
 
     return {
