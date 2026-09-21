@@ -76,11 +76,11 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         minDistance: 16.0,
         minHeight: 3.0,
         maxHeight: 140.0,
-        foliageColor: '#3cb371',
+        foliageColor: '#5c8338',
         trunkColor: '#8b5a2b',
         hueVariation: 0.08,
         tintVariation: 0.16,
-        activeModels: []
+        activeModels: ['pine_a_6', 'pine_b_1', 'pine_c_6']
     },
     'archipelago': {
         enabled: true,
@@ -90,11 +90,11 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         minDistance: 18.0,
         minHeight: 2.8,
         maxHeight: 90.0,
-        foliageColor: '#2e8b57',
+        foliageColor: '#3cb371',
         trunkColor: '#6b4226',
         hueVariation: 0.07,
         tintVariation: 0.18,
-        activeModels: []
+        activeModels: ['pine_a_6', 'pine_b_1', 'pine_c_6']
     },
     'ghibli_isles': {
         enabled: true,
@@ -104,11 +104,11 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         minDistance: 16.0,
         minHeight: 3.0,
         maxHeight: 135.0,
-        foliageColor: '#22c55e',
+        foliageColor: '#5c8338',
         trunkColor: '#795548',
         hueVariation: 0.08,
         tintVariation: 0.16,
-        activeModels: []
+        activeModels: ['pine_a_7', 'pine_b_2', 'pine_c_5']
     },
     'misty_mountains': {
         enabled: true,
@@ -122,7 +122,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         trunkColor: '#4a3728',
         hueVariation: 0.05,
         tintVariation: 0.14,
-        activeModels: []
+        activeModels: ['pine_a_8', 'pine_b_3', 'pine_c_6']
     },
     'misty_mountains_2': {
         enabled: true,
@@ -136,7 +136,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         trunkColor: '#3e2d21',
         hueVariation: 0.05,
         tintVariation: 0.14,
-        activeModels: []
+        activeModels: ['pine_a_7', 'pine_b_4', 'pine_c_5']
     },
     'crystal_land': {
         enabled: true,
@@ -150,7 +150,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         trunkColor: '#9b59b6',
         hueVariation: 0.12,
         tintVariation: 0.25,
-        activeModels: []
+        activeModels: ['magic_a_crystala01', 'magic_a_diamond', 'magic_a_ruby']
     },
     'magical_sanctuary': {
         enabled: true,
@@ -164,7 +164,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         trunkColor: '#475569',
         hueVariation: 0.10,
         tintVariation: 0.22,
-        activeModels: []
+        activeModels: ['magic_b_shroom', 'magic_b_shroomv2', 'magic_a_halucogentree']
     },
     
 };
@@ -172,7 +172,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
 // Global active biome configs with localStorage persistence
 export let biomeTreeConfigs = JSON.parse(JSON.stringify(DEFAULT_BIOME_TREE_CONFIGS));
 
-const STORAGE_KEY = 'ghibli_biome_tree_settings_v4';
+const STORAGE_KEY = 'ghibli_biome_tree_settings_v5';
 try {
     if (typeof localStorage !== 'undefined') {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -181,6 +181,14 @@ try {
             Object.keys(parsed).forEach(k => {
                 if (biomeTreeConfigs[k]) {
                     biomeTreeConfigs[k] = { ...biomeTreeConfigs[k], ...parsed[k] };
+                    // If activeModels was saved empty, restore default models
+                    if (!biomeTreeConfigs[k].activeModels || biomeTreeConfigs[k].activeModels.length === 0) {
+                        biomeTreeConfigs[k].activeModels = [...(DEFAULT_BIOME_TREE_CONFIGS[k]?.activeModels || [])];
+                    }
+                    if (k === 'ghibli_land') {
+                        if (biomeTreeConfigs[k].maxHeight < 100) biomeTreeConfigs[k].maxHeight = 140.0;
+                        if (biomeTreeConfigs[k].minHeight > 6) biomeTreeConfigs[k].minHeight = 3.0;
+                    }
                 }
             });
         }
@@ -279,6 +287,25 @@ export function applyColorVariation(hexColor, hueVar = 0, tintVar = 0) {
 // ==========================================
 // 4. MAIN TREE & VEGETATION LOADER ENGINE
 // ==========================================
+export const treeMatcapUniform = { value: null };
+export const treeUseMatcapUniform = { value: 0.0 };
+export const treeMatcapTintUniform = { value: 0.35 };
+
+export function setTreeMatcap(texture, tintFactor = 0.35) {
+    treeMatcapUniform.value = texture || null;
+    treeUseMatcapUniform.value = texture ? 1.0 : 0.0;
+    if (tintFactor !== undefined) {
+        treeMatcapTintUniform.value = tintFactor;
+    }
+}
+
+export function getTreeMatcapState() {
+    return {
+        active: treeUseMatcapUniform.value > 0.5,
+        texture: treeMatcapUniform.value,
+        tint: treeMatcapTintUniform.value
+    };
+}
 export function initTreesAndOctree(...args) {
     let opts;
     if (args.length === 1 && typeof args[0] === 'object' && !args[0].isScene) {
@@ -325,10 +352,11 @@ export function initTreesAndOctree(...args) {
     const tempFlowerColor = new THREE.Color();
     // Keep the forest dense around the player, but stop drawing distant full
     // tree models beyond the scene's useful fog range.
-    const treeDist = 520;
+    const treeDist = 380;
     let logicTimer = 0;
     let currentFrame = 0;
     const treeLightUniform = { value: 1.0 };
+    const treeTimeUniform = { value: 0.0 };
 
     // Spatial cell hash map to enforce minimum distance between trees
     const treeGrid = new Map();
@@ -470,82 +498,103 @@ export function initTreesAndOctree(...args) {
     // ==========================================
     const gradientMap = matTree ? matTree.gradientMap : null;
 
-    const matTrunk = new THREE.MeshToonMaterial({
-        color: 0xffffff,
-        gradientMap: gradientMap,
-        dithering: true,
-        side: THREE.FrontSide
-    });
-
-    const matFoliage = new THREE.MeshToonMaterial({
-        color: 0xffffff,
-        gradientMap: gradientMap,
-        dithering: true,
-        side: THREE.DoubleSide
-    });
-
-    function addNonPineNightFloor(material, strength, cacheKey) {
-        material.onBeforeCompile = (shader) => {
-            shader.uniforms.uTreeLightFactor = treeLightUniform;
-            shader.fragmentShader = `uniform float uTreeLightFactor;\n` + shader.fragmentShader;
-            shader.fragmentShader = shader.fragmentShader.replace(
-                '#include <dithering_fragment>',
-                `#include <dithering_fragment>
-                 // Preserve a dark trace of the editor colour when the world's
-                 // direct night lighting reaches zero; this avoids black cutouts.
-                 float nonPineNight = 1.0 - uTreeLightFactor;
-                 gl_FragColor.rgb = max(
-                     gl_FragColor.rgb,
-                     diffuseColor.rgb * nonPineNight * ${strength.toFixed(2)}
-                 );`
-            );
-        };
-        material.customProgramCacheKey = () => `non-pine-night-floor-${cacheKey}`;
-    }
-
-    addNonPineNightFloor(matTrunk, 0.22, 'trunk');
-    addNonPineNightFloor(matFoliage, 0.36, 'foliage');
-
-    // GLB pine foliage is built from alpha-cutout cards. Keep its own texture
-    // and alpha mask when converting it to an instanced material; replacing it
-    // with a blank colour material is what made the cards render as solid sheets.
+    // Stylized Tree Shader:
+    // Implements volumetric canopy gradient (inner/underside #1c3b23 to outer #5c8338),
+    // 3D spherical normal curvature, 2-tone cel lighting, backlight translucency rim,
+    // procedural trunk bark striations with under-canopy AO, and vertex wind sway/flutter.
     function makeInstancedTreeMaterial(sourceMaterial, isFoliage = false, isPine = false, axialBillboard = false) {
         const source = Array.isArray(sourceMaterial) ? sourceMaterial[0] : sourceMaterial;
-        const usesCutout = isPine && !!(source && (source.alphaTest > 0 || source.transparent || source.alphaMap));
+        const hasMap = !!(source && source.map);
+        const usesCutout = !!(source && (source.alphaTest > 0 || source.transparent || source.alphaMap || (isPine && hasMap)));
         const useAxialBillboard = axialBillboard && isFoliage && usesCutout;
-        const nightResponse = isPine ? 0.78 : 0.42;
 
-        // Keep the source GLB material for pines. It contains the authored
-        // texture/roughness response that the generic toon replacement lost.
-        // The existing shared toon materials remain the path for other models.
-        const material = isPine && source?.clone
-            ? source.clone()
-            : new THREE.MeshToonMaterial({
-                color: 0xffffff,
-                gradientMap: gradientMap,
-                dithering: true,
-                side: isFoliage ? THREE.DoubleSide : THREE.FrontSide
-            });
+        const material = new THREE.MeshToonMaterial({
+            color: 0xffffff,
+            map: hasMap ? source.map : null,
+            gradientMap: gradientMap,
+            dithering: true,
+            side: isFoliage ? THREE.DoubleSide : THREE.FrontSide
+        });
+
         material.alphaTest = usesCutout ? Math.max(source?.alphaTest || 0, 0.45) : 0;
         material.transparent = false;
         material.depthWrite = true;
         material.vertexColors = true;
-        material.side = isFoliage ? THREE.DoubleSide : THREE.FrontSide;
 
-        // One shared shader value darkens every instanced tree at night without
-        // duplicating materials or adding any draw calls.
         material.onBeforeCompile = (shader) => {
             shader.uniforms.uTreeLightFactor = treeLightUniform;
-            shader.vertexShader = `varying float vTreeTone;\nvarying vec3 vTreeInstanceColor;\n` + shader.vertexShader;
+            shader.uniforms.uTreeTime = treeTimeUniform;
+            shader.uniforms.uTreeMatcap = treeMatcapUniform;
+            shader.uniforms.uUseTreeMatcap = treeUseMatcapUniform;
+            shader.uniforms.uTreeMatcapTint = treeMatcapTintUniform;
+
+            const vVaryings = `
+uniform float uTreeLightFactor;
+uniform float uTreeTime;
+varying vec3 vTreeLocalPos;
+varying vec3 vTreeWorldPos;
+varying vec3 vTreeInstanceColor;
+varying float vTreeTone;
+varying vec3 vBlendedNormal;
+`;
+
+            shader.vertexShader = vVaryings + shader.vertexShader;
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
+                 vTreeLocalPos = position;
+                 #if defined(USE_INSTANCING_COLOR)
                  vTreeInstanceColor = instanceColor;
-                 vTreeTone = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);`
+                 #elif defined(USE_COLOR)
+                 vTreeInstanceColor = vColor;
+                 #else
+                 vTreeInstanceColor = vec3(0.361, 0.514, 0.220);
+                 #endif
+
+                 vTreeTone = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
+
+                 ${isFoliage ? `
+                 vec3 crownCenter = vec3(0.0, max(position.y * 0.65, 2.2), 0.0);
+                 vec3 sphereDir = normalize(position - crownCenter);
+                 vec3 adjustedNormal = normalize(mix(normal, sphereDir, 0.55));
+                 ` : `
+                 vec3 adjustedNormal = normal;
+                 `}
+
+                 mat3 instNormalMat = mat3(modelMatrix * instanceMatrix);
+                 vBlendedNormal = normalize(instNormalMat * adjustedNormal);
+
+                 vec4 instWorldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
+                 vTreeWorldPos = instWorldPos.xyz;
+
+                 // Wind Sway & Flutter (Stylized Tree Sandbox parameters)
+                 // Wind Strength: 0.15, Wind Speed: 1.2, Pendulum Dip: 0.05
+                 float hFactor = clamp(position.y / 11.0, 0.0, 1.0);
+                 float swayCurve = hFactor * hFactor;
+                 float swayPhase = uTreeTime * 1.2 + instanceMatrix[3].x * 0.12 + instanceMatrix[3].z * 0.12;
+                 float swayX = sin(swayPhase) * 0.15 * swayCurve;
+                 float swayZ = cos(swayPhase * 0.85) * 0.10 * swayCurve;
+                 float swayDip = -(swayX * swayX + swayZ * swayZ) * 0.05;
+
+                 transformed.x += swayX;
+                 transformed.z += swayZ;
+                 transformed.y += swayDip;
+
+                 ${isFoliage ? `
+                 // Flutter Amplitude: 0.03, Flutter Speed: 2.5
+                 // Performance optimization: only compute flutter on trees within 160m
+                 float distToCam = length(cameraPosition - vTreeWorldPos);
+                 if (distToCam < 160.0) {
+                     float flutterFade = 1.0 - smoothstep(70.0, 160.0, distToCam);
+                     float branchDist = length(position.xz);
+                     float flutterPhase = uTreeTime * 2.5 + position.y * 2.8 + (position.x + position.z) * 1.5;
+                     float flutterAmt = sin(flutterPhase) * 0.03 * clamp(branchDist * 0.35, 0.0, 1.0) * flutterFade;
+                     transformed += normal * flutterAmt;
+                 }
+                 ` : ''}`
             );
+
             if (useAxialBillboard) {
-                // Pine needle cards rotate only around world Y. This keeps the
-                // tree upright while preventing the foliage from turning edge-on.
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <project_vertex>',
                     `vec3 instancePosition = instanceMatrix[3].xyz;
@@ -565,30 +614,176 @@ export function initTreesAndOctree(...args) {
                      gl_Position = projectionMatrix * mvPosition;`
                 );
             }
-            shader.fragmentShader = `uniform float uTreeLightFactor;\nvarying float vTreeTone;\nvarying vec3 vTreeInstanceColor;\n` + shader.fragmentShader;
+
+            const fVaryings = `
+uniform float uTreeLightFactor;
+uniform float uTreeTime;
+uniform sampler2D uTreeMatcap;
+uniform float uUseTreeMatcap;
+uniform float uTreeMatcapTint;
+varying vec3 vTreeLocalPos;
+varying vec3 vTreeWorldPos;
+varying vec3 vTreeInstanceColor;
+varying float vTreeTone;
+varying vec3 vBlendedNormal;
+`;
+            shader.fragmentShader = fVaryings + shader.fragmentShader;
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <dithering_fragment>',
                 `#include <dithering_fragment>
-                 // Keep the toon style while breaking up identical flat foliage.
-                 float treeTone = mix(0.92, 1.06, vTreeTone);
-                 gl_FragColor.rgb *= mix(1.0, uTreeLightFactor, ${nightResponse.toFixed(2)}) * treeTone;
-                 // Keep authored pine colour barely visible when direct night
-                 // lighting reaches zero, without making distant trees glow.
-                 float pineNight = 1.0 - uTreeLightFactor;
-                 gl_FragColor.rgb = max(
-                     gl_FragColor.rgb,
-                     vTreeInstanceColor * pineNight * ${(isFoliage ? 0.55 : 0.32).toFixed(2)} * treeTone
-                 );`
+                 float distToCamera = length(cameraPosition - vTreeWorldPos);
+                 float distBlur = smoothstep(100.0, 360.0, distToCamera);
+
+                 ${isFoliage ? `
+                 // 1. VOLUMETRIC CANOPY GRADIENT & PUFF DEPTH
+                 float normH = clamp((vTreeLocalPos.y - 0.5) / 8.5, 0.0, 1.0);
+                 float normRadius = clamp(length(vTreeLocalPos.xz) / 3.0, 0.0, 1.0);
+                 float canopyHeightExposure = clamp(normH * 0.65 + normRadius * 0.35, 0.0, 1.0);
+
+                 // Underside puff ambient occlusion
+                 float upFactor = clamp(vBlendedNormal.y * 0.5 + 0.5, 0.0, 1.0);
+                 float puffExposure = clamp(upFactor * 0.55 + canopyHeightExposure * 0.45, 0.0, 1.0);
+                 float tGradient = pow(puffExposure, 1.9);
+
+                 // Outer / Top color from tree instance color
+                 vec3 colOuter = vTreeInstanceColor;
+                 if (dot(colOuter, colOuter) < 0.02) {
+                     colOuter = vec3(0.361, 0.514, 0.220);
+                 }
+
+                 // Inner / Underside color: deep forest viridian #1c3b23 tone
+                 vec3 colInner = mix(vec3(0.110, 0.231, 0.137), colOuter * 0.26, 0.42);
+
+                 // Variation Color #1e4430 with 0.6 strength
+                 vec3 colVar = vec3(0.118, 0.267, 0.188);
+                 float varNoise = (vTreeTone - 0.5) * 0.60;
+                 colInner = clamp(colInner + (colVar - colInner) * clamp(varNoise, 0.0, 1.0), 0.0, 1.0);
+
+                 // Procedural micro-leaf cellular grain: only evaluate nearby (< 120m) to save fillrate and eliminate far shimmering
+                 float activeGrain = 1.0;
+                 if (distToCamera < 120.0) {
+                     float grainFade = 1.0 - smoothstep(60.0, 120.0, distToCamera);
+                     float leafGrain = sin(vTreeLocalPos.x * 20.0) * sin(vTreeLocalPos.y * 20.0) * sin(vTreeLocalPos.z * 20.0) * 0.08;
+                     activeGrain += leafGrain * grainFade;
+                 }
+
+                 vec3 baseCanopyColor = mix(colInner, colOuter, tGradient) * activeGrain;
+
+                 // MatCap Shader Bank blending
+                 if (uUseTreeMatcap > 0.5) {
+                     vec3 viewN = normalize((viewMatrix * vec4(vBlendedNormal, 0.0)).xyz);
+                     vec2 mcUV = viewN.xy * 0.495 + 0.5;
+                     vec3 mcCol = texture2D(uTreeMatcap, mcUV).rgb;
+                     baseCanopyColor = mix(mcCol, mcCol * vTreeInstanceColor * 1.5, uTreeMatcapTint);
+                 }
+
+                 // 2. DIRECTIONAL SUN LIGHTING & CEL / TOON SHADING
+                 vec3 sunDir = normalize(vec3(0.588, 0.784, 0.196));
+                 float NdotL = dot(normalize(vBlendedNormal), sunDir);
+                 float halfLambert = clamp(NdotL * 0.5 + 0.5, 0.0, 1.0);
+
+                 // Soften cel steps into smooth painterly lighting at distance
+                 float toonStep = smoothstep(0.36, 0.44, halfLambert) * 0.48 + smoothstep(0.66, 0.74, halfLambert) * 0.52;
+                 float softLighting = mix(toonStep, halfLambert, distBlur * 0.75);
+
+                 vec3 sunlitTint = vec3(1.15, 1.08, 0.94);
+                 vec3 skyShadowTint = vec3(0.62, 0.78, 0.92);
+                 vec3 lightRamp = mix(skyShadowTint * 0.55, sunlitTint, softLighting);
+
+                 // 3. BACKLIGHT RIM / LEAF TRANSLUCENCY (fade out past 140m for performance)
+                 float rimFade = 1.0 - smoothstep(70.0, 140.0, distToCamera);
+                 vec3 viewDir = normalize(cameraPosition - vTreeWorldPos);
+                 float backLight = max(0.0, dot(-viewDir, sunDir));
+                 float leafGlow = pow(backLight, 3.2) * 0.28 * tGradient * rimFade;
+
+                 // 4. COMBINE SHADING
+                 vec3 litFoliage = baseCanopyColor * lightRamp + (colOuter * leafGlow * uTreeLightFactor);
+                 if (uUseTreeMatcap > 0.5) {
+                     litFoliage = mix(baseCanopyColor, baseCanopyColor * lightRamp, 0.35);
+                 }
+
+                 ${hasMap ? `
+                 // Textured leaves: at distance soften texture contrast so it looks like blurred painterly foliage
+                 vec3 needleTex = mix(gl_FragColor.rgb * 1.55, vec3(1.0), distBlur * 0.60);
+                 litFoliage *= needleTex;
+                 ` : ''}
+
+                 // 5. AMBIENT FLOOR (Guarantees visible depth, never pitch black)
+                 float dayNightScale = mix(0.42, 1.0, uTreeLightFactor);
+                 float ambientFloor = mix(0.25, 0.38, uTreeLightFactor);
+                 vec3 finalTreeColor = max(litFoliage * dayNightScale, baseCanopyColor * ambientFloor);
+
+                 // 6. ATMOSPHERIC DISTANCE BLUR & FOG (Softens & blurs further trees into sky haze)
+                 vec3 skyAtmosphereColor = mix(vec3(0.64, 0.78, 0.92), vec3(0.30, 0.40, 0.55), 1.0 - uTreeLightFactor);
+                 #ifdef USE_FOG
+                 skyAtmosphereColor = fogColor;
+                 #endif
+                 float atmosBlurFactor = smoothstep(110.0, 360.0, distToCamera) * 0.70;
+                 finalTreeColor = mix(finalTreeColor, skyAtmosphereColor, atmosBlurFactor);
+
+                 #ifdef USE_FOG
+                 #ifdef FOG_EXP2
+                 float fFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+                 #else
+                 float fFactor = smoothstep( fogNear, fogFar, vFogDepth );
+                 #endif
+                 finalTreeColor = mix( finalTreeColor, fogColor, fFactor );
+                 #endif
+
+                 gl_FragColor.rgb = finalTreeColor;
+
+                 ` : `
+                 // TRUNK SHADING
+                 float barkGrain = 1.0;
+                 if (distToCamera < 120.0) {
+                     barkGrain += sin(vTreeLocalPos.y * 5.6 + sin(vTreeLocalPos.x * 12.0) * 0.8) * 0.12 * (1.0 - distBlur);
+                 }
+                 float trunkAO = mix(0.55, 1.0, clamp(1.0 - (vTreeLocalPos.y / 7.0), 0.0, 1.0));
+
+                 vec3 trunkBase = vTreeInstanceColor;
+                 if (dot(trunkBase, trunkBase) < 0.02) {
+                     trunkBase = vec3(0.47, 0.35, 0.28);
+                 }
+
+                 ${hasMap ? `
+                 vec3 litTrunk = gl_FragColor.rgb * barkGrain * trunkAO * 1.25;
+                 ` : `
+                 vec3 litTrunk = trunkBase * barkGrain * trunkAO * 1.25;
+                 `}
+
+                 float trunkDayNight = mix(0.42, 1.0, uTreeLightFactor);
+                 float trunkFloor = mix(0.20, 0.30, uTreeLightFactor);
+                 vec3 finalTrunkColor = max(litTrunk * trunkDayNight, trunkBase * trunkFloor);
+
+                 // Atmospheric distance blur for trunks
+                 vec3 skyAtmosphereColor = mix(vec3(0.64, 0.78, 0.92), vec3(0.30, 0.40, 0.55), 1.0 - uTreeLightFactor);
+                 #ifdef USE_FOG
+                 skyAtmosphereColor = fogColor;
+                 #endif
+                 float atmosBlurFactor = smoothstep(110.0, 360.0, distToCamera) * 0.70;
+                 finalTrunkColor = mix(finalTrunkColor, skyAtmosphereColor, atmosBlurFactor);
+
+                 #ifdef USE_FOG
+                 #ifdef FOG_EXP2
+                 float fFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+                 #else
+                 float fFactor = smoothstep( fogNear, fogFar, vFogDepth );
+                 #endif
+                 finalTrunkColor = mix( finalTrunkColor, fogColor, fFactor );
+                 #endif
+
+                 gl_FragColor.rgb = finalTrunkColor;
+                 `}`
             );
         };
-        material.customProgramCacheKey = () => `instanced-tree-${isPine ? 'pine' : 'standard'}-${isFoliage ? 'foliage' : 'trunk'}-${usesCutout ? 'cutout' : 'solid'}-${useAxialBillboard ? 'axial' : 'fixed'}`;
+
+        material.customProgramCacheKey = () => `stylized-tree-${isFoliage ? 'foliage' : 'trunk'}-${hasMap ? 'map' : 'nomap'}-${useAxialBillboard ? 'axial' : 'fixed'}`;
         return material;
     }
 
-    // Real-world editor use is 2–3 selected models per biome. A 220-instance
-    // pool per model keeps those forests dense while avoiding hundreds of
-    // invisible, empty instances for every model.
-    const MODEL_POOL_CAP = LOW_GFX ? 110 : 220;
+    // Dynamic instance pool: inactive slots cost 0 draw calls because
+    // count is dynamically matched to living instances.
+    const MODEL_POOL_CAP = LOW_GFX ? 150 : 350;
     const loadedModels = new Map();
 
     function loadModelEntry(modelDef, onReady) {
@@ -633,16 +828,12 @@ export function initTreesAndOctree(...args) {
 
                 entry.instTrunk = new THREE.InstancedMesh(
                     trunkGeo,
-                    isPine
-                        ? makeInstancedTreeMaterial(childMeshes[0].material, false, true, axialBillboard)
-                        : matTrunk,
+                    makeInstancedTreeMaterial(childMeshes[0].material, false, isPine, axialBillboard),
                     MODEL_POOL_CAP
                 );
                 entry.instLeaves = new THREE.InstancedMesh(
                     leavesGeo,
-                    isPine
-                        ? makeInstancedTreeMaterial(childMeshes[1].material, true, true, axialBillboard)
-                        : matFoliage,
+                    makeInstancedTreeMaterial(childMeshes[1].material, true, isPine, axialBillboard),
                     MODEL_POOL_CAP
                 );
 
@@ -673,9 +864,7 @@ export function initTreesAndOctree(...args) {
 
                 entry.instSingle = new THREE.InstancedMesh(
                     singleGeo,
-                    isPine
-                        ? makeInstancedTreeMaterial(childMeshes[0].material, true, true, axialBillboard)
-                        : matFoliage,
+                    makeInstancedTreeMaterial(childMeshes[0].material, true, isPine, axialBillboard),
                     MODEL_POOL_CAP
                 );
                 entry.instSingle.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MODEL_POOL_CAP * 3).fill(1), 3);
@@ -816,26 +1005,23 @@ export function initTreesAndOctree(...args) {
     }
 
     function passesDensity(nx, nz, density) {
-        const clampedDensity = Math.max(0.05, Math.min(1.0, density ?? 0.7));
-        // Broad noise forms natural stands and clearings; the high-frequency
-        // sample makes density a true, stable per-location probability.
-        const stand = Math.max(0, Math.min(1,
-            (snoise(nx * 0.0018, nz * 0.0018) * 0.65 + snoise(nx * 0.006 + 60, nz * 0.006 + 60) * 0.35 + 1.0) * 0.5
-        ));
-        const site = (snoise(nx * 0.021 + 173.0, nz * 0.021 - 91.0) + 1.0) * 0.5;
-        return site <= clampedDensity * (0.45 + stand * 0.55);
+        const clampedDensity = Math.max(0.1, Math.min(1.0, density ?? 0.75));
+        const stand = (snoise(nx * 0.002, nz * 0.002) + 1.0) * 0.5;
+        const site = (snoise(nx * 0.025 + 100.0, nz * 0.025 - 100.0) + 1.0) * 0.5;
+        return site <= (clampedDensity * 0.78 + stand * 0.22);
     }
 
     function getModelBiomeQuota(cfg, poolCap) {
         const selectedModelCount = Math.max(1, (cfg.activeModels || []).length);
-        const biomeBudget = Math.max(0, Math.min(poolCap, cfg.count ?? poolCap));
-        return Math.max(1, Math.ceil(biomeBudget / selectedModelCount));
+        const biomeBudget = Math.max(0, cfg.count ?? 550);
+        return Math.max(1, Math.min(poolCap, Math.ceil(biomeBudget / selectedModelCount)));
     }
 
     function updateInstances(playerX, playerZ, time, dt, playerYaw) {
         currentFrame++;
         const dist = treeDist;
         treeLightUniform.value = Math.max(0.25, Math.min(1.0, getTreeLightFactor()));
+        treeTimeUniform.value = (typeof time === 'number') ? time : 0.0;
 
         if (camera) {
             vegOctree.update(camera, playerX, playerZ, dist);
@@ -1023,11 +1209,13 @@ export function initTreesAndOctree(...args) {
 
                             modelUpdated = true;
                         } else {
-                            if (entry.instTrunk) entry.instTrunk.setMatrixAt(i, dummyMatrix);
-                            if (entry.instLeaves) entry.instLeaves.setMatrixAt(i, dummyMatrix);
-                            if (entry.instSingle) entry.instSingle.setMatrixAt(i, dummyMatrix);
-                            entry.slots[i] = null;
-                            modelUpdated = true;
+                            if (entry.slots[i] !== null) {
+                                if (entry.instTrunk) entry.instTrunk.setMatrixAt(i, dummyMatrix);
+                                if (entry.instLeaves) entry.instLeaves.setMatrixAt(i, dummyMatrix);
+                                if (entry.instSingle) entry.instSingle.setMatrixAt(i, dummyMatrix);
+                                entry.slots[i] = null;
+                                modelUpdated = true;
+                            }
                         }
                     }
                 }

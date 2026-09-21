@@ -145,43 +145,45 @@ export function initDioramaProps(scene, params, LOW_GFX, matRock, matBush, matFl
        trailsData[i*4+3] = Math.random();
     }
 
-    function updateBirdsGen(data, inst, count, tX, tY, tZ, time, dt, centerPull) {
+    function updateBirdsGen(data, inst, count, tX, tY, tZ, time, dt, centerPull, calcFlock = true) {
         for (let i = 0; i < count; i++) {
             let px = data[i * 6 + 0], py = data[i * 6 + 1], pz = data[i * 6 + 2];
             let vx = data[i * 6 + 3], vy = data[i * 6 + 4], vz = data[i * 6 + 5];
 
-            let cx = 0, cy = 0, cz = 0;
             let sx = 0, sy = 0, sz = 0;
-            let ax = 0, ay = 0, az = 0;
-            let n = 0;
+            if (calcFlock) {
+                let cx = 0, cy = 0, cz = 0;
+                let ax = 0, ay = 0, az = 0;
+                let n = 0;
 
-            for (let j = 0; j < count; j++) {
-                if (i === j) continue;
-                let dx = px - data[j * 6 + 0], dy = py - data[j * 6 + 1], dz = pz - data[j * 6 + 2];
-                let distSq = dx*dx + dy*dy + dz*dz;
+                for (let j = 0; j < count; j++) {
+                    if (i === j) continue;
+                    let dx = px - data[j * 6 + 0], dy = py - data[j * 6 + 1], dz = pz - data[j * 6 + 2];
+                    let distSq = dx*dx + dy*dy + dz*dz;
 
-                if (distSq < 1200) {
-                    cx += data[j * 6 + 0]; cy += data[j * 6 + 1]; cz += data[j * 6 + 2];
-                    ax += data[j * 6 + 3]; ay += data[j * 6 + 4]; az += data[j * 6 + 5];
-                    n++;
+                    if (distSq < 1200) {
+                        cx += data[j * 6 + 0]; cy += data[j * 6 + 1]; cz += data[j * 6 + 2];
+                        ax += data[j * 6 + 3]; ay += data[j * 6 + 4]; az += data[j * 6 + 5];
+                        n++;
+                    }
+                    if (distSq < 400) {
+                        sx += dx; sy += dy; sz += dz;
+                    }
                 }
-                if (distSq < 400) {
-                    sx += dx; sy += dy; sz += dz;
+
+                if (n > 0) {
+                    cx /= n; cy /= n; cz /= n;
+                    ax /= n; ay /= n; az /= n;
+                    vx += (cx - px) * 0.4 * dt * 2.0;
+                    vy += (cy - py) * 0.4 * dt * 2.0;
+                    vz += (cz - pz) * 0.4 * dt * 2.0;
+                    vx += (ax - vx) * 0.1 * dt * 2.0;
+                    vy += (ay - vy) * 0.1 * dt * 2.0;
+                    vz += (az - vz) * 0.1 * dt * 2.0;
                 }
-            }
 
-            if (n > 0) {
-                cx /= n; cy /= n; cz /= n;
-                ax /= n; ay /= n; az /= n;
-                vx += (cx - px) * 0.4 * dt;
-                vy += (cy - py) * 0.4 * dt;
-                vz += (cz - pz) * 0.4 * dt;
-                vx += (ax - vx) * 0.1 * dt;
-                vy += (ay - vy) * 0.1 * dt;
-                vz += (az - vz) * 0.1 * dt;
+                vx += sx * 1.8 * dt * 2.0; vy += sy * 1.8 * dt * 2.0; vz += sz * 1.8 * dt * 2.0;
             }
-
-            vx += sx * 1.8 * dt; vy += sy * 1.8 * dt; vz += sz * 1.8 * dt;
 
             let formAngle = (i / count) * Math.PI * 2.0;
             let formRadius = 22 + (i % 6) * 9;
@@ -218,10 +220,14 @@ export function initDioramaProps(scene, params, LOW_GFX, matRock, matBush, matFl
         inst.instanceMatrix.needsUpdate = true;
     }
 
+    let birdFrameCount = 0;
     function updateBirds(playerX, playerY, playerZ, time, dt) {
+        birdFrameCount++;
         if (matBird.userData.shader) matBird.userData.shader.uniforms.time.value = time;
-        updateBirdsGen(birdData, instBirds, BIRD_COUNT, playerX, playerY + 14, playerZ, time, dt, 5.0);
-        updateBirdsGen(highBirdData, instHighBirds, HIGH_BIRD_COUNT, 0, 400, 0, time, dt, 2.0);
+        updateBirdsGen(birdData, instBirds, BIRD_COUNT, playerX, playerY + 14, playerZ, time, dt, 5.0, birdFrameCount % 2 === 0);
+        if (HIGH_BIRD_COUNT > 0) {
+            updateBirdsGen(highBirdData, instHighBirds, HIGH_BIRD_COUNT, 0, 400, 0, time, dt, 2.0, birdFrameCount % 2 === 1);
+        }
     }
 
     const dummy = new THREE.Object3D();

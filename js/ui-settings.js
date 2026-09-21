@@ -11,12 +11,15 @@ import {
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { LOW_GFX } from './config.js';
+import { initMatcapBank } from './matcap-bank.js';
+import { roystanParams, syncRoystanUniforms } from './shaders/roystanToon.js';
 
 // ==========================================
 // SETTINGS PANELS & BIOME PERSISTENCE (lil-gui)
 // ==========================================
 
 export function initSettingsPanels(context) {
+    initMatcapBank();
     const {
         gui,
         params,
@@ -126,7 +129,16 @@ export function initSettingsPanels(context) {
             document.getElementById('time-toggle').addEventListener('click', () => {
                 setTimeout(updateAtmoParamsFromPhase, 50);
             });
-    
+
+            // Flight Feel & World Life Folder
+            const lifeFolder = gui.addFolder('✈️ Flight Feel & Life');
+            lifeFolder.add(params, 'enableFlightBob').name('Floating Bob & Sway').listen();
+            lifeFolder.add(params, 'enableGlidePhysics').name('Dive & Glide Physics').listen();
+            lifeFolder.add(params, 'enableVaporTrails').name('Wingtip Vapor Trails').listen();
+            lifeFolder.add(params, 'enableSpeedStreaks').name('Speed Wind Streaks').listen();
+            lifeFolder.add(params, 'enableSeabirds').name('Distant Seabird Flocks').listen();
+            lifeFolder.add(params, 'enableDriftingPetals').name('Drifting Breeze Petals').listen();
+
             const atmoFolder = gui.addFolder('Sky & Light');
     
             // Sun & God Rays (moved here from Weather)
@@ -207,6 +219,7 @@ export function initSettingsPanels(context) {
                 }
             });
             atmoFolder.addColor(atmoParams, 'glintCol').name('Water Glint').onChange(v => envConfigs[timePhase].glintCol = parseInt(v.replace('#',''), 16));
+
     
             // Character Glow (merged from old top-level "Kiki Warm Side Glow")
             const glowFolder = atmoFolder.addFolder('Model Illumination');
@@ -215,7 +228,323 @@ export function initSettingsPanels(context) {
             glowFolder.add(modelLightingParams, 'bouncePower', 0.2, 4.0, 0.1).name('Ground Bounce');
             glowFolder.add(modelLightingParams, 'rimPower', 0.2, 3.5, 0.1).name('Side & Front Rim');
             glowFolder.add(modelLightingParams, 'nightBoost', 0.5, 2.5, 0.05).name('Night Clarity');
+
+            // ==========================================
+            // 🌊 CARTOON OCEAN & SHORES EDITOR
+            // ==========================================
+            const oceanFolder = gui.addFolder('🌊 Cartoon Ocean & Shores');
+            oceanFolder.close();
+
+            if (typeof waterUniforms !== 'undefined' && waterUniforms.waveHeight) {
+                const oceanParams = {
+                    deepColor: '#' + waterUniforms.waveColor.value.getHexString(),
+                    shallowColor: '#' + waterUniforms.uShallowColor.value.getHexString(),
+                    highlightColor: '#' + waterUniforms.waterHighlight.value.getHexString(),
+                    foamColor: '#' + waterUniforms.uFoamColor.value.getHexString(),
+                    waterLevel: waterUniforms.uWaterLevel ? waterUniforms.uWaterLevel.value : 2.4,
+                    waterScale: (waterUniforms.waterScale && waterUniforms.waterScale.value) ? waterUniforms.waterScale.value.x : 0.035,
+                    waterScaleX: (waterUniforms.waterScale && waterUniforms.waterScale.value) ? waterUniforms.waterScale.value.x : 0.035,
+                    waterScaleZ: (waterUniforms.waterScale && waterUniforms.waterScale.value) ? waterUniforms.waterScale.value.y : 0.035,
+                    displacementScale: (waterUniforms.waterDisplacementScale && waterUniforms.waterDisplacementScale.value) ? waterUniforms.waterDisplacementScale.value.x : 0.018,
+                    specularScale: (waterUniforms.specularScale && waterUniforms.specularScale.value !== undefined) ? waterUniforms.specularScale.value : 0.032,
+                    foamScale: (waterUniforms.uFoamScale && waterUniforms.uFoamScale.value !== undefined) ? waterUniforms.uFoamScale.value : 0.045,
+                    resetDefaults: () => {
+                        waterUniforms.waveHeight.value = 2.8;
+                        waterUniforms.waveSpeed.value = 0.45;
+                        waterUniforms.waveFrequency.value = 0.75;
+                        waterUniforms.waveSharpness.value = 0.78;
+                        waterUniforms.uShoreFoamWidth.value = 3.5;
+                        waterUniforms.uShoreWaveSpeed.value = 1.1;
+                        waterUniforms.uShoreWaveFreq.value = 1.2;
+                        waterUniforms.uShoreSurge.value = 0.8;
+                        waterUniforms.contrast.value = 22.0;
+                        waterUniforms.brightness.value = 1.65;
+                        waterUniforms.offset.value = 0.042;
+                        waterUniforms.specularBrightness.value = 2.5;
+                        waterUniforms.specularPop.value = 0.78;
+                        waterUniforms.displacementHeight.value = 0.28;
+                        waterUniforms.waveColor.value.set('#00aaff');
+                        waterUniforms.waterColorTint.value.set('#00aaff');
+                        waterUniforms.uShallowColor.value.set('#2eebe0');
+                        waterUniforms.waterHighlight.value.set('#ffffff');
+                        waterUniforms.uFoamColor.value.set('#ffffff');
+                        waterUniforms.uWaterLevel.value = 2.4;
+                        if (waterUniforms.waterScale) waterUniforms.waterScale.value.set(0.035, 0.035);
+                        if (waterUniforms.waterDisplacementScale) waterUniforms.waterDisplacementScale.value.set(0.018, 0.018);
+                        if (waterUniforms.specularScale) waterUniforms.specularScale.value = 0.032;
+                        if (waterUniforms.uFoamScale) waterUniforms.uFoamScale.value = 0.045;
+                        if (waterMesh) {
+                            waterMesh.position.y = 2.4;
+                            if (waterMesh.material) {
+                                waterMesh.material.roughness = 0.0;
+                                waterMesh.material.metalness = 0.15;
+                            }
+                        }
+                        oceanParams.deepColor = '#00aaff';
+                        oceanParams.shallowColor = '#2eebe0';
+                        oceanParams.highlightColor = '#ffffff';
+                        oceanParams.foamColor = '#ffffff';
+                        oceanParams.waterLevel = 2.4;
+                        oceanParams.waterScale = 0.035;
+                        oceanParams.waterScaleX = 0.035;
+                        oceanParams.waterScaleZ = 0.035;
+                        oceanParams.displacementScale = 0.018;
+                        oceanParams.specularScale = 0.032;
+                        oceanParams.foamScale = 0.045;
+                        oceanFolder.controllersRecursive().forEach(c => c.updateDisplay());
+                    }
+                };
+
+                // 1. Water Shader Scales & Patterns
+                const scaleSub = oceanFolder.addFolder('Shader Scales & Patterns');
+                const ctrlScale = scaleSub.add(oceanParams, 'waterScale', 0.002, 0.200, 0.001).name('Water Pattern Scale').onChange(v => {
+                    if (waterUniforms.waterScale) waterUniforms.waterScale.value.set(v, v);
+                    oceanParams.waterScaleX = v;
+                    oceanParams.waterScaleZ = v;
+                    ctrlScaleX.updateDisplay();
+                    ctrlScaleZ.updateDisplay();
+                }).listen();
+                const ctrlScaleX = scaleSub.add(oceanParams, 'waterScaleX', 0.002, 0.200, 0.001).name('Pattern Scale X').onChange(v => {
+                    if (waterUniforms.waterScale) waterUniforms.waterScale.value.x = v;
+                }).listen();
+                const ctrlScaleZ = scaleSub.add(oceanParams, 'waterScaleZ', 0.002, 0.200, 0.001).name('Pattern Scale Z').onChange(v => {
+                    if (waterUniforms.waterScale) waterUniforms.waterScale.value.y = v;
+                }).listen();
+                scaleSub.add(oceanParams, 'displacementScale', 0.001, 0.100, 0.001).name('Wave Ripple Scale').onChange(v => {
+                    if (waterUniforms.waterDisplacementScale) waterUniforms.waterDisplacementScale.value.set(v, v);
+                }).listen();
+                scaleSub.add(oceanParams, 'specularScale', 0.002, 0.150, 0.001).name('Sparkle / Caustics Scale').onChange(v => {
+                    if (waterUniforms.specularScale) waterUniforms.specularScale.value = v;
+                }).listen();
+                scaleSub.add(oceanParams, 'foamScale', 0.005, 0.200, 0.001).name('Shore Foam Pattern Scale').onChange(v => {
+                    if (waterUniforms.uFoamScale) waterUniforms.uFoamScale.value = v;
+                }).listen();
+                scaleSub.add(waterUniforms.waveFrequency, 'value', 0.05, 2.0, 0.02).name('Wave Length / Frequency').listen();
+
+                // Shoreline & Breaking Foam
+                const shoreSub = oceanFolder.addFolder('Shoreline & Foam');
+                shoreSub.add(waterUniforms.uShoreFoamWidth, 'value', 0.2, 12.0, 0.1).name('Shore Foam Width');
+                shoreSub.add(waterUniforms.uShoreWaveSpeed, 'value', 0.1, 3.0, 0.05).name('Shore Wave Speed');
+                shoreSub.add(waterUniforms.uShoreWaveFreq, 'value', 0.2, 3.0, 0.05).name('Shore Wave Frequency');
+                shoreSub.add(waterUniforms.uShoreSurge, 'value', 0.0, 3.0, 0.05).name('Shore Wave Surge');
+                shoreSub.add(oceanParams, 'foamScale', 0.005, 0.200, 0.001).name('Foam Pattern Scale').onChange(v => {
+                    if (waterUniforms.uFoamScale) waterUniforms.uFoamScale.value = v;
+                }).listen();
+                shoreSub.addColor(oceanParams, 'foamColor').name('Shore Foam Color').onChange(v => waterUniforms.uFoamColor.value.set(v));
+
+                // Ocean Waves & Swells
+                const waveSub = oceanFolder.addFolder('Ocean Waves & Physics');
+                waveSub.add(waterUniforms.waveHeight, 'value', 0.0, 6.0, 0.1).name('Wave Height');
+                waveSub.add(waterUniforms.waveSpeed, 'value', 0.0, 2.0, 0.02).name('Wave Speed');
+                waveSub.add(waterUniforms.waveFrequency, 'value', 0.05, 2.0, 0.02).name('Wave Frequency').listen();
+                waveSub.add(waterUniforms.waveSharpness, 'value', 0.0, 2.0, 0.02).name('Wave Sharpness');
+
+                // Colors & Depth
+                const colorSub = oceanFolder.addFolder('Colors & Water Depth');
+                colorSub.addColor(oceanParams, 'deepColor').name('Deep Ocean Color').onChange(v => {
+                    waterUniforms.waveColor.value.set(v);
+                    waterUniforms.waterColorTint.value.set(v);
+                });
+                colorSub.addColor(oceanParams, 'shallowColor').name('Shallow Coast Color').onChange(v => waterUniforms.uShallowColor.value.set(v));
+                colorSub.addColor(oceanParams, 'highlightColor').name('Wave Crest Color').onChange(v => waterUniforms.waterHighlight.value.set(v));
+                colorSub.add(waterUniforms.contrast, 'value', 1.0, 40.0, 0.5).name('Crest Contrast');
+                colorSub.add(waterUniforms.brightness, 'value', 0.5, 3.5, 0.05).name('Water Brightness');
+                colorSub.add(waterUniforms.offset, 'value', -0.1, 0.2, 0.005).name('Crest Foam Offset');
+
+                // Caustic Sparkles & Reflections
+                const sparkSub = oceanFolder.addFolder('Caustics & Sun Glints');
+                sparkSub.add(waterUniforms.specularBrightness, 'value', 0.0, 8.0, 0.1).name('Sparkle Brightness');
+                sparkSub.add(waterUniforms.specularPop, 'value', 0.1, 2.0, 0.02).name('Sparkle Threshold');
+                sparkSub.add(waterUniforms.displacementHeight, 'value', 0.0, 1.0, 0.02).name('Caustic Distortion');
+                sparkSub.add(oceanParams, 'specularScale', 0.002, 0.150, 0.001).name('Sparkle Scale').onChange(v => {
+                    if (waterUniforms.specularScale) waterUniforms.specularScale.value = v;
+                }).listen();
+
+                // Water Height & Surface
+                const levelSub = oceanFolder.addFolder('Water Height & Surface');
+                levelSub.add(oceanParams, 'waterLevel', 0.0, 10.0, 0.1).name('Water Level (Y)').onChange(v => {
+                    waterUniforms.uWaterLevel.value = v;
+                    if (waterMesh) waterMesh.position.y = v;
+                });
+                if (waterMesh && waterMesh.material) {
+                    levelSub.add(waterMesh.material, 'roughness', 0.0, 1.0, 0.02).name('Surface Roughness');
+                    levelSub.add(waterMesh.material, 'metalness', 0.0, 1.0, 0.02).name('Surface Metalness');
+                }
+
+                oceanFolder.add(oceanParams, 'resetDefaults').name('Reset Ocean Defaults');
+            }
     
+            // Zelda / Roystan Toon Shading (Optional Mode)
+            const toonFolder = gui.addFolder('🎨 Zelda / Roystan Toon');
+            toonFolder.close();
+
+            // Store baseline settings to revert back to when Toon Mode is turned off
+            const DEFAULT_SUN_SETTINGS = {
+                sunAltitude: 160,
+                sunAzimuth: 0,
+                lockSunToPlayer: false,
+                normalizeSun: false,
+                sunDiscScale: 1.8,
+                godRays: true,
+                godRayIntensity: 0.6,
+                godRayDensity: 0.15,
+                godRayDecay: 0.8,
+                godRayWeight: 0.85,
+                lumMin: 0.85,
+                lumMax: 0.98,
+                rayColorInner: '#ffea9f',
+                rayColorOuter: '#ff9933',
+                ambColor: '#ffffff',
+                dirColor: '#f09e9e',
+                ambI: 1.833,
+                dirI: 4.92,
+                waterColor: '#1a4075',
+                glintCol: '#ffaa00'
+            };
+            let savedSunSettings = { ...DEFAULT_SUN_SETTINGS };
+
+            // Target Sun & Sky settings from user screenshot
+            const TOON_SUN_PRESET = {
+                sunAltitude: 160,
+                sunAzimuth: 0,
+                lockSunToPlayer: true,
+                normalizeSun: false,
+                sunDiscScale: 1.3,
+                godRays: true,
+                godRayIntensity: 0.0,
+                godRayDensity: 0.1,
+                godRayDecay: 0.8,
+                godRayWeight: 0.85,
+                lumMin: 0.85,
+                lumMax: 0.98,
+                rayColorInner: '#ffea9f',
+                rayColorOuter: '#ff9933',
+                ambColor: '#ffffff',
+                dirColor: '#f09e9e',
+                ambI: 1.833,
+                dirI: 4.92,
+                waterColor: '#1a4075',
+                glintCol: '#ffaa00'
+            };
+
+            function applySunPreset(cfg) {
+                if (!cfg) return;
+
+                if (typeof setNormalizeSun === 'function') {
+                    setNormalizeSun(cfg.normalizeSun);
+                } else {
+                    params.normalizeSun = cfg.normalizeSun;
+                }
+
+                params.sunAltitude = cfg.sunAltitude;
+                params.sunAzimuth = cfg.sunAzimuth;
+                params.lockSunToPlayer = cfg.lockSunToPlayer;
+                params.sunDiscScale = cfg.sunDiscScale;
+                params.godRays = cfg.godRays;
+                params.godRayIntensity = cfg.godRayIntensity;
+                params.godRayDensity = cfg.godRayDensity;
+                params.godRayDecay = cfg.godRayDecay;
+                params.godRayWeight = cfg.godRayWeight;
+                params.lumMin = cfg.lumMin;
+                params.lumMax = cfg.lumMax;
+                params.rayColorInner = cfg.rayColorInner;
+                params.rayColorOuter = cfg.rayColorOuter;
+
+                if (typeof staticSun !== 'undefined' && staticSun) {
+                    staticSun.scale.setScalar(cfg.sunDiscScale);
+                }
+
+                if (typeof godRaysPass !== 'undefined' && godRaysPass) {
+                    godRaysPass.enabled = cfg.godRays;
+                    if (godRaysPass.uniforms) {
+                        if (godRaysPass.uniforms.uIntensity) godRaysPass.uniforms.uIntensity.value = cfg.godRayIntensity;
+                        if (godRaysPass.uniforms.uDensity) godRaysPass.uniforms.uDensity.value = cfg.godRayDensity;
+                        if (godRaysPass.uniforms.uDecay) godRaysPass.uniforms.uDecay.value = cfg.godRayDecay;
+                        if (godRaysPass.uniforms.uWeight) godRaysPass.uniforms.uWeight.value = cfg.godRayWeight;
+                        if (godRaysPass.uniforms.uLumMin) godRaysPass.uniforms.uLumMin.value = cfg.lumMin;
+                        if (godRaysPass.uniforms.uLumMax) godRaysPass.uniforms.uLumMax.value = cfg.lumMax;
+                        if (godRaysPass.uniforms.uRayColorInner) godRaysPass.uniforms.uRayColorInner.value.set(cfg.rayColorInner);
+                        if (godRaysPass.uniforms.uRayColorOuter) godRaysPass.uniforms.uRayColorOuter.value.set(cfg.rayColorOuter);
+                    }
+                }
+
+                atmoParams.ambColor = cfg.ambColor;
+                atmoParams.dirColor = cfg.dirColor;
+                atmoParams.ambI = cfg.ambI;
+                atmoParams.dirI = cfg.dirI;
+                atmoParams.waterColor = cfg.waterColor;
+                atmoParams.glintCol = cfg.glintCol;
+
+                if (typeof envConfigs !== 'undefined' && envConfigs[timePhase]) {
+                    envConfigs[timePhase].sunY = cfg.sunAltitude;
+                    envConfigs[timePhase].amb = parseInt(cfg.ambColor.replace('#', ''), 16);
+                    envConfigs[timePhase].dir = parseInt(cfg.dirColor.replace('#', ''), 16);
+                    envConfigs[timePhase].ambI = cfg.ambI;
+                    envConfigs[timePhase].dirI = cfg.dirI;
+                    const wCol = parseInt(cfg.waterColor.replace('#', ''), 16);
+                    envConfigs[timePhase].waterColor = wCol;
+                    envConfigs[timePhase].glintCol = parseInt(cfg.glintCol.replace('#', ''), 16);
+                    if (typeof waterUniforms !== 'undefined' && waterUniforms.uWaterColor) {
+                        waterUniforms.uWaterColor.value.set(wCol);
+                    }
+                }
+
+                // Refresh GUI controllers to reflect updated values
+                if (atmoFolder) {
+                    atmoFolder.controllersRecursive().forEach(c => c.updateDisplay());
+                }
+                if (window.sunGodRaysFolder) {
+                    window.sunGodRaysFolder.controllersRecursive().forEach(c => c.updateDisplay());
+                }
+            }
+
+            toonFolder.add(roystanParams, 'enabled').name('Enable Toon Mode').onChange(v => {
+                syncRoystanUniforms();
+                if (v) {
+                    // Save baseline settings before applying Toon Sun preset
+                    savedSunSettings = {
+                        sunAltitude: params.sunAltitude,
+                        sunAzimuth: params.sunAzimuth,
+                        lockSunToPlayer: params.lockSunToPlayer,
+                        normalizeSun: params.normalizeSun,
+                        sunDiscScale: params.sunDiscScale,
+                        godRays: params.godRays,
+                        godRayIntensity: params.godRayIntensity,
+                        godRayDensity: params.godRayDensity,
+                        godRayDecay: params.godRayDecay,
+                        godRayWeight: params.godRayWeight,
+                        lumMin: params.lumMin,
+                        lumMax: params.lumMax,
+                        rayColorInner: params.rayColorInner,
+                        rayColorOuter: params.rayColorOuter,
+                        ambColor: atmoParams.ambColor,
+                        dirColor: atmoParams.dirColor,
+                        ambI: atmoParams.ambI,
+                        dirI: atmoParams.dirI,
+                        waterColor: atmoParams.waterColor,
+                        glintCol: atmoParams.glintCol
+                    };
+                    applySunPreset(TOON_SUN_PRESET);
+                } else {
+                    // Revert to saved defaults when Toon Mode is turned off
+                    applySunPreset(savedSunSettings || DEFAULT_SUN_SETTINGS);
+                }
+            });
+
+            const rimSub = toonFolder.addFolder('Sunlit Rim Glow');
+            rimSub.add(roystanParams, 'rimEnabled').name('Rim Enabled').onChange(() => syncRoystanUniforms());
+            rimSub.addColor(roystanParams, 'rimColor').name('Rim Color').onChange(() => syncRoystanUniforms());
+            rimSub.add(roystanParams, 'rimIntensity', 0.1, 4.0, 0.05).name('Rim Brightness').onChange(() => syncRoystanUniforms());
+            rimSub.add(roystanParams, 'rimAmount', 0.1, 0.95, 0.01).name('Rim Width').onChange(() => syncRoystanUniforms());
+            rimSub.add(roystanParams, 'rimThreshold', 0.0, 1.0, 0.05).name('Sun Facing Mask').onChange(() => syncRoystanUniforms());
+
+            const specSub = toonFolder.addFolder('Cartoon Specular (Shine)');
+            specSub.add(roystanParams, 'specularEnabled').name('Specular Enabled').onChange(() => syncRoystanUniforms());
+            specSub.addColor(roystanParams, 'specularColor').name('Shine Color').onChange(() => syncRoystanUniforms());
+            specSub.add(roystanParams, 'specularSize', 0.01, 0.25, 0.005).name('Shine Size').onChange(() => syncRoystanUniforms());
+            specSub.add(roystanParams, 'specularSmoothness', 0.001, 0.05, 0.002).name('Border Softness').onChange(() => syncRoystanUniforms());
+            specSub.add(roystanParams, 'shininess', 4.0, 128.0, 2.0).name('Glossiness').onChange(() => syncRoystanUniforms());
+
             // Night
             const moonParams = {
                 moonlightColor: '#' + envConfigs[2].dir.toString(16).padStart(6, '0'),
@@ -370,7 +699,7 @@ export function initSettingsPanels(context) {
                     dummy.rotation.set(0, tangentAng + (i % 2 === 0 ? 0 : Math.PI), 0);
     
                     const s = 0.95 + (i % 3) * 0.1;
-                    const sx = s * 1.15 * (0.88 + (i % 4) * 0.09) * widthBoost * (i % 2 === 0 ? 1 : -1);
+                    const sx = s * 1.15 * (0.88 + (i % 4) * 0.09) * widthBoost;
                     const sy = s * (0.90 + ((i + 1) % 4) * 0.08);
                     const sz = s * (0.92 + ((i + 2) % 3) * 0.08) * widthBoost;
     
@@ -409,6 +738,8 @@ export function initSettingsPanels(context) {
             }
     
             const cloudFolder = gui.addFolder('Clouds');
+            const lowBankModelActive = { 'Shelf': true, 'Fortress': true, 'Asymmetric': true, 'Undulating': true };
+            const cirroModelActive = { 'Cirro Shelf': true, 'Cirro Cluster': true, 'High Horizon Shelf': true };
     
             function updateAllCloudVisibility() {
                 const master = params.showClouds !== false;
@@ -421,11 +752,21 @@ export function initSettingsPanels(context) {
                 }
                 if (typeof instLowBankClouds !== 'undefined') {
                     instLowBankClouds.visible = master && !!params.cloudsLowBank;
-                    if (typeof lowBankMeshes !== 'undefined') lowBankMeshes.forEach(m => { m.visible = instLowBankClouds.visible; });
+                    if (typeof lowBankMeshes !== 'undefined') {
+                        const lowBankNames = ['Shelf', 'Fortress', 'Asymmetric', 'Undulating'];
+                        lowBankMeshes.forEach((m, idx) => {
+                            m.visible = instLowBankClouds.visible && (lowBankModelActive[lowBankNames[idx]] !== false);
+                        });
+                    }
                 }
                 if (typeof instBillboardClouds !== 'undefined') {
                     instBillboardClouds.visible = master && !!params.cloudsBillboard;
-                    if (typeof cirroMeshes !== 'undefined') cirroMeshes.forEach(m => { m.visible = instBillboardClouds.visible; });
+                    if (typeof cirroMeshes !== 'undefined') {
+                        const cirroNames = ['Cirro Shelf', 'Cirro Cluster', 'High Horizon Shelf'];
+                        cirroMeshes.forEach((m, idx) => {
+                            m.visible = instBillboardClouds.visible && (cirroModelActive[cirroNames[idx]] !== false);
+                        });
+                    }
                 }
             }
             window.updateAllCloudVisibility = updateAllCloudVisibility;
@@ -439,7 +780,8 @@ export function initSettingsPanels(context) {
             cloudFolder.add(params, 'cloudsHigh').name('2. Distant Cumulus Towers').onChange(updateAllCloudVisibility).listen();
             cloudFolder.add(params, 'cloudsLowTower').name('3. Low Horizon Towers').onChange(updateAllCloudVisibility).listen();
             cloudFolder.add(params, 'cloudsGiant').name('4. Distant Horizon Banks').onChange(updateAllCloudVisibility).listen();
-            cloudFolder.add(params, 'cloudsBillboard').name('5. Distant High Clouds').onChange(updateAllCloudVisibility).listen();
+            cloudFolder.add(params, 'cloudsLowBank').name('5. Low Horizon Banks').onChange(updateAllCloudVisibility).listen();
+            cloudFolder.add(params, 'cloudsBillboard').name('6. Distant High Clouds').onChange(updateAllCloudVisibility).listen();
             cloudFolder.add(params, 'cloudsMinDistance', 0, 3000, 25).name('Minimum Camera Clearance').onChange(v => enforceCloudMinDistance(v)).listen();
             cloudFolder.add(params, 'cloudTerrainClearance', 0, 1500, 10).name('Mountain Clearance').onChange(() => {
                 if (typeof updateLowCloudAltitude === 'function') updateLowCloudAltitude(params.cloudsLowAltitude);
@@ -582,7 +924,7 @@ export function initSettingsPanels(context) {
 
         // 3b. Low Horizon Banks
         const lowBankFolder = cloudFolder.addFolder('Low Horizon Banks');
-        lowBankFolder.add(params, 'cloudsLowBank').name('Show Horizon Banks').onChange(updateAllCloudVisibility).listen();
+        lowBankFolder.add(params, 'cloudsLowBank').name('Show Low Horizon Banks').onChange(updateAllCloudVisibility).listen();
         lowBankFolder.add(params, 'cloudsLowBankCount', 0, 48, 1).name('How Many').onChange(v => setCloudCount(instLowBankClouds, v));
         lowBankFolder.add(params, 'cloudsLowBankDensity', 0.2, 3.0, 0.05).name('Density').onChange(v => updateLowBankCloudDensity(v)).listen();
         lowBankFolder.add(params, 'cloudsLowBankSize', 0.2, 3, 0.05).name('Scale / Size').onChange(v => setCloudSize(instLowBankClouds, v));
@@ -614,9 +956,14 @@ export function initSettingsPanels(context) {
         });
         lowBankFolder.addColor(params, 'cloudsLowBankColor').name('Color Tint');
 
+        const lowBankModelsFolder = lowBankFolder.addFolder('Models / Archetypes');
+        ['Shelf', 'Fortress', 'Asymmetric', 'Undulating'].forEach(name => {
+            lowBankModelsFolder.add(lowBankModelActive, name).name(name).onChange(updateAllCloudVisibility);
+        });
+
         // 3c. Distant High Clouds (3D Procedural Meshes)
         const billboardFolder = cloudFolder.addFolder('Distant High Clouds');
-        billboardFolder.add(params, 'cloudsBillboard').name('Show High Clouds').onChange(updateAllCloudVisibility).listen();
+        billboardFolder.add(params, 'cloudsBillboard').name('Show Distant High Clouds').onChange(updateAllCloudVisibility).listen();
         billboardFolder.add(params, 'cloudsBillboardCount', 0, 36, 1).name('How Many').onChange(v => setCloudCount(instBillboardClouds, v));
         billboardFolder.add(params, 'cloudsBillboardSize', 0.2, 3, 0.05).name('Scale / Size').onChange(v => setCloudSize(instBillboardClouds, v));
         billboardFolder.add(params, 'cloudsBillboardAltitude', 400, 3000, 25).name('Altitude / Height').onChange(v => {
@@ -655,8 +1002,18 @@ export function initSettingsPanels(context) {
         billboardFolder.add(params, 'cloudsBillboardOpacity', 0.1, 1.0, 0.02).name('Opacity').onChange(v => {
             setMaterialOpacity(cirroCloudMat, v);
         });
+        billboardFolder.add(params, 'cloudsBillboardBottomBlur', 0.05, 0.8, 0.02).name('Bottom Blur / Feather').onChange(v => {
+            if (cirroCloudMat.userData && cirroCloudMat.userData.shader && cirroCloudMat.userData.shader.uniforms.uBottomBlur) {
+                cirroCloudMat.userData.shader.uniforms.uBottomBlur.value = v;
+            }
+        });
         billboardFolder.addColor(params, 'cloudsBillboardColor').name('Color Tint').onChange(v => {
             cirroCloudMat.color.set(v);
+        });
+
+        const cirroModelsFolder = billboardFolder.addFolder('Models / Archetypes');
+        ['Cirro Shelf', 'Cirro Cluster', 'High Horizon Shelf'].forEach(name => {
+            cirroModelsFolder.add(cirroModelActive, name).name(name).onChange(updateAllCloudVisibility);
         });
 
             // 4. Lighting & Ghibli Shading Colors
@@ -885,12 +1242,21 @@ export function initSettingsPanels(context) {
                 }
             }, 'resetBiome').name('Reset This Biome to Default');
 
+            treeFolder.add({
+                openBank: () => {
+                    if (window.openMatcapBank) window.openMatcapBank();
+                }
+            }, 'openBank').name('🎨 MatCap Shader Bank');
+
             treeFolder.close();
 
 // ==========================================
             const sysFolder = gui.addFolder('Dev & System');
     
             // Editor launchers
+            sysFolder.add({ openShaderBank: () => {
+                if (window.openMatcapBank) window.openMatcapBank();
+            }}, 'openShaderBank').name('MatCap Shader Bank (B)');
             sysFolder.add({ openTerrainEditor: () => {
                 const btn = document.getElementById('editor-toggle');
                 if (btn) btn.click();
@@ -1034,6 +1400,23 @@ export function initSettingsPanels(context) {
                     isModelVisible = true;
                     updateModelVisibility();
                     updateAllCloudVisibility();
+                    if (parsed.controllers && typeof waterUniforms !== 'undefined') {
+                        if (parsed.controllers.waterScale !== undefined && waterUniforms.waterScale) {
+                            const ws = parsed.controllers.waterScale;
+                            const wsx = parsed.controllers.waterScaleX !== undefined ? parsed.controllers.waterScaleX : ws;
+                            const wsz = parsed.controllers.waterScaleZ !== undefined ? parsed.controllers.waterScaleZ : ws;
+                            waterUniforms.waterScale.value.set(wsx, wsz);
+                        }
+                        if (parsed.controllers.displacementScale !== undefined && waterUniforms.waterDisplacementScale) {
+                            waterUniforms.waterDisplacementScale.value.set(parsed.controllers.displacementScale, parsed.controllers.displacementScale);
+                        }
+                        if (parsed.controllers.specularScale !== undefined && waterUniforms.specularScale) {
+                            waterUniforms.specularScale.value = parsed.controllers.specularScale;
+                        }
+                        if (parsed.controllers.foamScale !== undefined && waterUniforms.uFoamScale) {
+                            waterUniforms.uFoamScale.value = parsed.controllers.foamScale;
+                        }
+                    }
                 }
             } catch(e) {
                 console.error('Failed to load settings', e);
@@ -1197,11 +1580,23 @@ export function initSettingsPanels(context) {
                     }
                 });
             }
+
+            const topShaderBankBtn = document.getElementById('top-shader-bank-btn');
+            if (topShaderBankBtn) {
+                topShaderBankBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (window.toggleMatcapBank) window.toggleMatcapBank();
+                });
+            }
     
             window.addEventListener('keydown', (e) => {
                 if (e.target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
                 if (e.code === 'KeyT') {
                     const btn = document.getElementById('top-tree-btn');
+                    if (btn) btn.click();
+                }
+                if (e.code === 'KeyB') {
+                    const btn = document.getElementById('top-shader-bank-btn');
                     if (btn) btn.click();
                 }
             });

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getWorldHeight } from './world.js';
+import { applyRoystanShader } from './shaders/roystanToon.js';
 
 // ==========================================
 // PLAYER ENTITY & FLIGHT MODEL LOADING
@@ -22,6 +23,7 @@ export function initPlayer(scene, worldLayout, gltfLoader, gradientMap, params) 
     
         const proxyGeo = new THREE.BoxGeometry(1.5, 0.5, 3);
         const proxyMat = new THREE.MeshToonMaterial({ color: 0xcc4444, gradientMap });
+        applyRoystanShader(proxyMat);
         const proxyMesh = new THREE.Mesh(proxyGeo, proxyMat);
         proxyMesh.castShadow = true;
         playerVisuals.add(proxyMesh);
@@ -123,6 +125,7 @@ export function initPlayer(scene, worldLayout, gltfLoader, gradientMap, params) 
                             const mats = Array.isArray(c.material) ? c.material : [c.material];
                             mats.forEach(m => {
                                 if (m) {
+                                    applyRoystanShader(m);
                                     if (m.map && !m.emissiveMap) {
                                         m.emissiveMap = m.map;
                                         m.emissive = new THREE.Color(0xffffff);

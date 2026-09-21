@@ -5,9 +5,9 @@ import * as THREE from 'three';
 // ==========================================
 
 export const envConfigs = [
-    {bg: 0x3a88d6, skyMid: 0x72b2e8, skyHorizon: 0xb8daf2, horizonGlow: 0.15, amb: 0xd8eefa, dir: 0xfffbf0, ambI: 1.25, dirI: 2.50, starOp: 0, sunY: 10000, moonY: -8000, glintCol: 0xfff0d0, cloudCol: 0xfffcf5, crystalGlowMult: 0.0}, // Day (Wanderlust-II)
-    {bg: 0x2a5090, skyMid: 0xc85078, skyHorizon: 0xffa07a, horizonGlow: 0.45, amb: 0xffdab9, dir: 0xffaa00, ambI: 1.10, dirI: 3.20, starOp: 0, sunY: 160, moonY: 200, glintCol: 0xffaa00, cloudCol: 0xfffaec, crystalGlowMult: 0.45}, // Dusk (Cloned from Wanderlust-II)
-    {bg: 0x162d5a, skyMid: 0x1d3a6e, skyHorizon: 0x224888, horizonGlow: 0.10, amb: 0x7788bb, dir: 0xffbb55, ambI: 1.5, dirI: 3.5, starOp: 1.0, sunY: -8000, moonY: 1600, glintCol: 0xffaa44, cloudCol: 0x2e4a80, crystalGlowMult: 1.0}, // Night (copied from ghibli-flight)
+    {bg: 0x3a88d6, skyMid: 0x72b2e8, skyHorizon: 0xb8daf2, horizonGlow: 0.15, amb: 0xd8eefa, dir: 0xfffbf0, ambI: 1.25, dirI: 2.50, starOp: 0, sunY: 10000, moonY: -8000, glintCol: 0xfff0d0, cloudCol: 0xfffcf5, crystalGlowMult: 0.0, waterColor: 0x1a4075}, // Day (Wanderlust-II)
+    {bg: 0x2a5090, skyMid: 0xc85078, skyHorizon: 0xffa07a, horizonGlow: 0.45, amb: 0xffffff, dir: 0xf09e9e, ambI: 1.833, dirI: 4.92, starOp: 0, sunY: 160, moonY: 200, glintCol: 0xffaa00, cloudCol: 0xfffaec, crystalGlowMult: 0.45, waterColor: 0x1a4075}, // Dusk (Cloned from Wanderlust-II)
+    {bg: 0x162d5a, skyMid: 0x1d3a6e, skyHorizon: 0x224888, horizonGlow: 0.10, amb: 0x7788bb, dir: 0xffbb55, ambI: 1.5, dirI: 3.5, starOp: 1.0, sunY: -8000, moonY: 1600, glintCol: 0xffaa44, cloudCol: 0x2e4a80, crystalGlowMult: 1.0, waterColor: 0x1a4075}, // Night (copied from ghibli-flight)
 ];
 
 export function createCloudNoiseTexture(size = 256) {

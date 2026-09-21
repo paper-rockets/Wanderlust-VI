@@ -64,9 +64,10 @@ export function initRenderer(container, params, LOW_GFX) {
     const composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
-    const bloomRes = LOW_GFX
-        ? new THREE.Vector2(window.innerWidth * 0.5, window.innerHeight * 0.5)
-        : new THREE.Vector2(window.innerWidth, window.innerHeight);
+    const bloomRes = new THREE.Vector2(
+        Math.min(window.innerWidth * 0.5, 960),
+        Math.min(window.innerHeight * 0.5, 540)
+    );
     const bloomPass = new UnrealBloomPass(bloomRes, 0.8, 0.4, 1.5);
     bloomPass.enabled = !LOW_GFX;
     composer.addPass(bloomPass);
@@ -273,10 +274,14 @@ export function initRenderer(container, params, LOW_GFX) {
         photoExitBtn.addEventListener('click', () => {
             isPhotoMode = false;
             window.isPhotoMode = false;
-            document.getElementById('settings-controls').style.display = 'flex';
-            document.getElementById('touch-controls').style.display = '';
-            document.getElementById('time-toggle').style.display = 'block';
-            document.getElementById('photo-mode-ui').style.display = 'none';
+            const sc = document.getElementById('settings-controls');
+            if (sc) sc.style.display = 'flex';
+            const tc = document.getElementById('touch-controls');
+            if (tc) tc.style.display = '';
+            const tt = document.getElementById('time-toggle');
+            if (tt) tt.style.display = 'block';
+            const pm = document.getElementById('photo-mode-ui');
+            if (pm) pm.style.display = 'none';
             camera.fov = 60;
             camera.position.set(0, 4, 14);
             camera.up.set(0, 1, 0);

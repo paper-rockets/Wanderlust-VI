@@ -13,14 +13,14 @@ export function initPostProcessingShaders(composer, params, LOW_GFX) {
             uniforms: {
                 tDiffuse: { value: null },
                 uSunScreenPos: { value: new THREE.Vector2(0.5, 0.5) },
-                uIntensity: { value: 0.60 },
-                uDecay: { value: 0.92 },
-                uDensity: { value: 0.50 },
-                uWeight: { value: 0.85 },
-                uLumMin: { value: 0.85 },
-                uLumMax: { value: 0.98 },
-                uRayColorInner: { value: new THREE.Color('#ffea9f') },
-                uRayColorOuter: { value: new THREE.Color('#ff9933') },
+                uIntensity: { value: params.godRayIntensity !== undefined ? params.godRayIntensity : 0.60 },
+                uDecay: { value: params.godRayDecay !== undefined ? params.godRayDecay : 0.80 },
+                uDensity: { value: params.godRayDensity !== undefined ? params.godRayDensity : 0.15 },
+                uWeight: { value: params.godRayWeight !== undefined ? params.godRayWeight : 0.85 },
+                uLumMin: { value: params.lumMin !== undefined ? params.lumMin : 0.85 },
+                uLumMax: { value: params.lumMax !== undefined ? params.lumMax : 0.98 },
+                uRayColorInner: { value: new THREE.Color(params.rayColorInner || '#ffea9f') },
+                uRayColorOuter: { value: new THREE.Color(params.rayColorOuter || '#ff9933') },
                 uEdgeFadeDist: { value: 1.5 },
                 uSunVisible: { value: 1.0 }
             },
@@ -56,16 +56,16 @@ export function initPostProcessingShaders(composer, params, LOW_GFX) {
                     // Direction from this pixel toward the sun
                     vec2 deltaUV = (vUv - uSunScreenPos);
                     float dist = length(deltaUV);
-                    deltaUV *= (1.0 / 24.0) * uDensity; // 24 dithered samples for crepuscular light shafts piercing through clouds
-    
+                    deltaUV *= (1.0 / 14.0) * uDensity; // 14 dithered samples for crepuscular light shafts
+
                     // Screen-space dither offsets sample points to eliminate banding
                     float dither = pseudoRand(gl_FragCoord.xy);
                     vec2 sampleUV = vUv - (deltaUV * dither);
-    
+
                     float illumination = 0.0;
                     float currentWeight = uWeight;
-    
-                    for(int i = 0; i < 24; i++) {
+
+                    for(int i = 0; i < 14; i++) {
                         sampleUV -= deltaUV;
                         vec4 samp = texture2D(tDiffuse, clamp(sampleUV, 0.001, 0.999));
                         float lum = dot(samp.rgb, vec3(0.299, 0.587, 0.114));
@@ -74,10 +74,10 @@ export function initPostProcessingShaders(composer, params, LOW_GFX) {
                         illumination += bright * currentWeight;
                         currentWeight *= uDecay;
                     }
-    
-                    // Intensity normalization for 24-sample step integration
-                    illumination *= 1.35;
-    
+
+                    // Intensity normalization for 14-sample step integration
+                    illumination *= 2.31;
+
                     // Fade out rays near screen edges and when sun is off-screen
                     float edgeFade = 1.0 - smoothstep(0.4, uEdgeFadeDist, dist);
     

@@ -2,10 +2,38 @@ import * as THREE from 'three';
 import { snoise } from './noise.js';
 import { getWorldHeight, getWorldColor, getBiomeAt } from './world.js';
 import { setupToonCloudShader } from './clouds.js';
+import { applyRoystanShader } from './shaders/roystanToon.js';
 
 // ==========================================
 // TERRAIN, TOON MATERIALS & STYLIZED WATER
 // ==========================================
+
+// MatCap full shader replacement uniforms for Crystal Land terrain
+export const crystalMatcapUniform = { value: null };
+export const crystalUseMatcapUniform = { value: 0.0 };
+export const crystalMatcapReplaceUniform = { value: 1.0 }; // 1.0 = 100% full replacement of terrain shader
+
+export function setCrystalTerrainMatcap(texture, replaceFactor = 1.0) {
+    crystalMatcapUniform.value = texture || null;
+    crystalUseMatcapUniform.value = texture ? 1.0 : 0.0;
+    if (typeof replaceFactor === 'number') {
+        crystalMatcapReplaceUniform.value = replaceFactor;
+    }
+}
+
+export function getCrystalTerrainMatcapState() {
+    return {
+        active: crystalUseMatcapUniform.value > 0.5,
+        texture: crystalMatcapUniform.value,
+        replace: crystalMatcapReplaceUniform.value
+    };
+}
+
+// Shared terrain height texture for water shoreline waves, foam, and depth
+export let terrainHeightTex = null;
+export const terrainCenter = new THREE.Vector2(0, 0);
+export let currentTerrainSize = 1200;
+let activeWaterUniforms = null;
 
 export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayout) {
         let terrainRes = params.terrainRes ? parseInt(params.terrainRes) : 256;
@@ -37,18 +65,61 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
             vertexColors: true,
             dithering: true
         });
-    
-        // Shader injection for perfect pixel-smooth shorelines
+
+        // Shader injection for perfect pixel-smooth shorelines + Crystal Land MatCap replacement
         terrainMat.onBeforeCompile = (shader) => {
+            shader.uniforms.uCrystalMatcap = crystalMatcapUniform;
+            shader.uniforms.uCrystalUseMatcap = crystalUseMatcapUniform;
+            shader.uniforms.uCrystalMatcapReplace = crystalMatcapReplaceUniform;
+
             shader.vertexShader = `
                 varying vec3 vWorldPos;
+                varying vec3 vCrystalNormal;
             ` + shader.vertexShader;
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <worldpos_vertex>`,
                 `#include <worldpos_vertex>
-                 vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+                 vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+                 vCrystalNormal = normalize(normalMatrix * normal);`
+            );
+
+            shader.fragmentShader = `
+                uniform sampler2D uCrystalMatcap;
+                uniform float uCrystalUseMatcap;
+                uniform float uCrystalMatcapReplace;
+                varying vec3 vWorldPos;
+                varying vec3 vCrystalNormal;
+            ` + shader.fragmentShader;
+
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <dithering_fragment>`,
+                `#include <dithering_fragment>
+                 if (uCrystalUseMatcap > 0.5) {
+                     vec3 cNorm = normalize(vCrystalNormal);
+                     vec2 mcUv = cNorm.xy * 0.495 + vec2(0.5);
+                     vec4 mc = texture2D(uCrystalMatcap, mcUv);
+                     vec3 finalCrystalCol = mc.rgb;
+
+                     #ifdef USE_FOG
+                     #ifdef FOG_EXP2
+                     float cFogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+                     #else
+                     float cFogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+                     #endif
+                     finalCrystalCol = mix( finalCrystalCol, fogColor, cFogFactor );
+                     #endif
+
+                     gl_FragColor.rgb = mix(gl_FragColor.rgb, finalCrystalCol, uCrystalMatcapReplace);
+                 }
+                `
             );
         };
+        terrainMat.customProgramCacheKey = () => 'crystal-terrain-toon-matcap';
+    
+        applyRoystanShader(terrainMat);
+        applyRoystanShader(smoothTerrainMat);
+        applyRoystanShader(matRock);
+        applyRoystanShader(matBush);
     
         // Trees closer than this use the full model; farther ones use a leaves-only light model
         const TREE_LOD_RADIUS = 150.0;
@@ -147,6 +218,22 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
         }
     
         let terrainHeightBuffer = new Float32Array((256 + 1) * (256 + 1));
+        currentTerrainSize = TERRAIN_SIZE;
+        const initStride = terrainRes + 1;
+        if (!terrainHeightTex) {
+            terrainHeightTex = new THREE.DataTexture(
+                terrainHeightBuffer,
+                initStride,
+                initStride,
+                THREE.RedFormat,
+                THREE.FloatType
+            );
+            terrainHeightTex.minFilter = THREE.LinearFilter;
+            terrainHeightTex.magFilter = THREE.LinearFilter;
+            terrainHeightTex.wrapS = THREE.ClampToEdgeWrapping;
+            terrainHeightTex.wrapT = THREE.ClampToEdgeWrapping;
+            terrainHeightTex.needsUpdate = true;
+        }
         let terrainPrevHeights = new Float32Array(0);
         // Keep an unfiltered colour map, then filter it for rendering. The terrain positions,
         // normals, and grid resolution are deliberately left alone.
@@ -154,15 +241,46 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
         let terrainPrevRawColors = new Float32Array(0);
         let terrainColorScratch = new Float32Array(0);
         let terrainNormalScratch = new Float32Array(0);
+        let terrainPrevFinalColors = new Float32Array(0);
+        let terrainPrevFinalNormals = new Float32Array(0);
         let lastTerrainRes = -1;
         let lastVisualSmoothing = null;
 
-        function blurTerrainColors(source, target, stride, radius) {
+        function computeGridNormalsRegion(heights, targetNormals, stride, vertexSpacing, minRow, maxRow, minCol, maxCol) {
+            const inv2Spacing = 1.0 / (2.0 * vertexSpacing);
             const last = stride - 1;
-            for (let row = 0; row < stride; row++) {
+            for (let row = minRow; row <= maxRow; row++) {
+                const rowUp = row > 0 ? (row - 1) * stride : row * stride;
+                const rowDown = row < last ? (row + 1) * stride : row * stride;
+                const rowOffset = row * stride;
+                for (let col = minCol; col <= maxCol; col++) {
+                    const colLeft = col > 0 ? col - 1 : col;
+                    const colRight = col < last ? col + 1 : col;
+
+                    const hl = heights[rowOffset + colLeft];
+                    const hr = heights[rowOffset + colRight];
+                    const hu = heights[rowUp + col];
+                    const hd = heights[rowDown + col];
+
+                    const nx = (hl - hr) * inv2Spacing;
+                    const nz = (hu - hd) * inv2Spacing;
+                    const ny = 1.0;
+                    const invLen = 1.0 / Math.hypot(nx, ny, nz);
+
+                    const idx = (rowOffset + col) * 3;
+                    targetNormals[idx] = nx * invLen;
+                    targetNormals[idx + 1] = ny * invLen;
+                    targetNormals[idx + 2] = nz * invLen;
+                }
+            }
+        }
+
+        function blurTerrainColorsRegion(source, target, stride, minRow, maxRow, minCol, maxCol, radius = 1) {
+            const last = stride - 1;
+            for (let row = minRow; row <= maxRow; row++) {
                 const rowUp = Math.max(0, row - radius);
                 const rowDown = Math.min(last, row + radius);
-                for (let col = 0; col < stride; col++) {
+                for (let col = minCol; col <= maxCol; col++) {
                     const colLeft = Math.max(0, col - radius);
                     const colRight = Math.min(last, col + radius);
                     const center = (row * stride + col) * 3;
@@ -188,14 +306,12 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
             }
         }
 
-        // Blend only lighting directions. Terrain vertices are not moved, so
-        // terrain shape, height, collision, and placement all stay exact.
-        function blurTerrainNormals(source, target, stride) {
+        function blurTerrainNormalsRegion(source, target, stride, minRow, maxRow, minCol, maxCol) {
             const last = stride - 1;
-            for (let row = 0; row < stride; row++) {
+            for (let row = minRow; row <= maxRow; row++) {
                 const rowUp = Math.max(0, row - 1);
                 const rowDown = Math.min(last, row + 1);
-                for (let col = 0; col < stride; col++) {
+                for (let col = minCol; col <= maxCol; col++) {
                     const colLeft = Math.max(0, col - 1);
                     const colRight = Math.min(last, col + 1);
                     let nx = 0, ny = 0, nz = 0;
@@ -263,6 +379,7 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
             const normals = terrainGeo.attributes.normal;
             const count = pos.count;
             const stride = terrainRes + 1;
+            const last = stride - 1;
     
             if (terrainHeightBuffer.length < count) {
                 terrainHeightBuffer = new Float32Array(count);
@@ -270,6 +387,8 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
             if (terrainRawColors.length !== count * 3) terrainRawColors = new Float32Array(count * 3);
             if (terrainColorScratch.length !== count * 3) terrainColorScratch = new Float32Array(count * 3);
             if (terrainNormalScratch.length !== count * 3) terrainNormalScratch = new Float32Array(count * 3);
+            if (terrainPrevFinalColors.length !== count * 3) terrainPrevFinalColors = new Float32Array(count * 3);
+            if (terrainPrevFinalNormals.length !== count * 3) terrainPrevFinalNormals = new Float32Array(count * 3);
     
             // Grid moved by (dc, dr) cells: vertex (r, c) now shows what (r + dr, c + dc) showed before
             const dc = Math.round((gridX - lastTerrainGridX) / vertexSpacing);
@@ -281,6 +400,8 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
                 if (terrainPrevRawColors.length !== count * 3) terrainPrevRawColors = new Float32Array(count * 3);
                 terrainPrevHeights.set(terrainHeightBuffer.subarray(0, count));
                 terrainPrevRawColors.set(terrainRawColors);
+                terrainPrevFinalColors.set(colors.array);
+                terrainPrevFinalNormals.set(normals.array);
             }
     
             for (let i = 0; i < count; i++) {
@@ -292,10 +413,11 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
                         const h = terrainPrevHeights[oi];
                         pos.setY(i, h);
                         terrainHeightBuffer[i] = h;
-                        colors.setXYZ(i, terrainPrevRawColors[oi * 3], terrainPrevRawColors[oi * 3 + 1], terrainPrevRawColors[oi * 3 + 2]);
                         terrainRawColors[i * 3] = terrainPrevRawColors[oi * 3];
                         terrainRawColors[i * 3 + 1] = terrainPrevRawColors[oi * 3 + 1];
                         terrainRawColors[i * 3 + 2] = terrainPrevRawColors[oi * 3 + 2];
+                        colors.setXYZ(i, terrainPrevFinalColors[oi * 3], terrainPrevFinalColors[oi * 3 + 1], terrainPrevFinalColors[oi * 3 + 2]);
+                        normals.setXYZ(i, terrainPrevFinalNormals[oi * 3], terrainPrevFinalNormals[oi * 3 + 1], terrainPrevFinalNormals[oi * 3 + 2]);
                         continue;
                     }
                 }
@@ -313,31 +435,69 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
                     tempColor.lerp(colorPath, pathMask * 0.85);
                 }
     
-                colors.setXYZ(i, tempColor.r, tempColor.g, tempColor.b);
                 terrainRawColors[i * 3] = tempColor.r;
                 terrainRawColors[i * 3 + 1] = tempColor.g;
                 terrainRawColors[i * 3 + 2] = tempColor.b;
+                colors.setXYZ(i, tempColor.r, tempColor.g, tempColor.b);
             }
 
-            terrainGeo.computeVertexNormals();
+            if (!canShift) {
+                // Full rebuild
+                computeGridNormalsRegion(terrainHeightBuffer, normals.array, stride, vertexSpacing, 0, last, 0, last);
+                if (useVisualSmoothing) {
+                    blurTerrainColorsRegion(terrainRawColors, colors.array, stride, 0, last, 0, last, 1);
+                    blurTerrainNormalsRegion(normals.array, terrainNormalScratch, stride, 0, last, 0, last);
+                    normals.array.set(terrainNormalScratch);
+                }
+            } else {
+                // Fast boundary-only update: recompute normals and smoothing only for the newly exposed strip (plus 1 margin)
+                const dirtyMinRow = dr > 0 ? Math.max(0, stride - dr - 1) : 0;
+                const dirtyMaxRow = dr < 0 ? Math.min(last, -dr) : last;
+                const dirtyMinCol = dc > 0 ? Math.max(0, stride - dc - 1) : 0;
+                const dirtyMaxCol = dc < 0 ? Math.min(last, -dc) : last;
 
-            if (useVisualSmoothing) {
-                // One weighted pass removes colour blocks and hard light seams.
-                // The raw buffers remain available when Crystal Land is entered.
-                blurTerrainColors(terrainRawColors, terrainColorScratch, stride, 1);
-                colors.array.set(terrainColorScratch);
-                blurTerrainNormals(normals.array, terrainNormalScratch, stride);
-                normals.array.set(terrainNormalScratch);
-                normals.needsUpdate = true;
+                if (dr !== 0) {
+                    computeGridNormalsRegion(terrainHeightBuffer, normals.array, stride, vertexSpacing, dirtyMinRow, dirtyMaxRow, 0, last);
+                    if (useVisualSmoothing) {
+                        blurTerrainColorsRegion(terrainRawColors, colors.array, stride, dirtyMinRow, dirtyMaxRow, 0, last, 1);
+                        blurTerrainNormalsRegion(normals.array, terrainNormalScratch, stride, dirtyMinRow, dirtyMaxRow, 0, last);
+                        for (let r = dirtyMinRow; r <= dirtyMaxRow; r++) {
+                            const start = r * stride * 3;
+                            const end = (r * stride + stride) * 3;
+                            normals.array.set(terrainNormalScratch.subarray(start, end), start);
+                        }
+                    }
+                }
+                if (dc !== 0) {
+                    computeGridNormalsRegion(terrainHeightBuffer, normals.array, stride, vertexSpacing, 0, last, dirtyMinCol, dirtyMaxCol);
+                    if (useVisualSmoothing) {
+                        blurTerrainColorsRegion(terrainRawColors, colors.array, stride, 0, last, dirtyMinCol, dirtyMaxCol, 1);
+                        blurTerrainNormalsRegion(normals.array, terrainNormalScratch, stride, 0, last, dirtyMinCol, dirtyMaxCol);
+                        for (let r = 0; r <= last; r++) {
+                            for (let c = dirtyMinCol; c <= dirtyMaxCol; c++) {
+                                const idx = (r * stride + c) * 3;
+                                normals.array[idx] = terrainNormalScratch[idx];
+                                normals.array[idx + 1] = terrainNormalScratch[idx + 1];
+                                normals.array[idx + 2] = terrainNormalScratch[idx + 2];
+                            }
+                        }
+                    }
+                }
             }
 
             pos.needsUpdate = true;
             colors.needsUpdate = true;
+            normals.needsUpdate = true;
     
             lastTerrainGridX = gridX;
             lastTerrainGridZ = gridZ;
             lastTerrainRes = terrainRes;
             lastVisualSmoothing = useVisualSmoothing;
+
+            terrainCenter.set(gridX, gridZ);
+            if (terrainHeightTex) {
+                terrainHeightTex.needsUpdate = true;
+            }
         }
 
         function setTerrainResolution(nextResolution) {
@@ -350,6 +510,24 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
             terrainGeo = nextGeo;
             terrain.geometry = terrainGeo;
             terrainRes = next;
+
+            const nextStride = next + 1;
+            if (terrainHeightTex) terrainHeightTex.dispose();
+            terrainHeightTex = new THREE.DataTexture(
+                terrainHeightBuffer,
+                nextStride,
+                nextStride,
+                THREE.RedFormat,
+                THREE.FloatType
+            );
+            terrainHeightTex.minFilter = THREE.LinearFilter;
+            terrainHeightTex.magFilter = THREE.LinearFilter;
+            terrainHeightTex.wrapS = THREE.ClampToEdgeWrapping;
+            terrainHeightTex.wrapT = THREE.ClampToEdgeWrapping;
+            terrainHeightTex.needsUpdate = true;
+            if (activeWaterUniforms && activeWaterUniforms.uTerrainHeightMap) {
+                activeWaterUniforms.uTerrainHeightMap.value = terrainHeightTex;
+            }
 
             // Force a full height, color, and normal rebuild on the new geometry next frame.
             lastTerrainGridX = -9999;
@@ -380,97 +558,469 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
 
 export function initWater(scene, LOW_GFX) {
     let waterMesh;
-        const WATER_SEGS = LOW_GFX ? 24 : 48;
-        const waterGeo = new THREE.PlaneGeometry(5000, 5000, WATER_SEGS, WATER_SEGS);
-        waterGeo.rotateX(-Math.PI / 2);
-    
-        const waterUniforms = {
-            uTime:      { value: 0 },
-            uPlayerPos: { value: new THREE.Vector3() }
-        };
-    
-        const waterMat = new THREE.MeshStandardMaterial({
-            color: 0x00c8c0,
-            transparent: false,
-            opacity: 1.0,
-            roughness: 0.04,
-            metalness: 0.0
-        });
-    
-        waterMat.onBeforeCompile = (shader) => {
-            shader.uniforms.uTime      = waterUniforms.uTime;
-            shader.uniforms.uPlayerPos = waterUniforms.uPlayerPos;
-    
-            shader.vertexShader = `
-                varying vec3 vWorldPos;
-            ` + shader.vertexShader;
-    
-            // no vertex displacement — keeps geometry stable
-    
-            shader.vertexShader = shader.vertexShader.replace(
-                `#include <worldpos_vertex>`,
-                `#include <worldpos_vertex>
-                 vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
-            );
-    
-            // ── Fragment shader: caustics + subtle fresnel + shore foam ────────
-            shader.fragmentShader = `
-                uniform float uTime;
-                varying vec3  vWorldPos;
-    
-                vec3 w_permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
-                float snoise(vec2 v){
-                    const vec4 C = vec4(0.211324865405187,0.366025403784439,-0.577350269189626,0.024390243902439);
-                    vec2 i  = floor(v + dot(v, C.yy));
-                    vec2 x0 = v - i + dot(i, C.xx);
-                    vec2 i1 = (x0.x > x0.y) ? vec2(1.0,0.0) : vec2(0.0,1.0);
-                    vec4 x12 = x0.xyxy + C.xxzz; x12.xy -= i1;
-                    i = mod(i, 289.0);
-                    vec3 p = w_permute(w_permute(i.y+vec3(0.0,i1.y,1.0))+i.x+vec3(0.0,i1.x,1.0));
-                    vec3 m = max(0.5-vec3(dot(x0,x0),dot(x12.xy,x12.xy),dot(x12.zw,x12.zw)),0.0);
-                    m = m*m; m = m*m;
-                    vec3 x = 2.0*fract(p*C.www)-1.0; vec3 h = abs(x)-0.5; vec3 ox = floor(x+0.5);
-                    vec3 a0 = x-ox; m *= 1.79284291400159-0.85373472095314*(a0*a0+h*h);
-                    vec3 g; g.x=a0.x*x0.x+h.x*x0.y; g.yz=a0.yz*x12.xz+h.yz*x12.yw;
-                    return 130.0*dot(m,g);
-                }
-            ` + shader.fragmentShader;
-    
-            shader.fragmentShader = shader.fragmentShader.replace(
-                `#include <color_fragment>`,
-                `#include <color_fragment>
-    
-                // ── Base: keep material cyan, subtle far-distance darkening ──────
-                diffuseColor.rgb = vec3(0.00, 0.78, 0.80);
-                float camDist = length(vWorldPos.xz - cameraPosition.xz);
-                float farFade = smoothstep(80.0, 500.0, camDist);
-                diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.45, farFade);
-    
-                // ── Caustics ────────────────────────────────────────────────────
-                vec2 cuv = vWorldPos.xz * 0.10;
-                float c1 = 1.0 - abs(snoise(cuv + vec2( uTime*0.10,  uTime*0.05)));
-                float c2 = 1.0 - abs(snoise(cuv * 1.5 - vec2(uTime*0.15, -uTime*0.05)));
-                float caustics = clamp(pow(c1, 6.0) + pow(c2, 5.5)*0.5, 0.0, 1.0);
-                diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.97, 1.0), caustics * 0.4);
-    
-                // ── Shore foam: noise patches that look like water edge ──────────
-                float foamN1 = snoise(vWorldPos.xz * 0.28 + vec2( uTime*0.18, -uTime*0.13));
-                float foamN2 = snoise(vWorldPos.xz * 0.60 - vec2(-uTime*0.11,  uTime*0.16));
-                float foamN3 = snoise(vWorldPos.xz * 0.12 + vec2( uTime*0.07,  uTime*0.05));
-                float foam   = smoothstep(0.3, 0.7, foamN1)
-                             * smoothstep(0.2, 0.6, foamN2)
-                             * smoothstep(0.0, 0.5, foamN3);
-                diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 1.0, 1.0), foam * 0.85);
-                `
-            );
-        };
-    
-        waterMesh = new THREE.Mesh(waterGeo, waterMat);
-        waterMesh.position.y = 2.4; // Lowered slightly so the terrain shader can paint a smooth shoreline above it
-        waterMesh.receiveShadow = true;
-        scene.add(waterMesh);
+    const WATER_SIZE = 4000;
+    const WATER_SEGS = LOW_GFX ? 64 : 192;
+    const waterGeo = new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE, WATER_SEGS, WATER_SEGS);
+    waterGeo.rotateX(-Math.PI / 2);
 
-    
+    const texLoader = new THREE.TextureLoader();
+    const waterTex = texLoader.load('./assets/water-tex-cartoon.jpg');
+    waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping;
+
+    const noiseTex = texLoader.load('./assets/smooth_monochrome_noise.jpg');
+    noiseTex.wrapS = noiseTex.wrapT = THREE.RepeatWrapping;
+
+    const timeUniform = { value: 0.0 };
+    const waterUniforms = {
+        uTime: timeUniform,
+        time: timeUniform,
+        uPlayerPos: { value: new THREE.Vector3() },
+
+        // Terrain heightmap & shoreline depth
+        uTerrainHeightMap: { value: terrainHeightTex },
+        uTerrainCenter: { value: terrainCenter },
+        uTerrainSize: { value: currentTerrainSize },
+        uWaterLevel: { value: 2.4 },
+
+        // Shoreline Waves & Lapping Foam
+        uShoreFoamWidth: { value: 2.6 },
+        uShoreWaveSpeed: { value: 1.1 },
+        uShoreWaveFreq: { value: 1.2 },
+        uShoreSurge: { value: 0.8 },
+        uFoamScale: { value: 0.045 }, // Shore foam texture repeat scale
+        uFoamColor: { value: new THREE.Color(1.0, 1.0, 1.0) },
+        uShallowColor: { value: new THREE.Color(0.18, 0.92, 0.88) }, // Radiant tropical turquoise
+
+        // Gerstner Waves & Simplex Noise Displacement (ShaderFrog flight-scale)
+        normalOffset: { value: 0.1 },
+        fbmHeight: { value: 0.015 },
+        fbmScale: { value: 1.2 },
+        pScale: { value: new THREE.Vector3(0.02, 1.0, 0.02) },
+        waveHeight: { value: 2.8 },
+        waveSpeed: { value: 0.45 },
+        waveFrequency: { value: 0.75 },
+        waveSharpness: { value: 0.78 },
+
+        // Deep ocean and crest colors (Vibrant ShaderFrog Cyan Palette)
+        waveColor: { value: new THREE.Color(0.0, 0.67, 1.0) },
+        waterHighlight: { value: new THREE.Color(1.0, 1.0, 1.0) },
+        contrast: { value: 22.0 },
+        brightness: { value: 1.65 },
+        offset: { value: 0.042 },
+
+        // Cartoon Water Surface textures & sparkles
+        waterImage: { value: waterTex },
+        waterScale: { value: new THREE.Vector2(0.035, 0.035) },
+        waterSpeed: { value: new THREE.Vector2(-0.091, -0.094) },
+        waterColorTint: { value: new THREE.Color(0.0, 0.67, 1.0) },
+        waterAmt: { value: 0.45 },
+
+        displacement: { value: noiseTex },
+        displacementSpeed: { value: new THREE.Vector2(-0.039, 0.038) },
+        waterDisplacementScale: { value: new THREE.Vector2(0.018, 0.018) },
+        displacementHeight: { value: 0.28 },
+
+        specularMap: { value: noiseTex },
+        specularScale: { value: 0.032 },
+        specularBrightness: { value: 2.5 },
+        specularPop: { value: 0.78 },
+        specularMax: { value: 0.30 },
+        specularSpeed: { value: new THREE.Vector2(0.021, 0.026) }
+    };
+    activeWaterUniforms = waterUniforms;
+
+    const waterMat = new THREE.MeshPhysicalMaterial({
+        roughness: 0.0,
+        metalness: 0.15,
+        iridescence: 0.22,
+        clearcoat: 0.1,
+        clearcoatRoughness: 0.1
+    });
+
+    waterMat.onBeforeCompile = (shader) => {
+        Object.assign(shader.uniforms, waterUniforms);
+        shader.defines.USE_UV = '';
+
+        // --- VERTEX SHADER INJECTION ---
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <common>',
+            `#include <common>
+            varying float vOceanHeight;
+            varying vec3 vOceanWorldPos;
+
+            uniform float time;
+            uniform vec3 uPlayerPos;
+            uniform float normalOffset;
+            uniform float fbmHeight;
+            uniform float fbmScale;
+            uniform vec3 pScale;
+            uniform float waveHeight;
+            uniform float waveSpeed;
+            uniform float waveFrequency;
+            uniform float waveSharpness;
+
+            // Shore uniforms
+            uniform sampler2D uTerrainHeightMap;
+            uniform vec2 uTerrainCenter;
+            uniform float uTerrainSize;
+            uniform float uWaterLevel;
+            uniform float uShoreWaveSpeed;
+            uniform float uShoreWaveFreq;
+            uniform float uShoreSurge;
+
+            // Simplex 4D Noise & FBM
+            vec4 mod289_ocean(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            float mod289_ocean(float x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 permute_ocean(vec4 x) { return mod289_ocean(((x * 34.0) + 1.0) * x); }
+            float permute_ocean(float x) { return mod289_ocean(((x * 34.0) + 1.0) * x); }
+            vec4 taylorInvSqrt_ocean(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+            float taylorInvSqrt_ocean(float r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+            vec4 grad4_ocean(float j, vec4 ip) {
+                const vec4 ones = vec4(1.0, 1.0, 1.0, -1.0);
+                vec4 p, s;
+                p.xyz = floor(fract(vec3(j) * ip.xyz) * 7.0) * ip.z - 1.0;
+                p.w = 1.5 - dot(abs(p.xyz), ones.xyz);
+                s = vec4(lessThan(p, vec4(0.0)));
+                p.xyz = p.xyz + (s.xyz * 2.0 - 1.0) * s.www;
+                return p;
+            }
+
+            float snoise_ocean(vec4 v, float t) {
+                const vec4 C = vec4(0.138196601125011, 0.276393202250021, 0.414589803375032, -0.447213595499958);
+                vec4 i  = floor(v + dot(v, vec4(0.309016994374947451)));
+                vec4 x0 = v - i + dot(i, C.xxxx);
+
+                vec4 i0;
+                vec3 isX = step(x0.yzw, x0.xxx);
+                vec3 isYZ = step(x0.zww, x0.yyz);
+                i0.x = isX.x + isX.y + isX.z;
+                i0.yzw = 1.0 - isX;
+                i0.y += isYZ.x + isYZ.y;
+                i0.zw += 1.0 - isYZ.xy;
+                i0.z += isYZ.z;
+                i0.w += 1.0 - isYZ.z;
+
+                vec4 i3 = clamp(i0, 0.0, 1.0);
+                vec4 i2 = clamp(i0 - 1.0, 0.0, 1.0);
+                vec4 i1 = clamp(i0 - 2.0, 0.0, 1.0);
+
+                vec4 x1 = x0 - i1 + C.xxxx;
+                vec4 x2 = x0 - i2 + C.yyyy;
+                vec4 x3 = x0 - i3 + C.zzzz;
+                vec4 x4 = x0 + C.wwww;
+
+                vec4 ip = vec4(1.0/289.0, 1.0/49.0, 1.0/7.0, 0.0);
+                vec4 p0 = grad4_ocean(mod289_ocean(i.x), ip);
+                vec4 p1 = grad4_ocean(mod289_ocean(i.y), ip);
+                vec4 p2 = grad4_ocean(mod289_ocean(i.z), ip);
+                vec4 p3 = grad4_ocean(mod289_ocean(i.w), ip);
+
+                vec4 m0 = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                vec2 m1 = max(0.6 - vec2(dot(x4,x4), 0.0), 0.0);
+                m0 = m0 * m0;
+                m1 = m1 * m1;
+
+                return 49.0 * (dot(m0 * m0, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3))) +
+                               dot(m1 * m1, vec2(dot(p0, x4), 0.0)));
+            }
+
+            float ocean_surface(vec4 coord, float t) {
+                float n = 0.0;
+                n += 1.000 * abs(snoise_ocean(coord, t));
+                n += 0.500 * abs(snoise_ocean(coord * 2.0, t));
+                n += 0.250 * abs(snoise_ocean(coord * 4.0, t));
+                n += 0.125 * abs(snoise_ocean(coord * 8.0, t));
+                return n;
+            }
+
+            vec3 ocean_GerstnerWave(vec4 wave, vec3 p, inout vec3 tangent, inout vec3 binormal, float t) {
+                float wavelength = wave.w;
+                float k = 2.0 * 3.14159265 / max(1.0, wavelength);
+                float c = sqrt(9.8 / k);
+                vec2 d = normalize(wave.xy);
+                vec2 crossDir = vec2(-d.y, d.x);
+                float phaseOffset = fract(wavelength * 0.173) * 6.2831853;
+                float crestBend = sin(dot(crossDir, p.xz) * k * 0.34 + t * 0.16 + phaseOffset) * 0.48;
+                crestBend += sin(dot(crossDir, p.xz) * k * 0.13 - t * 0.09) * 0.22;
+                float f = k * (dot(d, p.xz) - c * t) + phaseOffset + crestBend;
+                float a = waveHeight * wave.z;
+                float shortWaveFactor = clamp((220.0 - wavelength) / 150.0, 0.0, 1.0);
+                float q = waveSharpness * mix(0.32, 0.52, shortWaveFactor);
+
+                tangent += vec3(
+                    -d.x * d.x * (q * k * a * sin(f)),
+                    d.x * (k * a * cos(f)),
+                    -d.x * d.y * (q * k * a * sin(f))
+                );
+                binormal += vec3(
+                    -d.x * d.y * (q * k * a * sin(f)),
+                    d.y * (k * a * cos(f)),
+                    -d.y * d.y * (q * k * a * sin(f))
+                );
+                return vec3(
+                    d.x * (q * a * cos(f)),
+                    a * sin(f),
+                    d.y * (q * a * cos(f))
+                );
+            }
+
+            vec3 ocean_displace(vec3 pt, float t, float closeWaveDetail) {
+                vec3 tan = vec3(0.0, 0.0, 1.0);
+                vec3 bit = vec3(0.0, 0.0, 1.0);
+
+                // The 4 km water plane has 31 m vertex spacing at regular quality.
+                // Broad swells stay above that sampling limit; fine motion remains
+                // in the fragment textures instead of deforming sparse vertices.
+                vec3 wave1 = ocean_GerstnerWave(vec4(vec2(-0.88, -0.47), 0.31, 620.0 * waveFrequency), pt, tan, bit, t);
+                vec3 wave2 = ocean_GerstnerWave(vec4(vec2(0.34, 0.94), 0.22, 335.0 * waveFrequency), pt, tan, bit, t);
+                vec3 wave3 = ocean_GerstnerWave(vec4(vec2(0.97, 0.22), 0.15, 185.0 * waveFrequency), pt, tan, bit, t);
+                vec3 wave4 = ocean_GerstnerWave(vec4(vec2(-0.24, 0.97), 0.18, 118.0 * waveFrequency), pt, tan, bit, t);
+                vec3 wave5 = ocean_GerstnerWave(vec4(vec2(0.78, -0.63), 0.13, 88.0 * waveFrequency), pt, tan, bit, t);
+
+                vec3 newPos = pt + wave1 + wave2 + wave3 + (wave4 + wave5) * closeWaveDetail;
+                return newPos;
+            }
+
+            vec3 ocean_orthogonal(vec3 v) {
+                return normalize(abs(v.x) > abs(v.z) ? vec3(-v.y, v.x, 0.0) : vec3(0.0, -v.z, v.y));
+            }
+            `
+        );
+
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            `#include <begin_vertex>
+
+            // Absolute world position for continuous seamless waves as player flies
+            vec3 wPos = (modelMatrix * vec4(position, 1.0)).xyz;
+            vec3 pScaled = vec3(wPos.x, position.y, wPos.z);
+            float sTime = time * waveSpeed * 2.75;
+            float waterMeshScale = max(length(modelMatrix[0].xyz), length(modelMatrix[2].xyz));
+            float samplingDamping = mix(1.0, 0.12, clamp((waterMeshScale - 1.0) / 9.0, 0.0, 1.0));
+            float closeWaveDetail = 1.0 - smoothstep(140.0, 460.0, distance(wPos, uPlayerPos));
+
+            vec3 dispPos = ocean_displace(pScaled, sTime, closeWaveDetail);
+
+            vec3 t1 = vec3(1.0, 0.0, 0.0);
+            vec3 b1 = vec3(0.0, 0.0, 1.0);
+            vec3 n1 = pScaled + t1 * normalOffset;
+            vec3 n2 = pScaled + b1 * normalOffset;
+            vec3 dispN1 = ocean_displace(n1, sTime, closeWaveDetail);
+            vec3 dispN2 = ocean_displace(n2, sTime, closeWaveDetail);
+
+            vec3 dispTan = dispN1 - dispPos;
+            vec3 dispBitan = dispN2 - dispPos;
+            vec3 dispNorm = normalize(cross(dispBitan, dispTan));
+            if (dispNorm.y < 0.0) dispNorm = -dispNorm;
+
+            // Dynamic shore wave surge & shallow water damping
+            vec2 tUV = (wPos.xz - uTerrainCenter) / uTerrainSize + 0.5;
+            float wDepth = 50.0;
+            if (tUV.x >= 0.005 && tUV.x <= 0.995 && tUV.y >= 0.005 && tUV.y <= 0.995) {
+                float grndH = texture2D(uTerrainHeightMap, tUV).r;
+                wDepth = uWaterLevel - grndH;
+            }
+            float shoreFactor = clamp(1.0 - max(0.0, wDepth) / 8.0, 0.0, 1.0);
+            float shoreSwell = sin(max(0.0, wDepth) * uShoreWaveFreq - time * uShoreWaveSpeed * 1.35);
+            float deepDamping = smoothstep(0.0, 8.0, max(0.0, wDepth));
+
+            objectNormal = normalize(mix(vec3(0.0, 1.0, 0.0), dispNorm, samplingDamping));
+            float oceanDispY = (dispPos.y - pScaled.y) * deepDamping;
+            float closeGeometryBoost = mix(1.0, 1.9, closeWaveDetail);
+            float visibleOceanDispY = oceanDispY * closeGeometryBoost;
+            vec2 oceanDispXZ = (dispPos.xz - pScaled.xz) * deepDamping;
+            float shoreDispY = shoreSwell * uShoreSurge * 0.35 * shoreFactor;
+            float totalDispY = (visibleOceanDispY + shoreDispY) * samplingDamping;
+            transformed.xz += oceanDispXZ * closeWaveDetail * samplingDamping * 0.65;
+            transformed.y = position.y + totalDispY;
+            vOceanHeight = visibleOceanDispY * samplingDamping; // displayed crest/trough relative to mean sea level
+            vOceanWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+            `
+        );
+
+        // --- FRAGMENT SHADER INJECTION ---
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <common>',
+            `#include <common>
+            varying float vOceanHeight;
+            varying vec3 vOceanWorldPos;
+
+            uniform float time;
+            uniform vec3 uPlayerPos;
+            uniform vec3 waveColor;
+            uniform vec3 waterHighlight;
+            uniform vec3 uShallowColor;
+            uniform vec3 uFoamColor;
+            uniform float contrast;
+            uniform float brightness;
+            uniform float offset;
+            uniform float waveHeight;
+
+            // Shore uniforms
+            uniform sampler2D uTerrainHeightMap;
+            uniform vec2 uTerrainCenter;
+            uniform float uTerrainSize;
+            uniform float uWaterLevel;
+            uniform float uShoreFoamWidth;
+            uniform float uShoreWaveSpeed;
+            uniform float uShoreWaveFreq;
+            uniform float uShoreSurge;
+            uniform float uFoamScale;
+
+            // Textures & sparkles
+            uniform sampler2D waterImage;
+            uniform vec2 waterScale;
+            uniform vec2 waterSpeed;
+            uniform vec3 waterColorTint;
+            uniform float waterAmt;
+
+            uniform sampler2D displacement;
+            uniform vec2 displacementSpeed;
+            uniform vec2 waterDisplacementScale;
+            uniform float displacementHeight;
+
+            uniform sampler2D specularMap;
+            uniform float specularScale;
+            uniform float specularBrightness;
+            uniform float specularPop;
+            uniform float specularMax;
+            uniform vec2 specularSpeed;
+
+            vec4 getCartoonWater(vec2 worldCoord, float detailFade) {
+                vec4 disp = texture2D(
+                    displacement,
+                    worldCoord * waterDisplacementScale + time * displacementSpeed
+                );
+
+                vec4 wColor = mix(
+                    texture2D(
+                        waterImage,
+                        (worldCoord * waterScale + (disp.rg - 0.5) * displacementHeight) + time * waterSpeed
+                    ),
+                    vec4(waterColorTint, 1.0),
+                    waterAmt
+                );
+
+                // Preserve the authored close-up texture, but collapse it into a
+                // broad stable tone before it becomes sub-pixel noise at altitude.
+                float broadVariation = texture2D(
+                    displacement,
+                    worldCoord * 0.0015 + time * displacementSpeed * 0.08
+                ).r;
+                vec2 swellDirA = normalize(vec2(0.82, 0.57));
+                vec2 swellDirB = normalize(vec2(-0.38, 0.92));
+                float distantSwellA = sin(dot(worldCoord, swellDirA) * 0.015 - time * 0.72);
+                float distantSwellB = sin(dot(worldCoord, swellDirB) * 0.008 + time * 0.43);
+                float distantSwell = clamp(0.5 + distantSwellA * 0.28 + distantSwellB * 0.18, 0.0, 1.0);
+                vec3 distantWater = waterColorTint * (
+                    0.58 + broadVariation * 0.12 + distantSwell * 0.28
+                );
+                wColor.rgb = mix(distantWater, wColor.rgb, detailFade);
+
+                vec4 specBase = (
+                    texture2D(specularMap, worldCoord * specularScale + time * specularSpeed) *
+                    texture2D(specularMap, worldCoord * specularScale - time * specularSpeed)
+                );
+
+                vec4 spec = specBase;
+                float len = length(specBase.rgb);
+                if (len < specularPop) {
+                    spec *= 0.0;
+                } else {
+                    spec = vec4(1.0) * smoothstep(specularPop, specularPop + 0.15, len);
+                }
+
+                float specNoiseDarken = (length(
+                    texture2D(specularMap, worldCoord * 0.008 - time * specularSpeed * 0.5).rgb
+                ) / 1.732) * 3.0 - 1.0;
+                specNoiseDarken = clamp(specNoiseDarken, 0.0, 1.0);
+
+                spec = min(spec * specularBrightness, vec4(specularMax));
+
+                float distantSpecularFade = detailFade * detailFade;
+                return vec4(wColor.rgb + spec.rgb * specNoiseDarken * distantSpecularFade, 1.0);
+            }
+
+            vec3 getOceanWaveColor(float h, float detailFade) {
+                // Crest factor: only wave peaks (h > 0) receive bright white foam
+                float crestFactor = clamp(h / max(0.1, waveHeight * 0.8), 0.0, 1.0);
+                float mask = clamp((pow(crestFactor, 2.5) - offset) * contrast, 0.0, 1.0) * detailFade;
+                vec3 closeColor = mix(waveColor, waterHighlight, mask) * brightness;
+                return mix(waveColor * 0.72, closeColor, detailFade);
+            }
+
+            vec4 getCartoonOceanComposite(vec2 worldCoord, float h, float detailFade) {
+                vec4 tex = getCartoonWater(worldCoord, detailFade);
+                vec3 crestCol = getOceanWaveColor(h, detailFade);
+                // Pure frothy white cap right on top of wave peak
+                float peakFoam = smoothstep(waveHeight * 0.55, waveHeight * 1.15, h) * detailFade;
+                vec3 composite = mix(crestCol * tex.rgb, waterHighlight, peakFoam * 0.45);
+                return vec4(composite, 1.0);
+            }
+            `
+        );
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <map_fragment>',
+            `#include <map_fragment>
+            // Sample terrain height & calculate real water depth along shores
+            vec2 tUV = (vOceanWorldPos.xz - uTerrainCenter) / uTerrainSize + 0.5;
+            float wDepth = 50.0;
+            if (tUV.x >= 0.005 && tUV.x <= 0.995 && tUV.y >= 0.005 && tUV.y <= 0.995) {
+                float groundH = texture2D(uTerrainHeightMap, tUV).r;
+                wDepth = uWaterLevel - groundH;
+            }
+
+            // Keep the close-up style intact, then progressively suppress detail
+            // that aliases into bright blobs when viewed from flight altitude.
+            float waterViewDist = distance(vOceanWorldPos, uPlayerPos);
+            float waterDetailFade = 1.0 - smoothstep(140.0, 460.0, waterViewDist);
+
+            // 1. Shoreline surge waves & breaking surf
+            float shoreDist = max(0.0, wDepth);
+            float shoreDepthFactor = smoothstep(8.0, 0.0, shoreDist);
+            float shoreSwell = sin(shoreDist * uShoreWaveFreq - time * uShoreWaveSpeed * 1.35);
+
+            // 2. Shore foam: waterline contact band + breaking surge lines
+            float edgeFoam = smoothstep(uShoreFoamWidth * 0.45, 0.0, shoreDist);
+            float surgeFoam = smoothstep(0.35, 0.85, shoreSwell) * shoreDepthFactor * smoothstep(uShoreFoamWidth * 1.5, 0.0, shoreDist);
+
+            // Bubbly procedural foam froth texture
+            vec2 foamNoiseUV = vOceanWorldPos.xz * uFoamScale + vec2(time * 0.03, -time * 0.02);
+            float foamNoise = texture2D(displacement, foamNoiseUV).r;
+            float totalFoam = clamp(edgeFoam * 1.35 + surgeFoam * 0.85, 0.0, 1.0);
+            totalFoam = smoothstep(0.22, 0.58, totalFoam * (0.6 + 0.75 * foamNoise));
+            totalFoam *= mix(0.24, 1.0, waterDetailFade);
+
+            // 3. Base cartoon ocean with caustics & sparkles
+            vec4 oceanAlbedo = getCartoonOceanComposite(vOceanWorldPos.xz, vOceanHeight, waterDetailFade);
+
+            // 4. Blend to shallow tropical turquoise near shores
+            float shallowBlend = smoothstep(6.5, 0.0, shoreDist) * mix(0.18, 1.0, waterDetailFade);
+            vec3 waterCol = mix(oceanAlbedo.rgb, uShallowColor * 1.25, shallowBlend * 0.75);
+
+            // 5. Apply bright frothy shore foam on beach contact
+            waterCol = mix(waterCol, uFoamColor, totalFoam);
+
+            diffuseColor = vec4(waterCol, 1.0);
+            `
+        );
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <emissivemap_fragment>',
+            `#include <emissivemap_fragment>
+            // Self-radiant cartoon glow so the ocean is vividly luminous under all lighting
+            float waterEmissiveStrength = mix(0.08, 0.28, waterDetailFade);
+            totalEmissiveRadiance += waterCol * waterEmissiveStrength + (uFoamColor * totalFoam * 0.35);
+            `
+        );
+    };
+
+    waterMesh = new THREE.Mesh(waterGeo, waterMat);
+    waterMesh.position.y = 2.4;
+    waterMesh.receiveShadow = true;
+    scene.add(waterMesh);
 
     return {
         waterMesh,

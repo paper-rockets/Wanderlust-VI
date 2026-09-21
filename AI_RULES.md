@@ -62,5 +62,10 @@
 ## 11. One requested edit means one scoped change
 - If I ask for one edit, make only that edit. Do not add, adjust, fix, clean up, or improve anything else unless I explicitly ask for it in a separate request.
 
+## 12. Save completed work by default
+- Keep every completed edit saved in this exact working folder.
+- Commit completed edits to Git by default so they are recoverable, unless I explicitly ask to keep them uncommitted.
+- Never discard or revert a completed edit unless I explicitly ask you to revert that exact change.
+
 
 

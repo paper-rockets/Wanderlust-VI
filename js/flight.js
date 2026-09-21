@@ -203,8 +203,18 @@ export function initFlight(scene, camera, renderer, playerGrp, playerVisuals, st
     }
 
     function updateFlight(dt, inputState, isWindOn, isBoosting, isBraking) {
-        const targetSpeed = isBraking ? 0.0 : (isBoosting ? 250.0 : 18.0);
-        velocity += (targetSpeed - velocity) * dt * (isBraking ? 3.0 : (isBoosting ? 1.5 : 1.0));
+        let baseCruiseSpeed = 18.0;
+        if (params.enableGlidePhysics !== false) {
+            if (currentPitch < 0) {
+                // Diving: gravity pulls plane faster (up to +20 m/s at max dive)
+                baseCruiseSpeed += (-currentPitch / (Math.PI / 4)) * 20.0;
+            } else if (currentPitch > 0) {
+                // Climbing: gravity sheds speed (down to ~13.5 m/s)
+                baseCruiseSpeed -= (currentPitch / (Math.PI / 4)) * 4.5;
+            }
+        }
+        const targetSpeed = isBraking ? 0.0 : (isBoosting ? 250.0 : baseCruiseSpeed);
+        velocity += (targetSpeed - velocity) * dt * (isBraking ? 3.0 : (isBoosting ? 1.5 : (currentPitch < 0 ? 1.8 : 1.0)));
 
         if (!isFlightPaused) {
             tickMovement(dt, inputState, playerGrp, velocity, isWindOn);
@@ -237,11 +247,35 @@ export function initFlight(scene, camera, renderer, playerGrp, playerVisuals, st
         cameraBase.position.lerp(playerGrp.position, dt * 7.0);
         if (starField) starField.position.copy(playerGrp.position);
 
+        // Procedural Character Breathing, Floating Bob, & Turn Leaning
         if (playerVisuals) {
-            playerVisuals.rotation.x = THREE.MathUtils.lerp(playerVisuals.rotation.x, 0, dt * 5.0);
+            const flightTime = performance.now() * 0.001;
+            const activeBob = (params.enableFlightBob !== false && !isFlightPaused) ? 1.0 : 0.0;
+
+            // 1. Natural floating vertical bob (gentle air wave)
+            const bobY = Math.sin(flightTime * 2.2) * 0.09 * activeBob;
+            playerVisuals.position.y = THREE.MathUtils.lerp(playerVisuals.position.y, bobY, dt * 4.0);
+
+            // 2. Breathing roll sway & banking anticipation (lean into turn)
+            const swayRoll = Math.sin(flightTime * 1.5 + 0.8) * 0.025 * activeBob;
+            const bankLean = (-turnVelocity * 0.22) * activeBob;
+            playerVisuals.rotation.z = THREE.MathUtils.lerp(playerVisuals.rotation.z, swayRoll + bankLean, dt * 4.0);
+
+            // 3. Pitch response (diving tucks model forward-down slightly)
+            const diveNoseTuck = (currentPitch * 0.08) * activeBob;
+            playerVisuals.rotation.x = THREE.MathUtils.lerp(playerVisuals.rotation.x, diveNoseTuck, dt * 5.0);
+
+            // 4. High-speed micro-vibration when diving or boosting
+            if (velocity > 26.0 && activeBob > 0) {
+                const vib = (Math.sin(flightTime * 38.0) * 0.006) * Math.min(1.0, (velocity - 26.0) / 15.0);
+                playerVisuals.position.x = vib;
+            } else {
+                playerVisuals.position.x = THREE.MathUtils.lerp(playerVisuals.position.x, 0, dt * 8.0);
+            }
         }
 
-        camera.fov = THREE.MathUtils.lerp(camera.fov, isBoosting ? BASE_FOV + 12 : BASE_FOV, dt * 5.0);
+        const speedFovBoost = (velocity > 18.0 && !isBoosting) ? Math.min(6.0, (velocity - 18.0) * 0.28) : 0.0;
+        camera.fov = THREE.MathUtils.lerp(camera.fov, isBoosting ? BASE_FOV + 12 : (BASE_FOV + speedFovBoost), dt * 5.0);
         if (!window.isPhotoMode) {
             camera.up.set(0, 1, 0);
             camera.rotation.z = 0;
@@ -250,6 +284,7 @@ export function initFlight(scene, camera, renderer, playerGrp, playerVisuals, st
 
         return {
             velocity,
+            turnVelocity,
             currentYaw,
             currentPitch,
             currentRoll,

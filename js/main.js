@@ -52,6 +52,8 @@ import { initPlayer } from './player.js';
 import { initPostProcessingShaders } from './postprocessing.js';
 import { initFlight } from './flight.js';
 import { initSettingsPanels } from './ui-settings.js';
+import { initFlightEffects } from './flight-effects.js';
+import { initAtmosphereLife } from './atmosphere-life.js';
 
 // ==========================================
 // MAIN GAME INITIALIZATION & RENDER LOOP
@@ -78,6 +80,12 @@ window.isInitializingGui = true;
 let terrainScale = 1.0;
 
 const params = {
+    enableFlightBob: true,
+    enableGlidePhysics: true,
+    enableVaporTrails: true,
+    enableSpeedStreaks: true,
+    enableSeabirds: true,
+    enableDriftingPetals: true,
     trails: isWindTrailsOn,
     shadows: isShadowsOn,
     treeShadows: isTreeShadowsOn,
@@ -105,16 +113,16 @@ const params = {
     fogNearDist: 220.0,
     godRays: !LOW_GFX,
     godRayIntensity: 0.60,
-    godRayDensity: 0.50,
-    godRayDecay: 0.92,
+    godRayDensity: 0.15,
+    godRayDecay: 0.80,
     godRayWeight: 0.85,
     lumMin: 0.85,
     lumMax: 0.98,
     rayColorInner: '#ffea9f',
     rayColorOuter: '#ff9933',
-    sunAltitude: 1500,
+    sunAltitude: 160,
     sunAzimuth: 0,
-    lockSunToPlayer: true,
+    lockSunToPlayer: false,
     sunDiscScale: 1.8,
     treeScale: 3.75,
     quality: LOW_GFX ? 'Low' : 'Regular',
@@ -661,6 +669,9 @@ const {
     getPathStrength
 } = initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayout);
 const { waterMesh, waterMat, waterUniforms } = initWater(scene, LOW_GFX);
+window.waterMesh = waterMesh;
+window.waterMat = waterMat;
+window.waterUniforms = waterUniforms;
 
 // 7. Diorama Props, Instanced Foliage & Trails
 const spawnX = worldLayout.spawnPosition ? worldLayout.spawnPosition.x : 0;
@@ -813,6 +824,12 @@ const {
     isPaused
 } = initFlight(scene, camera, renderer, playerGrp, playerVisuals, starField, params);
 
+// 12b. Flight Visual Juice & Atmosphere Life
+const flightEffects = initFlightEffects(scene, camera, playerGrp, params);
+const atmosphereLife = initAtmosphereLife(scene, playerGrp, params, LOW_GFX, spawnX, spawnZ);
+window.flightEffects = flightEffects;
+window.atmosphereLife = atmosphereLife;
+
 // 13. Map UI
 initMapUI(params, playerGrp, worldLayout, getWorldHeight, setFlightHeading);
 
@@ -852,6 +869,7 @@ initSettingsPanels({
     setGodMode,
     terrain,
     waterMesh,
+    waterMat,
     treeMeshes,
     treeNearMeshes,
     treeGreenVariations,
@@ -1042,6 +1060,8 @@ function animate() {
         treeUniforms.uPlayerPos.value.copy(playerGrp.position);
     }
 
+
+
     currentFrame++;
     framesThisSecond++;
     const currentGroundY = getWorldHeight(playerGrp.position.x, playerGrp.position.z);
@@ -1093,6 +1113,13 @@ function animate() {
     const velocity = flightState.velocity;
     const currentYaw = flightState.currentYaw;
 
+    if (flightEffects) {
+        flightEffects.update(dt, velocity, flightState.turnVelocity || 0, isBoosting, flightState.currentPitch || 0);
+    }
+    if (atmosphereLife) {
+        atmosphereLife.update(dt, time, playerGrp.position);
+    }
+
     const highAlt = playerGrp.position.y > 600;
     terrain.visible = params.showTerrain;
     waterMesh.visible = params.showWater !== false;
@@ -1100,6 +1127,7 @@ function animate() {
     if (params.showTerrain) updateTerrainGeometry(playerGrp.position.x, playerGrp.position.z);
     waterMesh.position.x = playerGrp.position.x;
     waterMesh.position.z = playerGrp.position.z;
+    if (waterUniforms.uWaterLevel) waterMesh.position.y = waterUniforms.uWaterLevel.value;
 
     if (typeof window.fogGroup !== 'undefined' && window.fogGroup.visible) {
         fogUniforms.uTime.value = time;

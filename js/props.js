@@ -9,7 +9,7 @@ export function initPropsAndWildlife(scene, gltfLoader, params, LOW_GFX, gradien
         // ==========================================
         // GIANT FLOATING CRYSTALS (Instanced)
         // ==========================================
-        const CRYSTAL_COUNT = 48;
+        const CRYSTAL_COUNT = 10;
         const geoCrystal = new THREE.OctahedronGeometry(1, 1).toNonIndexed();
         geoCrystal.scale(1, 3, 1);
         geoCrystal.computeVertexNormals();
@@ -177,7 +177,7 @@ export function initPropsAndWildlife(scene, gltfLoader, params, LOW_GFX, gradien
             const groundH = Math.max(2.0, getWorldHeight(cx, cz));
     
             const s = 28 + (i % 7) * 10;
-            const scaleY = s * 1.7;
+            const scaleY = s * 1.19; // Shorter by 30% (from 1.7)
             // The octahedron geometry is stretched 3× vertically. Lift its centre by
             // its half-height so the crystal's base meets the ground instead of floating.
             const baseY = groundH + scaleY * 3;
@@ -187,9 +187,9 @@ export function initPropsAndWildlife(scene, gltfLoader, params, LOW_GFX, gradien
                 z: cz,
                 baseY: baseY,
                 groundH: groundH,
-                scaleX: s * 0.55,
+                scaleX: s * 0.66, // Thicker by 20% (from 0.55)
                 scaleY,
-                scaleZ: s * 0.55,
+                scaleZ: s * 0.66, // Thicker by 20% (from 0.55)
                 rotSpeedY: 0.003 + (i % 4) * 0.002,
                 bobSpeed: 0.4 + (i % 5) * 0.15,
                 bobAmp: 0,
@@ -321,7 +321,7 @@ export function initPropsAndWildlife(scene, gltfLoader, params, LOW_GFX, gradien
         const capybaraSpawns = [];
         const CAPYBARA_COUNT = 32;
         const CAPYBARA_DESPAWN_RADIUS = 1600;
-        const CAPYBARA_ANIM_RADIUS = 750;
+        const CAPYBARA_ANIM_RADIUS = 220; // Only animate bones when close enough to see leg motion
         let capyFlyTarget = null;
         let capybaraTemplate = null;
         let capybaraAnimations = [];
@@ -365,7 +365,7 @@ export function initPropsAndWildlife(scene, gltfLoader, params, LOW_GFX, gradien
         }, undefined, (err) => console.warn('Capybara GLB not available:', err.message));
     
         function findFlatSpot(cx, cz, minDist, maxDist, minSep) {
-            for (let attempt = 0; attempt < 25; attempt++) {
+            for (let attempt = 0; attempt < 6; attempt++) {
                 const angle = Math.random() * Math.PI * 2;
                 const r = minDist + Math.random() * (maxDist - minDist);
                 const tx = cx + Math.cos(angle) * r;

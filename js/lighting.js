@@ -5,20 +5,20 @@ import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js';
 // 2. LIGHTING & CELESTIAL BODIES (Sun, Moon, Glare)
 // ==========================================
 export function initLighting(scene, params) {
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.833);
         scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0xfffaeb, 1.4); // warm bright sunlight
+        const dirLight = new THREE.DirectionalLight(0xf09e9e, 4.92); // warm bright sunlight
         dirLight.position.set(150, 200, 50);
         dirLight.castShadow = true;
-        dirLight.shadow.camera.left = -120;
-        dirLight.shadow.camera.right = 120;
-        dirLight.shadow.camera.top = 120;
-        dirLight.shadow.camera.bottom = -120;
-        dirLight.shadow.mapSize.width = 2048;
-        dirLight.shadow.mapSize.height = 2048;
-        dirLight.shadow.bias = -0.002;
-        dirLight.shadow.normalBias = 1.5;
+        dirLight.shadow.camera.left = -75;
+        dirLight.shadow.camera.right = 75;
+        dirLight.shadow.camera.top = 75;
+        dirLight.shadow.camera.bottom = -75;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        dirLight.shadow.bias = -0.0015;
+        dirLight.shadow.normalBias = 1.0;
         scene.add(dirLight);
     
         // Sun Glare (Lensflare)
