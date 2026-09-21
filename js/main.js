@@ -1275,8 +1275,8 @@ function animate() {
 
     // Wind trails
     if (isWindTrailsOn && isWindOn) {
-        instTrails.visible = true;
-        const trailOpacity = isBoosting ? 0.22 : 0.08;
+        instTrails.visible = !isBoosting;
+        const trailOpacity = 0.05;
         if (instTrails.material) instTrails.material.opacity = trailOpacity;
         for (let i = 0; i < 100; i++) {
             let z = trailsData[i * 4 + 2];
@@ -1291,7 +1291,7 @@ function animate() {
             dummy.position.set(trailsData[i * 4], trailsData[i * 4 + 1], z);
             dummy.position.x += Math.sin(time * 3.0 + trailsData[i * 4 + 3] * 10) * 0.5;
             dummy.position.y += Math.cos(time * 3.0 + trailsData[i * 4 + 3] * 10) * 0.5;
-            dummy.scale.set(1.0, 1.0, isBoosting ? 2.5 : 1.0);
+            dummy.scale.set(0.55, 0.55, isBoosting ? 0.75 : 0.55);
             dummy.rotation.set(0, 0, 0);
             dummy.updateMatrix();
             instTrails.setMatrixAt(i, dummy.matrix);
