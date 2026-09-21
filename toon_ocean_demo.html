@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Toon Ocean Shader Demo</title>
+  <title>Water Shader Comparison &amp; Toon Ocean Demo</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -22,11 +22,11 @@
       position: absolute;
       top: 16px;
       left: 16px;
-      background: rgba(15, 23, 42, 0.88);
+      background: rgba(15, 23, 42, 0.92);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 8px;
       padding: 14px 18px;
-      max-width: 360px;
+      max-width: 380px;
       pointer-events: none;
       z-index: 10;
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
@@ -53,6 +53,16 @@
       font-size: 11px;
       margin: 2px 2px 2px 0;
     }
+    #shader-badge {
+      display: inline-block;
+      background: #0284c7;
+      color: #ffffff;
+      font-weight: bold;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
   </style>
 
   <script type="importmap">
@@ -60,6 +70,7 @@
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
         "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
         "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm"
       }
     }
@@ -68,13 +79,13 @@
 
 <body>
   <div id="info-card">
-    <h1>Toon Ocean Shader</h1>
-    <p>GPU Gerstner displacement, analytic surface normals, multi-step toon lighting, procedural crest glints &amp; shoreline distance foam.</p>
+    <div id="shader-badge">Active Shader: In-Game Water</div>
+    <h1>Water Shader Comparison</h1>
+    <p>Compare the current In-Game water shader (js/terrain.js) vs ToonOcean GPU Gerstner &amp; StylizedWater shaders.</p>
     <div>
-      <span class="feature-tag">10 Gerstner Waves</span>
-      <span class="feature-tag">Toon Lighting</span>
-      <span class="feature-tag">Procedural Foam</span>
-      <span class="feature-tag">Shore Masking</span>
+      <span class="feature-tag">In-Game Shader</span>
+      <span class="feature-tag">ToonOcean GPU</span>
+      <span class="feature-tag">Stylized Water</span>
     </div>
   </div>
 
@@ -85,6 +96,8 @@
     import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
     import { GUI } from "lil-gui";
     import { ToonOcean } from "./ToonOcean.js";
+    import { StylizedWater } from "./StylizedWater.js";
+    import { initWater } from "./js/terrain.js";
 
     // Create Renderer
     const container = document.getElementById("canvas-container");
@@ -117,18 +130,16 @@
     controls.maxPolarAngle = Math.PI * 0.49;
     controls.target.set(0, 0, 0);
 
-    // Create procedural shoreline texture (island mask in center)
+    // 1. Create Procedural Shoreline Map Texture
     function createShorelineTexture() {
       const canvas = document.createElement("canvas");
       canvas.width = 512;
       canvas.height = 512;
       const ctx = canvas.getContext("2d");
 
-      // Fill white (open ocean = 1.0)
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, 512, 512);
 
-      // Create central island gradient (center black = land, fading outward to white = ocean)
       const grad = ctx.createRadialGradient(256, 256, 40, 256, 256, 180);
       grad.addColorStop(0.0, "rgb(0,0,0)");
       grad.addColorStop(0.3, "rgb(20,20,20)");
@@ -150,8 +161,8 @@
 
     const shoreMap = createShorelineTexture();
 
-    // Create Toon Ocean
-    const ocean = new ToonOcean({
+    // 2. Instantiate SHADER A: New ToonOcean Shader
+    const toonOcean = new ToonOcean({
       size: 6000,
       resolution: 384,
 
@@ -178,16 +189,37 @@
       shoreFoamFalloff: 4.5
     });
 
-    scene.add(ocean.mesh);
+    // 3. Instantiate SHADER B: Current In-Game Water Shader (from js/terrain.js)
+    const inGameWater = initWater(scene, false);
+    // scale in-game water mesh to fit demo scene size
+    if (inGameWater && inGameWater.waterMesh) {
+      inGameWater.waterMesh.scale.set(1.5, 1.0, 1.5);
+    }
 
-    // Simple Island Mesh in center to match shoreline mask
+    // 4. Instantiate SHADER C: StylizedWater (from StylizedWater.js)
+    const stylizedWater = new StylizedWater({
+      renderer: renderer,
+      camera: camera,
+      size: 6000,
+      resolution: 192,
+      deepColor: "#06357d",
+      shallowColor: "#18b8c8",
+      foamColor: "#ffffff"
+    });
+
+    // Add meshes to scene
+    scene.add(toonOcean.mesh);
+    scene.add(stylizedWater.mesh);
+    // inGameWater.waterMesh was automatically added to scene by initWater
+
+    // 5. Central Island Mesh
     const islandGeo = new THREE.ConeGeometry(700, 160, 32);
     const islandMat = new THREE.MeshLambertMaterial({ color: 0x4d7c0f, flatShading: true });
     const island = new THREE.Mesh(islandGeo, islandMat);
     island.position.set(0, 30, 0);
     scene.add(island);
 
-    // Directional & Ambient Lighting
+    // 6. Lights
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
     dirLight.position.set(-400, 800, 250);
     scene.add(dirLight);
@@ -195,53 +227,73 @@
     const ambientLight = new THREE.AmbientLight(0xdff0ff, 0.6);
     scene.add(ambientLight);
 
-    // GUI Controls
-    const gui = new GUI({ width: 300 });
-    gui.domElement.style.marginRight = "10px";
+    // 7. GUI Switcher & Controls
+    const gui = new GUI({ title: "Water Selector & Controls", width: 320 });
+    const badge = document.getElementById("shader-badge");
 
-    const waveFolder = gui.addFolder("Wave Dynamics");
-    waveFolder.add(ocean.uniforms.uWaveHeight, "value", 0, 80, 1).name("Wave Height");
-    waveFolder.add(ocean.uniforms.uWaveSpeed, "value", 0, 3, 0.1).name("Wave Speed");
-    waveFolder.add(ocean.uniforms.uWaveDirection, "value", -Math.PI, Math.PI, 0.05).name("Wave Direction");
-    waveFolder.add(ocean.uniforms.uCrossSwell, "value", 0, 2, 0.05).name("Cross Swell");
-    waveFolder.add(ocean.uniforms.uChoppiness, "value", 0, 2, 0.05).name("Choppiness");
-    waveFolder.open();
-
-    const shadingFolder = gui.addFolder("Toon & Colors");
-    shadingFolder.add(ocean.uniforms.uToonSteps, "value", 3, 5, 1).name("Toon Steps");
-    
-    const colors = {
-      deep: "#06357d",
-      shallow: "#18b8c8",
-      foam: "#f7ffff"
+    const state = {
+      activeShader: "In-Game Water"
     };
 
-    shadingFolder.addColor(colors, "deep").name("Deep Color").onChange(v => ocean.setControls({ deepColor: v }));
-    shadingFolder.addColor(colors, "shallow").name("Shallow Color").onChange(v => ocean.setControls({ shallowColor: v }));
-    shadingFolder.addColor(colors, "foam").name("Foam Color").onChange(v => ocean.setControls({ foamColor: v }));
-    shadingFolder.open();
+    function updateActiveShader() {
+      const mode = state.activeShader;
+      badge.textContent = `Active Shader: ${mode}`;
 
-    const shoreFolder = gui.addFolder("Shoreline Foam");
-    shoreFolder.add(ocean.uniforms.uUseShoreMap, "value").name("Use Shore Map");
-    shoreFolder.add(ocean.uniforms.uShoreBandScale, "value", 5, 50, 1).name("Shore Scale");
-    shoreFolder.add(ocean.uniforms.uShoreBandSpeed, "value", 0, 1, 0.02).name("Shore Speed");
-    shoreFolder.add(ocean.uniforms.uShoreBandWidth, "value", 0.01, 0.4, 0.01).name("Shore Width");
-    shoreFolder.add(ocean.uniforms.uShoreFoamFalloff, "value", 1, 10, 0.5).name("Foam Falloff");
+      // Toggle mesh visibilities
+      toonOcean.mesh.visible = (mode === "ToonOcean (GPU Gerstner)");
+      if (inGameWater && inGameWater.waterMesh) {
+        inGameWater.waterMesh.visible = (mode === "In-Game Water");
+      }
+      if (stylizedWater && stylizedWater.mesh) {
+        stylizedWater.mesh.visible = (mode === "Stylized Water");
+      }
+    }
 
-    // Animation Loop
+    gui.add(state, "activeShader", [
+      "In-Game Water",
+      "ToonOcean (GPU Gerstner)",
+      "Stylized Water"
+    ]).name("Water Mode").onChange(updateActiveShader);
+
+    // ToonOcean Folder
+    const toonFolder = gui.addFolder("ToonOcean Controls");
+    toonFolder.add(toonOcean.uniforms.uWaveHeight, "value", 0, 80, 1).name("Wave Height");
+    toonFolder.add(toonOcean.uniforms.uWaveSpeed, "value", 0, 3, 0.1).name("Wave Speed");
+    toonFolder.add(toonOcean.uniforms.uWaveDirection, "value", -Math.PI, Math.PI, 0.05).name("Wave Direction");
+    toonFolder.add(toonOcean.uniforms.uCrossSwell, "value", 0, 2, 0.05).name("Cross Swell");
+    toonFolder.add(toonOcean.uniforms.uChoppiness, "value", 0, 2, 0.05).name("Choppiness");
+    toonFolder.add(toonOcean.uniforms.uToonSteps, "value", 3, 5, 1).name("Toon Steps");
+    toonFolder.add(toonOcean.uniforms.uUseShoreMap, "value").name("Use Shore Map");
+
+    // Initialize Visibility
+    updateActiveShader();
+
+    // 8. Animation Loop
     const clock = new THREE.Clock();
 
     function animate() {
       requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
-      ocean.update(elapsedTime);
+
+      // Update active shader uniforms
+      toonOcean.update(elapsedTime);
+
+      if (inGameWater && inGameWater.waterUniforms) {
+        if (inGameWater.waterUniforms.uTime) inGameWater.waterUniforms.uTime.value = elapsedTime;
+        if (inGameWater.waterUniforms.time) inGameWater.waterUniforms.time.value = elapsedTime;
+      }
+
+      if (stylizedWater && stylizedWater.update) {
+        stylizedWater.update(elapsedTime);
+      }
+
       controls.update();
       renderer.render(scene, camera);
     }
 
     animate();
 
-    // Window Resize Handler
+    // Resize Handler
     window.addEventListener("resize", () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
