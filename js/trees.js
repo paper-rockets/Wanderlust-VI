@@ -654,10 +654,19 @@ varying vec3 vBlendedNormal;
                  // Inner / Underside color: deep forest viridian #1c3b23 tone
                  vec3 colInner = mix(vec3(0.110, 0.231, 0.137), colOuter * 0.26, 0.42);
 
-                 // Variation Color #1e4430 with 0.6 strength
-                 vec3 colVar = vec3(0.118, 0.267, 0.188);
-                 float varNoise = (vTreeTone - 0.5) * 0.60;
-                 colInner = clamp(colInner + (colVar - colInner) * clamp(varNoise, 0.0, 1.0), 0.0, 1.0);
+                 // Crown color patches.  These use the mesh position plus the tree's
+                 // world position, so every individual tree keeps a stable, hand-painted
+                 // looking mix of cool shadow branches and warmer sun-facing branches.
+                 // It deliberately happens before lighting, preserving the biome color.
+                 float crownAngle = atan(vTreeLocalPos.z, vTreeLocalPos.x);
+                 float crownSlice = floor((crownAngle + 3.14159) * 2.15 + vTreeLocalPos.y * 0.52);
+                 float crownPatch = fract(sin(crownSlice * 19.19 + floor(vTreeLocalPos.y * 1.35) * 43.71 + vTreeTone * 97.13) * 43758.5453);
+                 float crownPatchSoft = smoothstep(0.18, 0.82, crownPatch);
+                 vec3 coolBranchColor = clamp(colOuter * vec3(0.56, 0.98, 1.20), 0.0, 1.0);
+                 vec3 warmBranchColor = clamp(colOuter * vec3(1.20, 1.14, 0.64), 0.0, 1.0);
+                 vec3 crownPatchColor = mix(coolBranchColor, warmBranchColor, crownPatchSoft);
+                 float patchStrength = 0.20 + (1.0 - tGradient) * 0.16;
+                 colInner = mix(colInner, crownPatchColor * 0.62, patchStrength);
 
                  // Procedural micro-leaf cellular grain: only evaluate nearby (< 120m) to save fillrate and eliminate far shimmering
                  float activeGrain = 1.0;
@@ -667,7 +676,14 @@ varying vec3 vBlendedNormal;
                      activeGrain += leafGrain * grainFade;
                  }
 
-                 vec3 baseCanopyColor = mix(colInner, colOuter, tGradient) * activeGrain;
+                 vec3 baseCanopyColor = mix(colInner, colOuter, tGradient);
+
+                 // Let the colored branch facets remain visible on the outer canopy too.
+                 // The height mask keeps a clean, sunlit crown tip while the lower layers
+                 // gain the richer teal/lime or red/gold variation seen in stylized trees.
+                 float outerPatchMask = (1.0 - smoothstep(0.72, 0.98, tGradient)) * (0.34 + 0.26 * (1.0 - crownPatchSoft));
+                 baseCanopyColor = mix(baseCanopyColor, crownPatchColor, outerPatchMask);
+                 baseCanopyColor *= activeGrain;
 
                  // MatCap Shader Bank blending
                  if (uUseTreeMatcap > 0.5) {
@@ -704,7 +720,9 @@ varying vec3 vBlendedNormal;
 
                  ${hasMap ? `
                  // Textured leaves: at distance soften texture contrast so it looks like blurred painterly foliage
-                 vec3 needleTex = mix(gl_FragColor.rgb * 1.55, vec3(1.0), distBlur * 0.60);
+                 // Texture supplies leaf detail only; it no longer flattens the new
+                 // per-branch color treatment into one dull overall tint.
+                 vec3 needleTex = mix(gl_FragColor.rgb * 1.22, vec3(1.0), distBlur * 0.60);
                  litFoliage *= needleTex;
                  ` : ''}
 
