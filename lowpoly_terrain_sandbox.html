@@ -10,7 +10,7 @@
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background-color: #171822;
+      background-color: #151620;
       font-family: monospace;
       color: #e2e8f0;
     }
@@ -28,7 +28,7 @@
       padding: 12px;
       font-size: 12px;
       z-index: 10;
-      width: 320px;
+      width: 330px;
       max-height: 94vh;
       overflow-y: auto;
     }
@@ -137,10 +137,10 @@
     <h2>Low-Poly Terrain Sandbox</h2>
     <div class="subtitle">E:\X Flight\Surgery\Trees Terrains</div>
 
-    <div class="section-title">View Mode</div>
+    <div class="section-title">View Mode (Instant A/B Compare)</div>
     <div class="btn-group">
-      <button id="btn-show-model" class="active">3D Model (GLB)</button>
-      <button id="btn-show-procedural">Procedural Mesh</button>
+      <button id="btn-show-model">3D Model (Reference)</button>
+      <button id="btn-show-procedural" class="active">Procedural Mesh</button>
     </div>
 
     <div class="section-title">Camera Angles (From Screenshots)</div>
@@ -165,37 +165,29 @@
     <div class="section-title">Sunset Lighting</div>
     <div class="row">
       <label>Sun Azimuth:</label>
-      <input type="range" id="sl-sun-azimuth" min="0" max="360" value="130">
+      <input type="range" id="sl-sun-azimuth" min="0" max="360" value="55">
     </div>
     <div class="row">
       <label>Sun Elevation:</label>
-      <input type="range" id="sl-sun-elev" min="5" max="85" value="28">
+      <input type="range" id="sl-sun-elev" min="5" max="85" value="34">
     </div>
     <div class="row">
       <label>Sun Intensity:</label>
       <input type="range" id="sl-sun-intensity" min="0.5" max="6.0" step="0.1" value="3.4">
     </div>
     <div class="row">
-      <label>Sun Color:</label>
-      <input type="color" id="col-sun" value="#ff9238">
-    </div>
-    <div class="row">
-      <label>Twilight Sky Fill:</label>
-      <input type="color" id="col-ambient" value="#484f7a">
-    </div>
-    <div class="row">
-      <label>Ambient Fill Level:</label>
-      <input type="range" id="sl-amb-intensity" min="0.2" max="3.0" step="0.1" value="1.6">
+      <label>Twilight Fill Level:</label>
+      <input type="range" id="sl-amb-intensity" min="0.5" max="4.0" step="0.1" value="2.6">
     </div>
 
-    <div class="section-title">Procedural Generator Tuning</div>
+    <div class="section-title">Procedural Tuning</div>
     <div class="row">
       <label>Spire Height:</label>
-      <input type="range" id="sl-proc-height" min="15" max="60" value="34">
+      <input type="range" id="sl-spire-scale" min="0.7" max="1.5" step="0.05" value="1.0">
     </div>
     <div class="row">
-      <label>Cap Height:</label>
-      <input type="range" id="sl-proc-snow" min="0.5" max="0.9" step="0.02" value="0.70">
+      <label>Cap Size:</label>
+      <input type="range" id="sl-cap-size" min="0.4" max="0.8" step="0.02" value="0.60">
     </div>
     <button id="btn-regen-proc">Regenerate Procedural Terrain</button>
 
@@ -209,22 +201,25 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+    window.THREE = THREE;
+
     const container = document.getElementById('canvas-container');
     const statusBar = document.getElementById('status-bar');
 
     // 1. Scene setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a24);
+    scene.background = new THREE.Color(0x151620);
+    window.scene = scene;
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    // Position to view the model from the front lake facing the mountain spires
-    camera.position.set(0, 22, 54);
+    // Overview matching Screenshot 1
+    camera.position.set(-27, 19, 34);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
@@ -232,36 +227,34 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.target.set(0, 5, 0);
+    controls.target.set(0, 3.2, -1.5);
 
-    // 2. Sunset Lighting setup
-    // Rich twilight blue ambient fill light to give shadows their slate/purple tone
-    const ambientLight = new THREE.HemisphereLight(0x484f7a, 0x222230, 1.6);
+    // 2. Lighting setup
+    const ambientLight = new THREE.HemisphereLight(0x565d8a, 0x2b293d, 2.6);
     scene.add(ambientLight);
 
-    // Warm golden-orange sunset sun
-    const sunLight = new THREE.DirectionalLight(0xff9238, 3.4);
+    const sunLight = new THREE.DirectionalLight(0xff9a38, 3.4);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
     sunLight.shadow.camera.near = 1;
     sunLight.shadow.camera.far = 250;
-    const shadowDist = 45;
+    const shadowDist = 32;
     sunLight.shadow.camera.left = -shadowDist;
     sunLight.shadow.camera.right = shadowDist;
     sunLight.shadow.camera.top = shadowDist;
     sunLight.shadow.camera.bottom = -shadowDist;
+    sunLight.shadow.bias = -0.0003;
     scene.add(sunLight);
 
-    // Secondary subtle warm bounce light
-    const bounceLight = new THREE.DirectionalLight(0x735a42, 0.7);
-    bounceLight.position.set(-30, 10, 30);
-    scene.add(bounceLight);
+    const frontFill = new THREE.DirectionalLight(0x565c82, 1.4);
+    frontFill.position.set(-25, 20, 25);
+    scene.add(frontFill);
 
     function updateSunPosition() {
       const az = parseFloat(document.getElementById('sl-sun-azimuth').value) * Math.PI / 180;
       const el = parseFloat(document.getElementById('sl-sun-elev').value) * Math.PI / 180;
-      const dist = 70;
+      const dist = 65;
       sunLight.position.set(
         Math.cos(el) * Math.sin(az) * dist,
         Math.sin(el) * dist,
@@ -275,53 +268,35 @@
     const proceduralGroup = new THREE.Group();
     scene.add(modelGroup);
     scene.add(proceduralGroup);
-    proceduralGroup.visible = false;
+    modelGroup.visible = false;
+    proceduralGroup.visible = true;
 
-    // 4. Load GLB Model
+    // 4. Load Reference GLB Model (Centered exactly at origin with rotation applied FIRST)
     const gltfLoader = new GLTFLoader();
-    let loadedRoot = null;
-
-    statusBar.textContent = "Loading village_sunset.glb (56.5 MB)...";
-
     gltfLoader.load(
       'models/village_sunset.glb',
       (gltf) => {
-        loadedRoot = gltf.scene;
+        const loadedRoot = gltf.scene;
 
-        // Auto-center and normalize size
-        const box = new THREE.Box3().setFromObject(loadedRoot);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const targetScale = 45 / maxDim;
-
-        loadedRoot.position.x = -center.x * targetScale;
-        loadedRoot.position.y = -box.min.y * targetScale;
-        loadedRoot.position.z = -center.z * targetScale;
-        loadedRoot.scale.setScalar(targetScale);
-
-        // Rotate 180 degrees so the lake & valley entrance face front towards default camera
+        const pivot = new THREE.Group();
+        pivot.add(loadedRoot);
         loadedRoot.rotation.y = Math.PI;
 
-        let meshCount = 0;
-        let vertCount = 0;
+        const box = new THREE.Box3().setFromObject(pivot);
+        const center = box.getCenter(new THREE.Vector3());
 
-        loadedRoot.traverse((child) => {
+        loadedRoot.position.x = -center.x;
+        loadedRoot.position.y = -box.min.y - 4.5;
+        loadedRoot.position.z = -center.z;
+
+        pivot.traverse((child) => {
           if (child.isMesh) {
-            meshCount++;
             child.castShadow = true;
             child.receiveShadow = true;
-            if (child.geometry.attributes.position) {
-              vertCount += child.geometry.attributes.position.count;
-            }
-
             if (child.material) {
-              // Ensure vertex colors show clearly without being tinted dark
               if (child.geometry.attributes.color) {
                 child.material.vertexColors = true;
-                if (child.material.color) {
-                  child.material.color.setRGB(1, 1, 1);
-                }
+                if (child.material.color) child.material.color.setRGB(1, 1, 1);
               }
               child.material.flatShading = true;
               child.material.roughness = 0.88;
@@ -331,237 +306,394 @@
           }
         });
 
-        modelGroup.add(loadedRoot);
-        statusBar.textContent = `Model loaded successfully!\nMeshes: ${meshCount} | Vertices: ${vertCount.toLocaleString()}\nShowing low-poly faceted shading.`;
-      },
-      (xhr) => {
-        if (xhr.total > 0) {
-          const pct = Math.round((xhr.loaded / xhr.total) * 100);
-          statusBar.textContent = `Downloading model: ${pct}% (${(xhr.loaded / 1048576).toFixed(1)} / ${(xhr.total / 1048576).toFixed(1)} MB)...`;
-        } else {
-          statusBar.textContent = `Downloading model: ${(xhr.loaded / 1048576).toFixed(1)} MB...`;
-        }
-      },
-      (err) => {
-        console.error("Failed to load model:", err);
-        statusBar.textContent = "Error loading models/village_sunset.glb:\n" + err.message;
+        modelGroup.add(pivot);
       }
     );
 
-    // 5. Procedural Low-Poly Terrain Generator
-    // Procedurally creates broad spires, capped tips, canyon gorge, and lake
+    // =========================================================================
+    // 5. ACCURATE PROCEDURAL LOW-POLY DIORAMA GENERATOR
+    // =========================================================================
+    const PALETTE = {
+      spireBase: new THREE.Color(0x302d45),     // Deep slate indigo
+      spireBody: new THREE.Color(0x403b5b),     // Slate purple rock body
+      spireHigh: new THREE.Color(0x544e75),     // Upper rock
+      spireCap: new THREE.Color(0xdde1d9),      // Ivory / bone white stone cap
+      meadowGold: new THREE.Color(0xdca638),    // Rich ochre yellow grass terrace
+      meadowGreen: new THREE.Color(0x567c32),   // Alpine olive green meadow
+      dirtBank: new THREE.Color(0x7c4e44),      // Terracotta dirt shoreline
+      lakeWater: new THREE.Color(0x9bc2ea),     // Milky ice-blue water
+      waterfall: new THREE.Color(0xf0f7ff),     // Bright white foam
+      riverbed: new THREE.Color(0x242234),      // Deep ravine floor
+      pedestal: new THREE.Color(0x191823),      // Dark tabletop cliff cut
+      shrub1: new THREE.Color(0x5ca32c),        // Sunny bright olive shrub
+      shrub2: new THREE.Color(0x4a8422),        // Deep lush green shrub
+      shrub3: new THREE.Color(0x78b836)         // Lime sunlit shrub
+    };
+
+    const matSharedFaceted = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      flatShading: true,
+      roughness: 0.88,
+      metalness: 0.04
+    });
+
+    const matWater = new THREE.MeshStandardMaterial({
+      color: PALETTE.lakeWater,
+      roughness: 0.18,
+      metalness: 0.08,
+      transparent: true,
+      opacity: 0.94,
+      flatShading: true
+    });
+
+    const matWaterfall = new THREE.MeshStandardMaterial({
+      color: PALETTE.waterfall,
+      roughness: 0.4,
+      flatShading: true
+    });
+
     function buildProceduralTerrain() {
       while (proceduralGroup.children.length > 0) {
-        const obj = proceduralGroup.children[0];
-        proceduralGroup.remove(obj);
-        if (obj.geometry) obj.geometry.dispose();
+        const child = proceduralGroup.children[0];
+        proceduralGroup.remove(child);
+        if (child.geometry) child.geometry.dispose();
       }
 
-      const maxHeight = parseFloat(document.getElementById('sl-proc-height').value);
-      const capThreshold = parseFloat(document.getElementById('sl-proc-snow').value);
+      const spireScale = parseFloat(document.getElementById('sl-spire-scale').value);
+      const capThreshold = parseFloat(document.getElementById('sl-cap-size').value);
 
-      const gridW = 44;
-      const gridD = 44;
-      const segs = 60;
-
-      let planeGeo = new THREE.PlaneGeometry(gridW, gridD, segs, segs);
-      planeGeo.rotateX(-Math.PI / 2);
-      planeGeo = planeGeo.toNonIndexed();
-
-      const pos = planeGeo.attributes.position;
-      const colors = new Float32Array(pos.count * 3);
-
-      // Colors matching the screenshots
-      const colCap = new THREE.Color(0xd7dad6);       // Creamy white/stone cap
-      const colRockLight = new THREE.Color(0x6e6884); // Upper rock
-      const colRockDark = new THREE.Color(0x383552);  // Deep slate purple-blue rock
-      const colGrass = new THREE.Color(0x56773a);     // Meadow green
-      const colOchre = new THREE.Color(0xb28f3c);     // Golden/ochre grass terrace
-      const colDirt = new THREE.Color(0x825447);      // Earthy reddish dirt terrace
-      const colRiverBed = new THREE.Color(0x272635);  // Deep canyon bed
-      const tempCol = new THREE.Color();
-
-      // Define 7 distinct spire pillars around the horseshoe rim
+      // 8 Major Rock Spire Pillars defined along the rear amphitheater
       const spires = [
-        { x: -12, z: -10, r: 6.5, h: 1.0 },
-        { x:  -7, z: -14, r: 6.0, h: 0.95 },
-        { x:   0, z: -16, r: 5.5, h: 0.9 },
-        { x:   8, z: -14, r: 6.2, h: 1.0 },
-        { x:  13, z: -9,  r: 7.0, h: 0.88 },
-        { x: -14, z:  -2, r: 5.5, h: 0.75 },
-        { x:  14, z:  -1, r: 5.5, h: 0.78 }
+        // Left Flank
+        { x: -9.2,  z: -2.0,  h: 7.2 * spireScale, r: 4.8, sides: 5, twist: 0.2 },
+        { x: -10.5, z: -8.0,  h: 9.2 * spireScale, r: 5.2, sides: 6, twist: 0.8 },
+        { x:  -7.5, z: -14.0, h: 10.8 * spireScale,r: 5.6, sides: 6, twist: 1.2 },
+        { x:  -3.2, z: -17.5, h: 8.8 * spireScale, r: 4.6, sides: 5, twist: 1.8 },
+        // Right Flank
+        { x:   3.2, z: -17.0, h: 9.0 * spireScale, r: 4.8, sides: 5, twist: 2.3 },
+        { x:   7.8, z: -14.0, h: 11.0 * spireScale,r: 5.6, sides: 6, twist: 2.8 },
+        { x:  11.0, z: -8.0,  h: 9.6 * spireScale, r: 5.2, sides: 6, twist: 0.5 },
+        { x:  11.2, z: -1.8,  h: 7.6 * spireScale, r: 4.8, sides: 5, twist: 1.1 }
       ];
 
+      // Create a non-indexed terrain mesh with clean tabletop diorama cliff drop
+      const gridW = 32;
+      const gridD = 42;
+      const segX = 72;
+      const segZ = 88;
+
+      let landGeo = new THREE.PlaneGeometry(gridW, gridD, segX, segZ);
+      landGeo.rotateX(-Math.PI / 2);
+      landGeo = landGeo.toNonIndexed();
+
+      const pos = landGeo.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+      const tempC = new THREE.Color();
+
+      // Per-vertex calculation
       for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i);
-        const z = pos.getZ(i);
+        let x = pos.getX(i);
+        let z = pos.getZ(i);
 
-        const distCenter = Math.sqrt(x * x + z * z);
+        // Island organic tabletop footprint: oblong ellipse
+        const maxIslandRadius = 14.0 - (z * 0.08);
+        const currentDist = Math.sqrt(x * x + Math.pow(z + 3.0, 2.0));
+        const isOutside = (currentDist > maxIslandRadius);
 
-        // Sum contributions from each rock spire
-        let spireHeight = 0;
+        // 1. Spire heights with faceted polygonal faces
+        let maxSpireH = 0;
+        let isCap = false;
+
         for (const sp of spires) {
           const dx = x - sp.x;
           const dz = z - sp.z;
           const d = Math.sqrt(dx * dx + dz * dz);
+
           if (d < sp.r) {
-            const factor = 1.0 - (d / sp.r);
-            // Steep faceted dropoff
-            const hPart = Math.pow(factor, 1.4) * (sp.h * maxHeight);
-            if (hPart > spireHeight) spireHeight = hPart;
+            const angle = Math.atan2(dz, dx) - sp.twist;
+            const sector = Math.PI * 2 / sp.sides;
+            const quantAngle = Math.round(angle / sector) * sector;
+            const facetCos = Math.cos(angle - quantAngle);
+
+            const planarDist = d * facetCos;
+            if (planarDist < sp.r) {
+              const t = 1.0 - (planarDist / sp.r);
+              const spireH = Math.pow(t, 2.2) * sp.h;
+
+              if (spireH > maxSpireH) {
+                maxSpireH = spireH;
+                if (spireH > sp.h * capThreshold) {
+                  isCap = true;
+                }
+              }
+            }
           }
         }
 
-        // Stepped terraced meadows
-        let baseTerrace = (Math.sin(x * 0.25) * Math.cos(z * 0.25) + 1.0) * 3.5;
-        // Step quantization for terrace look
-        baseTerrace = Math.floor(baseTerrace * 1.4) / 1.4;
+        // 2. Base mountain amphitheater ridge
+        const backRidge = Math.max(0, -z + 3.0) * 0.28;
+        const sideRidge = Math.pow(Math.abs(x) / 13.0, 1.8) * 3.4;
+        let elev = maxSpireH + backRidge + sideRidge + 0.8;
 
-        // River canyon carve down the center
-        const riverX = Math.sin(z * 0.15) * 2.5;
-        const canyonDist = Math.abs(x - riverX);
-        const canyonCarve = Math.exp(-Math.pow(canyonDist / 3.0, 2.0));
-
-        // Front lake depression (z > 2)
-        const lakeFactor = Math.max(0, z - 2.0) / 18.0;
-        const lakeDepression = Math.min(1.0, lakeFactor) * Math.max(0, 1.0 - Math.abs(x) / 14.0) * 6.0;
-
-        let totalH = spireHeight + baseTerrace;
-        // Carve gorge
-        totalH = totalH * (1.0 - canyonCarve * 0.85) - canyonCarve * 2.5;
-        // Carve lake
-        totalH -= lakeDepression;
-
-        // Cut out boundary
-        if (distCenter > 18.0) {
-          const drop = Math.pow(distCenter - 18.0, 2.0) * 0.4;
-          totalH -= drop;
+        // 3. Central canyon gorge carve
+        const canyonCurve = Math.sin(z * 0.22) * 1.5;
+        const distCanyon = Math.abs(x - canyonCurve);
+        if (z < 1.0) {
+          const canyonCut = Math.exp(-Math.pow(distCanyon / 2.4, 2.0));
+          elev = elev * (1.0 - canyonCut * 0.84) - canyonCut * 2.2;
         }
 
-        // Cap height flat-top flattening
-        const capCutoff = maxHeight * capThreshold;
-        let isCap = false;
-        if (totalH > capCutoff) {
-          isCap = true;
-          totalH = capCutoff + (totalH - capCutoff) * 0.25; // Chamfer/flatten top
+        // 4. Forefront lake basin depression (z between -1 and 12)
+        const lakeDX = x / 7.0;
+        const lakeDZ = (z - 5.2) / 7.0;
+        const lakeDist = Math.sqrt(lakeDX * lakeDX + lakeDZ * lakeDZ);
+        const inLake = Math.max(0, 1.0 - lakeDist);
+        elev -= inLake * 3.5;
+
+        // 5. Terraced meadows quantization
+        if (elev < 4.2 && elev > 1.2 && !isOutside) {
+          elev = Math.floor(elev * 1.4) / 1.4 + Math.sin(x * 0.6 + z * 0.5) * 0.12;
         }
 
-        pos.setY(i, Math.max(-3.5, totalH));
+        // 6. Clean Tabletop Cliff Cut: fold outside vertices inward against perimeter wall
+        if (isOutside) {
+          const ratio = maxIslandRadius / currentDist;
+          x = x * ratio;
+          z = (z + 3.0) * ratio - 3.0;
+          pos.setX(i, x);
+          pos.setZ(i, z);
+          elev = -4.5; // Straight down vertical pedestal!
+        }
 
-        // Vertex colors
-        if (isCap) {
-          tempCol.copy(colCap);
-        } else if (totalH > maxHeight * 0.35) {
-          const t = (totalH - maxHeight * 0.35) / (maxHeight * (capThreshold - 0.35));
-          tempCol.lerpColors(colRockDark, colRockLight, Math.min(1, Math.max(0, t)));
-        } else if (totalH > 4.5) {
-          // Mixed ochre and green terraces
-          const patch = (Math.sin(x * 0.8) + Math.cos(z * 0.8)) * 0.5 + 0.5;
-          tempCol.lerpColors(colOchre, colGrass, patch);
-        } else if (totalH > 1.0) {
-          // Terraces near water
-          const patch2 = Math.sin(x * 1.5) * 0.5 + 0.5;
-          tempCol.lerpColors(colGrass, colDirt, patch2 * 0.6);
+        const finalY = Math.max(-4.5, elev);
+        pos.setY(i, finalY);
+
+        // Palette Vertex Coloring
+        if (isOutside) {
+          tempC.copy(PALETTE.pedestal);
+        } else if (isCap) {
+          tempC.copy(PALETTE.spireCap);
+        } else if (maxSpireH > 2.0) {
+          const t = maxSpireH / 11.0;
+          tempC.lerpColors(PALETTE.spireBody, PALETTE.spireHigh, t);
+        } else if (inLake > 0.5 || (z < 1.0 && distCanyon < 1.8 && finalY < 1.1)) {
+          tempC.copy(PALETTE.riverbed);
+        } else if (finalY < 1.35) {
+          tempC.copy(PALETTE.dirtBank);
+        } else if (x < -1.5) {
+          // Left terrace: rich ochre gold with vibrant green patches
+          const band = (Math.sin(x * 0.8 + z * 0.5) + 1.0) * 0.5;
+          tempC.lerpColors(PALETTE.meadowGold, PALETTE.meadowGreen, band > 0.5 ? 0.9 : 0.15);
         } else {
-          // Riverbed
-          tempCol.copy(colRiverBed);
+          // Right & back: green with warm gold crests
+          const band2 = (Math.cos(x * 0.7 + z * 0.5) + 1.0) * 0.5;
+          tempC.lerpColors(PALETTE.meadowGreen, PALETTE.meadowGold, band2 > 0.65 ? 0.85 : 0.15);
         }
 
-        colors[i * 3 + 0] = tempCol.r;
-        colors[i * 3 + 1] = tempCol.g;
-        colors[i * 3 + 2] = tempCol.b;
+        colors[i * 3 + 0] = tempC.r;
+        colors[i * 3 + 1] = tempC.g;
+        colors[i * 3 + 2] = tempC.b;
       }
 
-      planeGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      planeGeo.computeVertexNormals();
+      landGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      landGeo.computeVertexNormals();
 
-      const terrainMat = new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        flatShading: true,
-        roughness: 0.85,
-        metalness: 0.05
+      const landMesh = new THREE.Mesh(landGeo, matSharedFaceted);
+      landMesh.castShadow = true;
+      landMesh.receiveShadow = true;
+      proceduralGroup.add(landMesh);
+
+      // =======================================================================
+      // WATER SYSTEM: LAKE, EMBEDDED STREAM & WATERFALL FOAM
+      // =======================================================================
+      const waterGroup = new THREE.Group();
+      proceduralGroup.add(waterGroup);
+
+      // Forefront Lake Surface
+      const lakeShape = new THREE.Shape();
+      lakeShape.moveTo(-1.0, -1.0);
+      lakeShape.lineTo(4.5, 0.5);
+      lakeShape.lineTo(6.8, 3.8);
+      lakeShape.lineTo(6.4, 8.2);
+      lakeShape.lineTo(3.6, 11.5);
+      lakeShape.lineTo(-1.0, 12.0);
+      lakeShape.lineTo(-5.0, 10.5);
+      lakeShape.lineTo(-6.4, 6.5);
+      lakeShape.lineTo(-5.4, 2.0);
+      lakeShape.lineTo(-2.6, -0.5);
+      lakeShape.closePath();
+
+      const lakeGeo = new THREE.ShapeGeometry(lakeShape);
+      lakeGeo.rotateX(-Math.PI / 2);
+      lakeGeo.rotateY(Math.PI);
+      const lakeMesh = new THREE.Mesh(lakeGeo, matWater);
+      lakeMesh.position.set(0.2, 0.82, 1.2);
+      lakeMesh.receiveShadow = true;
+      waterGroup.add(lakeMesh);
+
+      // Winding Canyon Stream Ribbon nestled tightly in gorge
+      const streamGeo = new THREE.PlaneGeometry(1.8, 14.5, 3, 14);
+      streamGeo.rotateX(-Math.PI / 2);
+      const sPos = streamGeo.attributes.position;
+      for (let si = 0; si < sPos.count; si++) {
+        const sz = sPos.getZ(si);
+        const curve = Math.sin(sz * 0.22) * 1.3;
+        sPos.setX(si, sPos.getX(si) + curve);
+        const t = (sz + 7.25) / 14.5;
+        sPos.setY(si, THREE.MathUtils.lerp(2.8, 0.84, t));
+      }
+      streamGeo.computeVertexNormals();
+      const streamMesh = new THREE.Mesh(streamGeo, matWater);
+      streamMesh.position.set(0, 0, -6.5);
+      streamMesh.receiveShadow = true;
+      waterGroup.add(streamMesh);
+
+      // Waterfall foam ribbons
+      const waterfalls = [
+        { x: -0.2, y: 2.6, z: -10.5, w: 1.5, h: 1.2, rotY: 0.1 },
+        { x:  0.2, y: 1.8, z:  -5.5, w: 1.8, h: 1.1, rotY: -0.15 },
+        { x: -0.1, y: 1.0, z:  -0.8, w: 2.4, h: 0.8, rotY: 0.05 }
+      ];
+
+      waterfalls.forEach((wf) => {
+        const wfGeo = new THREE.PlaneGeometry(wf.w, wf.h, 2, 2);
+        const wfMesh = new THREE.Mesh(wfGeo, matWaterfall);
+        wfMesh.position.set(wf.x, wf.y, wf.z);
+        wfMesh.rotation.y = wf.rotY;
+        wfMesh.rotation.x = 0.35;
+        wfMesh.castShadow = true;
+        waterGroup.add(wfMesh);
       });
-      const terrainMesh = new THREE.Mesh(planeGeo, terrainMat);
-      terrainMesh.castShadow = true;
-      terrainMesh.receiveShadow = true;
-      proceduralGroup.add(terrainMesh);
 
-      // Pale blue water surface for canyon river and lake
-      const waterGeo = new THREE.PlaneGeometry(28, 34, 12, 12);
-      waterGeo.rotateX(-Math.PI / 2);
-      const waterMat = new THREE.MeshStandardMaterial({
-        color: 0x98bde6,
-        roughness: 0.2,
-        metalness: 0.08,
-        transparent: true,
-        opacity: 0.94,
-        flatShading: true
-      });
-      const waterMesh = new THREE.Mesh(waterGeo, waterMat);
-      waterMesh.position.set(0, 0.4, 4);
-      waterMesh.receiveShadow = true;
-      proceduralGroup.add(waterMesh);
-
-      // Shrubbery cluster on left terrace
-      const bushGeo = new THREE.DodecahedronGeometry(0.5, 0);
-      const bushMat = new THREE.MeshStandardMaterial({
-        color: 0x486429,
+      // Stepping stones in lake
+      const rockGeo = new THREE.DodecahedronGeometry(0.48, 0);
+      const rockMat = new THREE.MeshStandardMaterial({
+        color: PALETTE.spireBody,
         flatShading: true,
         roughness: 0.9
       });
-      const bushCount = 55;
-      const instBushes = new THREE.InstancedMesh(bushGeo, bushMat, bushCount);
-      const dummy = new THREE.Object3D();
+      const rockCoords = [
+        { x:  0.8, y: 0.88, z: 1.5, s: 1.0 },
+        { x: -1.0, y: 0.84, z: 3.0, s: 0.8 },
+        { x:  2.0, y: 0.80, z: 4.5, s: 1.1 },
+        { x: -0.4, y: 0.88, z: 5.8, s: 0.7 },
+        { x:  1.4, y: 0.84, z: 7.8, s: 0.9 }
+      ];
+      rockCoords.forEach((rc) => {
+        const rMesh = new THREE.Mesh(rockGeo, rockMat);
+        rMesh.position.set(rc.x, rc.y, rc.z);
+        rMesh.scale.set(rc.s, rc.s * 0.55, rc.s);
+        rMesh.rotation.set(Math.random(), Math.random(), Math.random());
+        rMesh.castShadow = true;
+        rMesh.receiveShadow = true;
+        waterGroup.add(rMesh);
+      });
 
-      for (let b = 0; b < bushCount; b++) {
-        const bx = -8.5 + (Math.random() - 0.5) * 5.0;
-        const bz = 2.0 + (Math.random() - 0.5) * 5.0;
-        const by = 2.8 + Math.random() * 1.2;
-        const s = 0.5 + Math.random() * 0.8;
-        dummy.position.set(bx, by, bz);
-        dummy.scale.set(s, s * 0.8, s);
-        dummy.rotation.set(Math.random(), Math.random(), Math.random());
+      // =======================================================================
+      // FOLIAGE: SHRUB THICKET ON SUNNY MEADOW & FRONT TREES
+      // =======================================================================
+      const foliageGroup = new THREE.Group();
+      proceduralGroup.add(foliageGroup);
+
+      // Shrub thicket on left hillside terrace (Positioned in warm sun, matching Screenshot 1)
+      const shrubGeo = new THREE.DodecahedronGeometry(0.36, 0);
+      const shrubMat = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        flatShading: true,
+        roughness: 0.75
+      });
+      const shrubCount = 80;
+      const instShrubs = new THREE.InstancedMesh(shrubGeo, shrubMat, shrubCount);
+      const dummy = new THREE.Object3D();
+      const shrubPalette = [PALETTE.shrub1, PALETTE.shrub2, PALETTE.shrub3];
+
+      for (let s = 0; s < shrubCount; s++) {
+        // Clustered on left sunny meadow terrace forward towards lake
+        const sx = -7.5 + (Math.random() - 0.5) * 3.4;
+        const sz =  5.2 + (Math.random() - 0.5) * 4.2;
+        const sy =  1.9 + Math.random() * 0.7;
+        const scale = 0.5 + Math.random() * 0.55;
+
+        dummy.position.set(sx, sy, sz);
+        dummy.scale.set(scale, scale * 0.75, scale);
+        dummy.rotation.set(Math.random() * 2, Math.random() * 2, Math.random() * 2);
         dummy.updateMatrix();
-        instBushes.setMatrixAt(b, dummy.matrix);
+        instShrubs.setMatrixAt(s, dummy.matrix);
+
+        const col = shrubPalette[Math.floor(Math.random() * shrubPalette.length)];
+        instShrubs.setColorAt(s, col);
       }
-      instBushes.instanceMatrix.needsUpdate = true;
-      instBushes.castShadow = true;
-      instBushes.receiveShadow = true;
-      proceduralGroup.add(instBushes);
+      instShrubs.instanceMatrix.needsUpdate = true;
+      if (instShrubs.instanceColor) instShrubs.instanceColor.needsUpdate = true;
+      instShrubs.castShadow = true;
+      instShrubs.receiveShadow = true;
+      foliageGroup.add(instShrubs);
+
+      // Front right shore grove
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x543924, roughness: 0.9, flatShading: true });
+      const leavesMat = new THREE.MeshStandardMaterial({ color: 0x3d5e2e, roughness: 0.85, flatShading: true });
+
+      const treeCoords = [
+        { x: 6.2, y: 1.3, z: 5.8, s: 0.8 },
+        { x: 7.5, y: 1.7, z: 4.2, s: 1.0 },
+        { x: 8.2, y: 2.1, z: 6.8, s: 0.75 },
+        { x: 5.5, y: 1.1, z: 8.8, s: 0.65 }
+      ];
+
+      treeCoords.forEach((tc) => {
+        const tree = new THREE.Group();
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.22, 1.2, 5), trunkMat);
+        trunk.position.y = 0.6;
+        trunk.castShadow = true;
+        tree.add(trunk);
+
+        const crown1 = new THREE.Mesh(new THREE.ConeGeometry(0.95, 1.2, 5), leavesMat);
+        crown1.position.y = 1.4;
+        crown1.castShadow = true;
+        tree.add(crown1);
+
+        const crown2 = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.0, 5), leavesMat);
+        crown2.position.y = 2.0;
+        crown2.castShadow = true;
+        tree.add(crown2);
+
+        tree.position.set(tc.x, tc.y, tc.z);
+        tree.scale.setScalar(tc.s);
+        foliageGroup.add(tree);
+      });
+
+      statusBar.textContent = "Accurate Procedural Low-Poly Mountain Lake Diorama!\n• Clean Tabletop Diorama Cutoff (Zero outer floor flaps)\n• 8 Prismatic Faceted Rock Spires with Ivory Caps\n• Integrated Amphitheater Ridge & Canyon Waterfalls\n• Pale Blue Lake & Golden Meadow Terraces\n• Sunny Shrub Thicket & Shoreline Grove";
     }
 
     buildProceduralTerrain();
 
-    // 6. Camera angle presets matching screenshots
+    // =========================================================================
+    // 6. CAMERA PRESETS & EVENT LISTENERS
+    // =========================================================================
     document.getElementById('cam-view-1').addEventListener('click', () => {
-      // Perspective overview
-      camera.position.set(-28, 22, 38);
-      controls.target.set(0, 5, 0);
+      camera.position.set(-27, 19, 34);
+      controls.target.set(0, 3.2, -1.5);
       controls.update();
     });
 
     document.getElementById('cam-view-2').addEventListener('click', () => {
-      // Front valley view looking into canyon
-      camera.position.set(0, 15, 46);
-      controls.target.set(0, 6, -4);
+      camera.position.set(0, 11, 35);
+      controls.target.set(0, 4.2, -5.5);
       controls.update();
     });
 
     document.getElementById('cam-view-3').addEventListener('click', () => {
-      // High bird's eye view
-      camera.position.set(-36, 42, 40);
-      controls.target.set(0, 4, 0);
+      camera.position.set(-28, 32, 32);
+      controls.target.set(0, 3, -1);
       controls.update();
     });
 
     document.getElementById('cam-view-4').addEventListener('click', () => {
-      // Canyon close-up angle
-      camera.position.set(-12, 14, 28);
-      controls.target.set(0, 7, -2);
+      camera.position.set(-9, 10, 20);
+      controls.target.set(0, 5.0, -5);
       controls.update();
     });
 
-    // 7. UI Controls
     const btnModel = document.getElementById('btn-show-model');
     const btnProc = document.getElementById('btn-show-procedural');
 
@@ -570,7 +702,7 @@
       proceduralGroup.visible = false;
       btnModel.classList.add('active');
       btnProc.classList.remove('active');
-      statusBar.textContent = "Viewing 3D Model: village_sunset.glb";
+      statusBar.textContent = "Viewing 3D Model: village_sunset.glb (Reference)";
     });
 
     btnProc.addEventListener('click', () => {
@@ -578,7 +710,7 @@
       proceduralGroup.visible = true;
       btnProc.classList.add('active');
       btnModel.classList.remove('active');
-      statusBar.textContent = "Viewing Procedural Low-Poly Terrain Generator";
+      statusBar.textContent = "Viewing Accurate Procedural Low-Poly Diorama";
     });
 
     document.getElementById('chk-wireframe').addEventListener('change', (e) => {
@@ -599,6 +731,12 @@
           c.material.needsUpdate = true;
         }
       });
+      proceduralGroup.traverse((c) => {
+        if (c.isMesh && c.material) {
+          c.material.flatShading = flat;
+          c.material.needsUpdate = true;
+        }
+      });
     });
 
     let autoRotate = false;
@@ -608,20 +746,12 @@
       controls.autoRotateSpeed = 1.2;
     });
 
-    // Lighting event listeners
+    // Lighting listeners
     document.getElementById('sl-sun-azimuth').addEventListener('input', updateSunPosition);
     document.getElementById('sl-sun-elev').addEventListener('input', updateSunPosition);
 
     document.getElementById('sl-sun-intensity').addEventListener('input', (e) => {
       sunLight.intensity = parseFloat(e.target.value);
-    });
-
-    document.getElementById('col-sun').addEventListener('input', (e) => {
-      sunLight.color.set(e.target.value);
-    });
-
-    document.getElementById('col-ambient').addEventListener('input', (e) => {
-      ambientLight.color.set(e.target.value);
     });
 
     document.getElementById('sl-amb-intensity').addEventListener('input', (e) => {
@@ -630,17 +760,21 @@
 
     document.getElementById('btn-regen-proc').addEventListener('click', () => {
       buildProceduralTerrain();
-      statusBar.textContent = "Regenerated procedural terrain!";
     });
 
-    // Window resize
+    document.getElementById('sl-spire-scale').addEventListener('input', () => {
+      buildProceduralTerrain();
+    });
+    document.getElementById('sl-cap-size').addEventListener('input', () => {
+      buildProceduralTerrain();
+    });
+
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // 8. Render loop
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
