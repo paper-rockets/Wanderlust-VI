@@ -6,13 +6,21 @@ import {
     setBiomeTreeConfig,
     saveBiomeTreeSettings,
     refreshAllTrees,
-    refreshBiomeColors
+    refreshBiomeColors,
+    treeLeafBottomUniform,
+    treeLeafTopUniform,
+    treeLeafVarColorUniform,
+    treeLeafVarStrengthUniform,
+    treeLeafGradPowerUniform,
+    treeLeafBrightnessUniform,
+    setTreeSeasonPreset
 } from './trees.js';
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { LOW_GFX } from './config.js';
 import { initMatcapBank } from './matcap-bank.js';
 import { roystanParams, syncRoystanUniforms } from './shaders/roystanToon.js';
+import { biomeColorConfigs } from '../world-layout.js';
 
 // ==========================================
 // SETTINGS PANELS & BIOME PERSISTENCE (lil-gui)
@@ -374,6 +382,61 @@ export function initSettingsPanels(context) {
                 oceanFolder.add(oceanParams, 'resetDefaults').name('Reset Ocean Defaults');
             }
     
+            // ==========================================
+            // 🌱 PAINTED GRASS & BIOME COLORS (lil-gui)
+            // ==========================================
+            const paintedFolder = gui.addFolder('🌱 Painted Grass & Biome Colors');
+            paintedFolder.close();
+
+            const grassParams = {
+                enabled: true,
+                scaleMultiplier: 1.0,
+                strength: 0.85
+            };
+
+            const masterGrassSub = paintedFolder.addFolder('Ground Texture');
+            masterGrassSub.add(grassParams, 'enabled').name('Painted Grass Enabled').onChange(v => {
+                if (window.terrainGrassUniforms) {
+                    window.terrainGrassUniforms.uGrassEnabled.value = v ? 1.0 : 0.0;
+                }
+            });
+            masterGrassSub.add(grassParams, 'scaleMultiplier', 0.1, 5.0, 0.05).name('Scale Multiplier').onChange(v => {
+                if (window.terrainGrassUniforms) {
+                    window.terrainGrassUniforms.uGrassScale.value = (1.0 / 64.0) * v;
+                }
+            });
+            masterGrassSub.add(grassParams, 'strength', 0.0, 1.0, 0.05).name('Texture Strength').onChange(v => {
+                if (window.terrainGrassUniforms) {
+                    window.terrainGrassUniforms.uGrassTextureStrength.value = v;
+                }
+            });
+
+            // Per-biome brightness & variation controls (Excluding crystal land as requested)
+            const biomesFolder = paintedFolder.addFolder('Per-Biome Controls');
+            
+            Object.keys(biomeColorConfigs).forEach(biomeKey => {
+                const bCfg = biomeColorConfigs[biomeKey];
+                const bFolder = biomesFolder.addFolder(bCfg.name);
+                bFolder.close();
+
+                bFolder.add(bCfg, 'brightness', 0.3, 2.2, 0.05).name('Brightness').onChange(() => {
+                    if (window.forceTerrainColorUpdate) window.forceTerrainColorUpdate();
+                });
+                bFolder.add(bCfg, 'variation', 0.0, 2.5, 0.05).name('Color Variation').onChange(() => {
+                    if (window.forceTerrainColorUpdate) window.forceTerrainColorUpdate();
+                });
+                bFolder.addColor(bCfg, 'tint').name('Ground Tint').onChange(() => {
+                    if (window.forceTerrainColorUpdate) window.forceTerrainColorUpdate();
+                });
+                bFolder.add({ reset: () => {
+                    bCfg.brightness = 1.0;
+                    bCfg.variation = 1.0;
+                    bCfg.tint = '#ffffff';
+                    bFolder.controllers.forEach(c => c.updateDisplay());
+                    if (window.forceTerrainColorUpdate) window.forceTerrainColorUpdate();
+                }}, 'reset').name('Reset Biome');
+            });
+
             // Zelda / Roystan Toon Shading (Optional Mode)
             const toonFolder = gui.addFolder('🎨 Zelda / Roystan Toon');
             toonFolder.close();
@@ -1062,7 +1125,19 @@ export function initSettingsPanels(context) {
                 'magical_sanctuary': '✨ Magical Sanctuary'
             };
 
-            let selectedBiomeId = 'ghibli_land';
+            const biomeOptions = {
+                '🌳 Ghibli Land': 'ghibli_land',
+                '🌊 Archipelago': 'archipelago',
+                '🌳 Ghibli Isles': 'ghibli_isles',
+                '🏔️ Misty Mountains I': 'misty_mountains',
+                '🏔️ Misty Mountains II': 'misty_mountains_2',
+                '💎 Crystal Land': 'crystal_land',
+                '✨ Magical Sanctuary': 'magical_sanctuary'
+            };
+
+            let selectedBiomeId = (typeof worldLayout !== 'undefined' && worldLayout.spawnIsland && biomeLabels[worldLayout.spawnIsland.biomeId])
+                ? worldLayout.spawnIsland.biomeId
+                : 'archipelago';
             let currentCfg = getBiomeTreeConfig(selectedBiomeId);
 
             // State object for lil-gui controllers
@@ -1077,7 +1152,12 @@ export function initSettingsPanels(context) {
                 foliageColor: currentCfg.foliageColor,
                 trunkColor: currentCfg.trunkColor,
                 hueVariation: currentCfg.hueVariation,
-                tintVariation: currentCfg.tintVariation
+                tintVariation: currentCfg.tintVariation,
+                leafBottom: '#' + (treeLeafBottomUniform ? treeLeafBottomUniform.value.getHexString() : '1c3b23'),
+                leafVarColor: '#' + (treeLeafVarColorUniform ? treeLeafVarColorUniform.value.getHexString() : '1e4430'),
+                leafVarStrength: treeLeafVarStrengthUniform ? treeLeafVarStrengthUniform.value : 0.65,
+                leafGradPower: treeLeafGradPowerUniform ? treeLeafGradPowerUniform.value : 1.2,
+                leafBrightness: treeLeafBrightnessUniform ? treeLeafBrightnessUniform.value : 1.05
             };
 
             // Model checkbox states
@@ -1094,7 +1174,7 @@ export function initSettingsPanels(context) {
                 if (!cfg) return;
                 treeControls.enabled = !!cfg.enabled;
                 treeControls.density = cfg.density !== undefined ? cfg.density : 0.7;
-                treeControls.minDistance = cfg.minDistance !== undefined ? cfg.minDistance : 16.0;
+                treeControls.minDistance = cfg.minDistance !== undefined ? cfg.minDistance : 7.0;
                 treeControls.minHeight = cfg.minHeight !== undefined ? cfg.minHeight : 3.0;
                 treeControls.maxHeight = cfg.maxHeight !== undefined ? cfg.maxHeight : 140.0;
                 treeControls.scale = cfg.scale !== undefined ? cfg.scale : 1.0;
@@ -1118,18 +1198,28 @@ export function initSettingsPanels(context) {
             }
 
             function selectTreeEditorBiome(bId) {
-                if (!biomeLabels[bId]) return;
-                selectedBiomeId = bId;
-                treeControls.biome = bId;
-                syncControlsForBiome(bId);
+                let realId = bId;
+                if (!biomeLabels[realId]) {
+                    const foundKey = Object.keys(biomeLabels).find(k => biomeLabels[k] === bId);
+                    if (foundKey) realId = foundKey;
+                    else return;
+                }
+                selectedBiomeId = realId;
+                treeControls.biome = realId;
+                if (controllers.biome && controllers.biome.updateDisplay) {
+                    controllers.biome.updateDisplay();
+                }
+                syncControlsForBiome(realId);
             }
 
             // Main navigation and the top tree button both use this, so edits
             // always apply to the biome the player is currently viewing.
             window.selectTreeEditorBiome = selectTreeEditorBiome;
+            window.getSelectedTreeBiome = () => selectedBiomeId;
+            window.treeControls = treeControls;
 
             // 1. Biome selector
-            controllers.biome = treeFolder.add(treeControls, 'biome', biomeLabels).name('Select Biome').onChange(bId => {
+            controllers.biome = treeFolder.add(treeControls, 'biome', biomeOptions).name('Select Biome').onChange(bId => {
                 selectTreeEditorBiome(bId);
             });
 
@@ -1178,9 +1268,96 @@ export function initSettingsPanels(context) {
                 setBiomeTreeConfig(selectedBiomeId, { tintVariation: v });
                 refreshBiomeColors(selectedBiomeId);
             });
+            controllers.leafBottom = colorFolder.addColor(treeControls, 'leafBottom').name('Leaf Bottom / Underside').onChange(v => {
+                if (treeLeafBottomUniform) treeLeafBottomUniform.value.set(v);
+            });
+            controllers.leafVarColor = colorFolder.addColor(treeControls, 'leafVarColor').name('Branch Variation Color').onChange(v => {
+                if (treeLeafVarColorUniform) treeLeafVarColorUniform.value.set(v);
+            });
+            controllers.leafVarStrength = colorFolder.add(treeControls, 'leafVarStrength', 0.0, 1.5, 0.05).name('Var Strength (Noise)').onChange(v => {
+                if (treeLeafVarStrengthUniform) treeLeafVarStrengthUniform.value = v;
+            });
+            controllers.leafGradPower = colorFolder.add(treeControls, 'leafGradPower', 0.5, 3.0, 0.05).name('Vertical Grad Power').onChange(v => {
+                if (treeLeafGradPowerUniform) treeLeafGradPowerUniform.value = v;
+            });
+            controllers.leafBrightness = colorFolder.add(treeControls, 'leafBrightness', 0.5, 2.0, 0.05).name('Leaf Brightness').onChange(v => {
+                if (treeLeafBrightnessUniform) treeLeafBrightnessUniform.value = v;
+            });
+
+            function syncSeasonUI(seasonKey) {
+                const cfg = getBiomeTreeConfig(selectedBiomeId);
+                if (cfg) {
+                    treeControls.foliageColor = cfg.foliageColor;
+                    treeControls.trunkColor = cfg.trunkColor;
+                }
+                treeControls.leafBottom = '#' + treeLeafBottomUniform.value.getHexString();
+                treeControls.leafVarColor = '#' + treeLeafVarColorUniform.value.getHexString();
+                treeControls.leafVarStrength = treeLeafVarStrengthUniform.value;
+                treeControls.leafGradPower = treeLeafGradPowerUniform.value;
+                treeControls.leafBrightness = treeLeafBrightnessUniform.value;
+                colorFolder.controllers.forEach(c => c.updateDisplay && c.updateDisplay());
+            }
+            window.syncSeasonUI = syncSeasonUI;
+
+            // Seasonal Presets
+            const seasonActions = {
+                applySpring: () => {
+                    setTreeSeasonPreset('spring', true);
+                    syncSeasonUI('spring');
+                },
+                applyAutumn: () => {
+                    setTreeSeasonPreset('autumn', true);
+                    syncSeasonUI('autumn');
+                },
+                applyWinter: () => {
+                    setTreeSeasonPreset('winter', true);
+                    syncSeasonUI('winter');
+                }
+            };
+            colorFolder.add(seasonActions, 'applySpring').name('🌸 Spring Season');
+            colorFolder.add(seasonActions, 'applyAutumn').name('🍁 Fall / Autumn Season');
+            colorFolder.add(seasonActions, 'applyWinter').name('❄️ Winter Season');
 
             // 4. Model Picker with Toggles and Submenus
             const pickerFolder = treeFolder.addFolder('Model Picker (Active Models)');
+
+            pickerFolder.add({
+                clearAllBiome: () => {
+                    const cfg = getBiomeTreeConfig(selectedBiomeId);
+                    cfg.activeModels = [];
+                    Object.keys(ALL_TREE_MODELS).forEach(mId => { modelStates[mId] = false; });
+                    saveBiomeTreeSettings();
+                    syncControlsForBiome(selectedBiomeId);
+                    refreshAllTrees();
+                }
+            }, 'clearAllBiome').name('🚫 Clear All Trees (This Biome)');
+
+            pickerFolder.add({
+                applyToAll: () => {
+                    const cfg = getBiomeTreeConfig(selectedBiomeId);
+                    const currentActive = [...(cfg.activeModels || [])];
+                    Object.keys(DEFAULT_BIOME_TREE_CONFIGS).forEach(bId => {
+                        const targetCfg = getBiomeTreeConfig(bId);
+                        targetCfg.activeModels = [...currentActive];
+                    });
+                    saveBiomeTreeSettings();
+                    syncControlsForBiome(selectedBiomeId);
+                    refreshAllTrees();
+                }
+            }, 'applyToAll').name('📋 Apply Active Trees to ALL Biomes');
+
+            pickerFolder.add({
+                clearEverywhere: () => {
+                    Object.keys(DEFAULT_BIOME_TREE_CONFIGS).forEach(bId => {
+                        const targetCfg = getBiomeTreeConfig(bId);
+                        targetCfg.activeModels = [];
+                    });
+                    Object.keys(ALL_TREE_MODELS).forEach(mId => { modelStates[mId] = false; });
+                    saveBiomeTreeSettings();
+                    syncControlsForBiome(selectedBiomeId);
+                    refreshAllTrees();
+                }
+            }, 'clearEverywhere').name('🧹 Clear Trees Across ALL Biomes');
 
             Object.keys(TREE_CATEGORIES).forEach(categoryName => {
                 const catFolder = pickerFolder.addFolder(categoryName);
@@ -1193,7 +1370,12 @@ export function initSettingsPanels(context) {
                         models.forEach(m => {
                             if (!cfg.activeModels.includes(m.id)) cfg.activeModels.push(m.id);
                             modelStates[m.id] = true;
-                            if (window.loadModelEntry) window.loadModelEntry(m);
+                            const fullDef = ALL_TREE_MODELS[m.id] || m;
+                            if (window.loadModelEntry) {
+                                window.loadModelEntry(fullDef, () => {
+                                    refreshAllTrees();
+                                });
+                            }
                         });
                         saveBiomeTreeSettings();
                         syncControlsForBiome(selectedBiomeId);
@@ -1219,7 +1401,12 @@ export function initSettingsPanels(context) {
                         if (!cfg.activeModels) cfg.activeModels = [];
                         if (checked) {
                             if (!cfg.activeModels.includes(m.id)) cfg.activeModels.push(m.id);
-                            if (window.loadModelEntry) window.loadModelEntry(m);
+                            const fullDef = ALL_TREE_MODELS[m.id] || m;
+                            if (window.loadModelEntry) {
+                                window.loadModelEntry(fullDef, () => {
+                                    refreshAllTrees();
+                                });
+                            }
                         } else {
                             cfg.activeModels = cfg.activeModels.filter(id => id !== m.id);
                         }
@@ -1375,6 +1562,23 @@ export function initSettingsPanels(context) {
                         params.modelVisible = true;
                         isModelVisible = true;
                     }
+                    function cleanControllersBeforeLoad(obj) {
+                        if (!obj || typeof obj !== 'object') return;
+                        if (obj.controllers) {
+                            const skipKeys = [
+                                'selectAll', 'clearAll', 'resetBiome', 'openBank', 'openShaderBank',
+                                'openTerrainEditor', 'openCrystalEditor', 'runAcceptanceTests', 'resetDefaults',
+                                'saveActive', 'resetActive', 'saveAll', 'resetAll', 'saveGlobal', 'loadFile',
+                                'biome', 'clearAllBiome', 'applyToAll', 'clearEverywhere',
+                                ...Object.keys(ALL_TREE_MODELS)
+                            ];
+                            skipKeys.forEach(k => { delete obj.controllers[k]; });
+                        }
+                        if (obj.folders) {
+                            Object.values(obj.folders).forEach(cleanControllersBeforeLoad);
+                        }
+                    }
+                    cleanControllersBeforeLoad(parsed);
                     gui.load(parsed);
                     setCloudSize(instClouds, params.cloudsLowSize);
                     setCloudSize(instHighClouds, params.cloudsHighSize);
@@ -1511,6 +1715,7 @@ export function initSettingsPanels(context) {
                             if (parsed && parsed.controllers && cloudManager) {
                                 parsed.controllers = cloudManager.applyState(parsed.controllers);
                             }
+                            if (typeof cleanControllersBeforeLoad === 'function') cleanControllersBeforeLoad(parsed);
                             gui.load(parsed);
                             showVisualToast('Settings loaded from disk');
                         } else {
@@ -1566,13 +1771,35 @@ export function initSettingsPanels(context) {
             if (topTreeBtn) {
                 topTreeBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const activeBiome = getBiomeAt && playerGrp
-                        ? getBiomeAt(playerGrp.position.x, playerGrp.position.z)
-                        : null;
-                    if (activeBiome && biomeLabels[activeBiome.id]) {
-                        selectTreeEditorBiome(activeBiome.id);
+                    let targetBiomeId = null;
+                    if (window.currentPlayerBiomeId && biomeLabels[window.currentPlayerBiomeId]) {
+                        targetBiomeId = window.currentPlayerBiomeId;
+                    } else if (playerGrp) {
+                        const px = playerGrp.position.x;
+                        const pz = playerGrp.position.z;
+                        const activeBiome = getBiomeAt ? getBiomeAt(px, pz) : null;
+                        if (activeBiome && activeBiome.id !== 'open_ocean' && biomeLabels[activeBiome.id]) {
+                            targetBiomeId = activeBiome.id;
+                        } else if (typeof worldLayout !== 'undefined' && worldLayout.islands) {
+                            let closestDist = Infinity;
+                            let closestBiome = null;
+                            for (const isl of worldLayout.islands) {
+                                const dx = px - isl.centerX;
+                                const dz = pz - isl.centerZ;
+                                const d = dx * dx + dz * dz;
+                                if (d < closestDist && biomeLabels[isl.biomeId]) {
+                                    closestDist = d;
+                                    closestBiome = isl.biomeId;
+                                }
+                            }
+                            targetBiomeId = closestBiome;
+                        }
+                    }
+                    if (targetBiomeId && biomeLabels[targetBiomeId]) {
+                        selectTreeEditorBiome(targetBiomeId);
                     }
                     if (typeof toggleGUI === 'function') toggleGUI(true);
+                    if (gui && typeof gui.open === 'function') gui.open();
                     if (window.treeFolder) {
                         gui.foldersRecursive().forEach(f => f.close());
                         window.treeFolder.open();

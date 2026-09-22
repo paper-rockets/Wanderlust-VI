@@ -7,6 +7,45 @@ import terrainMtn2 from './terrain-mountains2.js';
 import terrainMagical from './terrain-magical.js';
 
 // ==========================================
+// BIOME COLOR & VISUAL CONTROLS (Excluding Crystal Land)
+// ==========================================
+export const biomeColorConfigs = {
+    ghibli_land: { name: '🌳 Ghibli Land', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
+    archipelago: { name: '🌊 Archipelago', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
+    ghibli_isles: { name: '🌳 Ghibli Isles', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
+    misty_mountains: { name: '🏔️ Misty Mountains I', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
+    misty_mountains_2: { name: '🏔️ Misty Mountains II', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
+    magical_sanctuary: { name: '✨ Magical Sanctuary', brightness: 1.0, variation: 1.0, tint: '#ffffff' }
+};
+
+const _tempBiomeTint = new THREE.Color();
+
+export function applyBiomeVisualAdjustments(biomeId, color) {
+    if (!biomeId || biomeId === 'crystal_land' || !biomeColorConfigs[biomeId]) return;
+    const cfg = biomeColorConfigs[biomeId];
+    if (cfg.variation !== 1.0) {
+        const avg = (color.r + color.g + color.b) * 0.333333;
+        color.r = avg + (color.r - avg) * cfg.variation;
+        color.g = avg + (color.g - avg) * cfg.variation;
+        color.b = avg + (color.b - avg) * cfg.variation;
+    }
+    if (cfg.brightness !== 1.0) {
+        color.r *= cfg.brightness;
+        color.g *= cfg.brightness;
+        color.b *= cfg.brightness;
+    }
+    if (cfg.tint && cfg.tint !== '#ffffff') {
+        _tempBiomeTint.set(cfg.tint);
+        color.r *= _tempBiomeTint.r;
+        color.g *= _tempBiomeTint.g;
+        color.b *= _tempBiomeTint.b;
+    }
+    color.r = Math.min(1.0, Math.max(0.0, color.r));
+    color.g = Math.min(1.0, Math.max(0.0, color.g));
+    color.b = Math.min(1.0, Math.max(0.0, color.b));
+}
+
+// ==========================================
 // 1. DETERMINISTIC SEEDED PRNG (Mulberry32)
 // ==========================================
 export class SeededRandom {
@@ -665,9 +704,12 @@ export class WorldLayout {
 
                 bestIsl.biome.module.getColor(h, bx1, bz1, snoise, blendColor1, smoothstep);
                 secondIsl.biome.module.getColor(h, bx2, bz2, snoise, blendColor2, smoothstep);
+                applyBiomeVisualAdjustments(bestIsl.biome.id, blendColor1);
+                applyBiomeVisualAdjustments(secondIsl.biome.id, blendColor2);
                 targetColor.copy(blendColor1).lerp(blendColor2, w2);
             } else {
                 bestIsl.biome.module.getColor(h, bx1, bz1, snoise, targetColor, smoothstep);
+                applyBiomeVisualAdjustments(bestIsl.biome.id, targetColor);
             }
         } else {
             // Open Ocean shallow-to-deep vertex coloring

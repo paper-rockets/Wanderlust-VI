@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painted Grass & Trees Sandbox</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: monospace;
+      background: #111317;
+      color: #e2e8f0;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+    #ui-panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      width: 320px;
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
+      background: #1a1e27;
+      border: 1px solid #333d4d;
+      padding: 12px;
+      z-index: 10;
+      font-size: 11px;
+    }
+    h1 {
+      margin: 0 0 4px 0;
+      font-size: 13px;
+      color: #7ee787;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .folder-path {
+      font-size: 10px;
+      color: #8b949e;
+      margin-bottom: 10px;
+      word-break: break-all;
+    }
+    .section-label {
+      font-weight: bold;
+      color: #58a6ff;
+      margin: 10px 0 4px 0;
+      text-transform: uppercase;
+      font-size: 10px;
+      border-bottom: 1px solid #30363d;
+      padding-bottom: 2px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 4px;
+      margin: 4px 0;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      padding: 6px 8px;
+      font-family: monospace;
+      font-size: 11px;
+      cursor: pointer;
+      flex: 1 1 calc(50% - 4px);
+      text-align: center;
+    }
+    button:hover {
+      background: #30363d;
+    }
+    button.active {
+      background: #1f6feb;
+      border-color: #58a6ff;
+      color: #ffffff;
+      font-weight: bold;
+    }
+    .btn-wide {
+      flex: 1 1 100%;
+    }
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 6px 0;
+    }
+    .control-row label {
+      font-size: 11px;
+    }
+    .control-row input[type="range"] {
+      width: 130px;
+    }
+    .control-row span {
+      width: 38px;
+      text-align: right;
+      color: #8b949e;
+    }
+    #status-box {
+      margin-top: 10px;
+      padding: 6px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      font-size: 10px;
+      color: #8b949e;
+      white-space: pre-wrap;
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div id="ui-panel">
+    <h1>Painted Grass & Trees Sandbox</h1>
+    <div class="folder-path">E:\X Flight\Surgery\Trees Terrains</div>
+
+    <div class="section-label">1. View Mode</div>
+    <div class="btn-row">
+      <button id="btn-mode-hill" class="active">Island Hill</button>
+      <button id="btn-mode-villa">Villa Diorama</button>
+      <button id="btn-mode-combo" class="btn-wide">Villa on Grassy Hill</button>
+      <button id="btn-mode-flat" class="btn-wide">Flat Ground Close-up</button>
+    </div>
+
+    <div class="section-label">2. Ground Texture</div>
+    <div class="btn-row">
+      <button id="btn-tex-seamless" class="active">Seamless Painted Grass</button>
+      <button id="btn-tex-diffuse">Raw Model Diffuse</button>
+      <button id="btn-tex-cliff">Grass + Cliff Slope</button>
+      <button id="btn-tex-plain">Flat Green (No Texture)</button>
+    </div>
+
+    <div class="section-label">3. Trees</div>
+    <div class="btn-row">
+      <button id="btn-toggle-trees" class="btn-wide active">Cypress Trees on Hill: ON</button>
+    </div>
+
+    <div class="section-label">4. Adjustments</div>
+    <div class="control-row">
+      <label for="slider-repeat">Grass Scale</label>
+      <input type="range" id="slider-repeat" min="1" max="30" step="1" value="12">
+      <span id="val-repeat">12x</span>
+    </div>
+    <div class="control-row">
+      <label for="slider-brightness">Grass Brightness</label>
+      <input type="range" id="slider-brightness" min="0.4" max="2.0" step="0.05" value="1.0">
+      <span id="val-brightness">1.0x</span>
+    </div>
+    <div class="control-row">
+      <label for="slider-sun">Sun Angle</label>
+      <input type="range" id="slider-sun" min="0" max="360" step="5" value="135">
+      <span id="val-sun">135°</span>
+    </div>
+    <div class="control-row">
+      <label for="slider-camera">Camera Tilt</label>
+      <input type="range" id="slider-camera" min="5" max="85" step="5" value="35">
+      <span id="val-camera">35°</span>
+    </div>
+
+    <div class="btn-row" style="margin-top: 8px;">
+      <button id="btn-wireframe" class="btn-wide">Wireframe: OFF</button>
+      <button id="btn-reset-cam" class="btn-wide">Reset Camera</button>
+    </div>
+
+    <div id="status-box">Loading 3D assets...</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    // State
+    const state = {
+      viewMode: 'hill', // 'hill', 'villa', 'combo', 'flat'
+      texMode: 'seamless', // 'seamless', 'diffuse', 'cliff', 'plain'
+      repeat: 12,
+      brightness: 1.0,
+      showTrees: true,
+      wireframe: false,
+      sunAngle: 135
+    };
+
+    // Setup Renderer
+    const container = document.getElementById('canvas-container');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    container.appendChild(renderer.domElement);
+
+    // Scene & Camera
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#98b8ce'); // Mediterranean sky blue
+    scene.fog = new THREE.FogExp2('#98b8ce', 0.008);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 500);
+    camera.position.set(0, 25, 45);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02; // Don't go below ground
+    controls.target.set(0, 6, 0);
+    controls.update();
+
+    // Lighting (Warm Mediterranean sunlight)
+    const ambientLight = new THREE.AmbientLight('#c2d6e8', 0.85);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight('#fff4e0', 1.7);
+    sunLight.position.set(30, 50, 20);
+    scene.add(sunLight);
+
+    const hemiLight = new THREE.HemisphereLight('#87ceeb', '#4d6932', 0.4);
+    scene.add(hemiLight);
+
+    // Texture Loader
+    const texLoader = new THREE.TextureLoader();
+    const textures = {
+      seamless: null,
+      diffuse: null
+    };
+
+    // Load textures
+    textures.seamless = texLoader.load('assets/greek_grass_seamless.png', (tex) => {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(state.repeat, state.repeat);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      updateMaterials();
+      updateStatus();
+    });
+
+    textures.diffuse = texLoader.load('assets/greek_GroundTEX.png', (tex) => {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(state.repeat, state.repeat);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      updateMaterials();
+    });
+
+    // Materials
+    const terrainMaterial = new THREE.MeshStandardMaterial({
+      roughness: 0.85,
+      metalness: 0.05,
+      flatShading: false
+    });
+
+    const cliffRockMaterial = new THREE.MeshStandardMaterial({
+      color: 0x6e685f,
+      roughness: 0.9,
+      metalness: 0.05
+    });
+
+    // Custom shader material for slope cliff blending
+    const slopeShaderMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        grassTex: { value: null },
+        grassScale: { value: state.repeat },
+        brightness: { value: state.brightness },
+        cliffColor: { value: new THREE.Color(0x6e685f) },
+        sunDir: { value: new THREE.Vector3(1, 1, 0.5).normalize() }
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        varying vec2 vUv;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPos = worldPos.xyz;
+          vUv = uv;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D grassTex;
+        uniform float grassScale;
+        uniform float brightness;
+        uniform vec3 sunDir;
+        uniform vec3 cliffColor;
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        varying vec2 vUv;
+
+        void main() {
+          // World normal up-factor (1.0 = completely flat top, 0.0 = vertical wall)
+          float slope = clamp(vNormal.y, 0.0, 1.0);
+          float grassFactor = smoothstep(0.45, 0.75, slope);
+
+          vec2 tiledUv = vWorldPos.xz * (grassScale * 0.02);
+          vec4 grassSample = texture2D(grassTex, tiledUv);
+          vec3 grassCol = grassSample.rgb * brightness;
+
+          vec3 finalColor = mix(cliffColor, grassCol, grassFactor);
+          
+          // Simple ambient + direct sun shading
+          float NdotL = max(dot(vNormal, sunDir), 0.0) * 0.7 + 0.35;
+          
+          gl_FragColor = vec4(finalColor * NdotL, 1.0);
+        }
+      `
+    });
+
+    // Objects
+    const groups = {
+      hill: new THREE.Group(),
+      villa: new THREE.Group(),
+      flat: new THREE.Group(),
+      trees: new THREE.Group()
+    };
+    scene.add(groups.hill);
+    scene.add(groups.villa);
+    scene.add(groups.flat);
+    scene.add(groups.trees);
+
+    // 1. Build Smooth Island Hill Mesh (similar to the game's islands)
+    const hillGeo = new THREE.PlaneGeometry(64, 64, 96, 96);
+    hillGeo.rotateX(-Math.PI / 2);
+    const pos = hillGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      const dist = Math.sqrt(x * x + z * z);
+      // Soft dome hill with subtle rolling ridges
+      let h = Math.max(0, 12 * Math.exp(-(dist * dist) / 360));
+      h += Math.sin(x * 0.25) * Math.cos(z * 0.25) * 1.5;
+      h += Math.sin(x * 0.6) * 0.5;
+      // Edge drop-off
+      if (dist > 28) {
+        h *= Math.max(0, 1.0 - (dist - 28) / 4);
+      }
+      pos.setY(i, h);
+    }
+    hillGeo.computeVertexNormals();
+
+    const hillMesh = new THREE.Mesh(hillGeo, terrainMaterial);
+    groups.hill.add(hillMesh);
+
+    // 2. Build Flat Ground Plane
+    const flatGeo = new THREE.PlaneGeometry(50, 50, 20, 20);
+    flatGeo.rotateX(-Math.PI / 2);
+    const flatMesh = new THREE.Mesh(flatGeo, terrainMaterial);
+    groups.flat.add(flatMesh);
+
+    // 3. Load GLB Villa Model
+    let villaModel = null;
+    let extractedCypressMesh = null;
+    const gltfLoader = new GLTFLoader();
+
+    gltfLoader.load('models/dae_villages__greek_sculptor_house.glb', (gltf) => {
+      villaModel = gltf.scene;
+      villaModel.scale.set(3, 3, 3);
+      villaModel.position.set(0, 0, 0);
+
+      // Search for cypress tree mesh inside the model to clone for terrain
+      villaModel.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (child.name.includes('Vegetation') || child.name.includes('Object_8')) {
+            extractedCypressMesh = child.clone();
+          }
+        }
+      });
+
+      groups.villa.add(villaModel);
+
+      // Populate cypress trees on the hill
+      spawnCypressTreesOnHill();
+
+      updateStatus();
+    }, undefined, (err) => {
+      console.error('Error loading GLB:', err);
+      document.getElementById('status-box').innerText = 'Model load notice: ' + err.message;
+    });
+
+    // Helper: sample hill height at (x, z)
+    function getHillHeight(x, z) {
+      const dist = Math.sqrt(x * x + z * z);
+      let h = Math.max(0, 12 * Math.exp(-(dist * dist) / 360));
+      h += Math.sin(x * 0.25) * Math.cos(z * 0.25) * 1.5;
+      h += Math.sin(x * 0.6) * 0.5;
+      if (dist > 28) h *= Math.max(0, 1.0 - (dist - 28) / 4);
+      return h;
+    }
+
+    // Spawn Cypress Trees on the Island Hill
+    function spawnCypressTreesOnHill() {
+      // Clear old trees
+      while (groups.trees.children.length > 0) {
+        groups.trees.remove(groups.trees.children[0]);
+      }
+
+      // Generate realistic Mediterranean cypress tree geometries if mesh not isolated,
+      // or use stylized cone/pill mesh matching the model's exact shape
+      const treeMat = new THREE.MeshStandardMaterial({
+        color: 0x486b36,
+        roughness: 0.9,
+        flatShading: true
+      });
+      const trunkMat = new THREE.MeshStandardMaterial({
+        color: 0x4a3728,
+        roughness: 0.9
+      });
+
+      // Scatter 28 cypress trees around the hill contours
+      const treeCoords = [
+        [-12, -8], [-14, -6], [-10, -11], [-16, -10],
+        [14, 8], [16, 6], [12, 11], [18, 9],
+        [-8, 14], [-6, 17], [-11, 15],
+        [8, -14], [10, -16], [6, -12],
+        [-18, 4], [-20, 2], [-17, 8],
+        [19, -4], [22, -2], [18, -8],
+        [-4, -18], [-2, -21], [3, -20],
+        [-20, -12], [20, 14], [-14, 18], [15, -18]
+      ];
+
+      treeCoords.forEach(([tx, tz]) => {
+        const ty = getHillHeight(tx, tz);
+        if (ty <= 0.2) return;
+
+        const treeGroup = new THREE.Group();
+        treeGroup.position.set(tx, ty, tz);
+
+        // Cypress Foliage (Stylized elongated teardrop / cone shape)
+        const scaleY = 1.8 + Math.random() * 0.8;
+        const scaleXZ = 0.8 + Math.random() * 0.3;
+        
+        const foliageGeo = new THREE.ConeGeometry(1.2 * scaleXZ, 6 * scaleY, 7);
+        foliageGeo.translate(0, 3 * scaleY, 0);
+        const foliage = new THREE.Mesh(foliageGeo, treeMat);
+
+        // Small Trunk
+        const trunkGeo = new THREE.CylinderGeometry(0.25, 0.3, 1.2, 5);
+        trunkGeo.translate(0, 0.6, 0);
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+
+        treeGroup.add(trunk);
+        treeGroup.add(foliage);
+        groups.trees.add(treeGroup);
+      });
+    }
+
+    // Update Materials based on state
+    function updateMaterials() {
+      const activeTex = (state.texMode === 'seamless') ? textures.seamless : textures.diffuse;
+      
+      if (activeTex) {
+        activeTex.repeat.set(state.repeat, state.repeat);
+      }
+
+      if (state.texMode === 'plain') {
+        terrainMaterial.map = null;
+        terrainMaterial.color.set('#5b823e'); // Current game flat green
+        terrainMaterial.needsUpdate = true;
+        hillMesh.material = terrainMaterial;
+        flatMesh.material = terrainMaterial;
+      } else if (state.texMode === 'cliff') {
+        slopeShaderMaterial.uniforms.grassTex.value = textures.seamless;
+        slopeShaderMaterial.uniforms.grassScale.value = state.repeat;
+        slopeShaderMaterial.uniforms.brightness.value = state.brightness;
+        slopeShaderMaterial.wireframe = state.wireframe;
+        hillMesh.material = slopeShaderMaterial;
+        flatMesh.material = terrainMaterial;
+        terrainMaterial.map = textures.seamless;
+        terrainMaterial.color.setRGB(state.brightness, state.brightness, state.brightness);
+        terrainMaterial.needsUpdate = true;
+      } else {
+        terrainMaterial.map = activeTex;
+        terrainMaterial.color.setRGB(state.brightness, state.brightness, state.brightness);
+        terrainMaterial.wireframe = state.wireframe;
+        terrainMaterial.needsUpdate = true;
+        hillMesh.material = terrainMaterial;
+        flatMesh.material = terrainMaterial;
+      }
+    }
+
+    // Update Scene Visibility based on View Mode
+    function updateVisibility() {
+      groups.hill.visible = (state.viewMode === 'hill' || state.viewMode === 'combo');
+      groups.villa.visible = (state.viewMode === 'villa' || state.viewMode === 'combo');
+      groups.flat.visible = (state.viewMode === 'flat');
+      groups.trees.visible = (state.showTrees && (state.viewMode === 'hill' || state.viewMode === 'combo'));
+
+      if (state.viewMode === 'villa') {
+        if (villaModel) {
+          villaModel.position.set(0, 0, 0);
+          villaModel.scale.set(3.5, 3.5, 3.5);
+        }
+        controls.target.set(0, 7, 0);
+        camera.position.set(0, 16, 26);
+      } else if (state.viewMode === 'combo') {
+        if (villaModel) {
+          // Place the villa gracefully on the crest of the hill
+          const crestY = getHillHeight(0, 0);
+          villaModel.position.set(0, crestY, 0);
+          villaModel.scale.set(2.4, 2.4, 2.4);
+        }
+        controls.target.set(0, 9, 0);
+        camera.position.set(0, 26, 46);
+      } else if (state.viewMode === 'hill') {
+        controls.target.set(0, 6, 0);
+      } else if (state.viewMode === 'flat') {
+        controls.target.set(0, 0, 0);
+        camera.position.set(0, 10, 18);
+      }
+      controls.update();
+    }
+
+    // Status display
+    function updateStatus() {
+      const modeNames = {
+        hill: 'Island Hill',
+        villa: 'Villa Diorama',
+        combo: 'Villa on Grassy Hill',
+        flat: 'Flat Ground'
+      };
+      const texNames = {
+        seamless: 'Seamless Painted Grass (assets/greek_grass_seamless.png)',
+        diffuse: 'Original Model Ground Diffuse (assets/greek_GroundTEX.png)',
+        cliff: 'Painted Grass + Stone Cliff Slope Shading',
+        plain: 'Flat Green (No Texture - Current Game Look)'
+      };
+      
+      const txt = 
+        `Active Mode: ${modeNames[state.viewMode]}\n` +
+        `Ground Style: ${texNames[state.texMode]}\n` +
+        `Tiling: ${state.repeat}x | Brightness: ${state.brightness.toFixed(2)}x\n` +
+        `Cypress Trees: ${state.showTrees ? 'ENABLED' : 'DISABLED'}\n` +
+        `Controls: Left-drag = Orbit | Right-drag = Pan | Wheel = Zoom`;
+      document.getElementById('status-box').innerText = txt;
+    }
+
+    // UI Event Wiring
+    function setupUI() {
+      // View Modes
+      const modes = ['hill', 'villa', 'combo', 'flat'];
+      modes.forEach(m => {
+        const btn = document.getElementById('btn-mode-' + m);
+        btn.addEventListener('click', () => {
+          modes.forEach(x => document.getElementById('btn-mode-' + x).classList.remove('active'));
+          btn.classList.add('active');
+          state.viewMode = m;
+          updateVisibility();
+          updateStatus();
+        });
+      });
+
+      // Textures
+      const texMap = {
+        'btn-tex-seamless': 'seamless',
+        'btn-tex-diffuse': 'diffuse',
+        'btn-tex-cliff': 'cliff',
+        'btn-tex-plain': 'plain'
+      };
+      Object.keys(texMap).forEach(btnId => {
+        const btn = document.getElementById(btnId);
+        btn.addEventListener('click', () => {
+          Object.keys(texMap).forEach(b => document.getElementById(b).classList.remove('active'));
+          btn.classList.add('active');
+          state.texMode = texMap[btnId];
+          updateMaterials();
+          updateStatus();
+        });
+      });
+
+      // Cypress Trees Toggle
+      const btnTrees = document.getElementById('btn-toggle-trees');
+      btnTrees.addEventListener('click', () => {
+        state.showTrees = !state.showTrees;
+        btnTrees.classList.toggle('active', state.showTrees);
+        btnTrees.innerText = `Cypress Trees on Hill: ${state.showTrees ? 'ON' : 'OFF'}`;
+        updateVisibility();
+        updateStatus();
+      });
+
+      // Grass Scale Slider
+      const sliderRepeat = document.getElementById('slider-repeat');
+      sliderRepeat.addEventListener('input', (e) => {
+        state.repeat = parseInt(e.target.value, 10);
+        document.getElementById('val-repeat').innerText = state.repeat + 'x';
+        updateMaterials();
+        updateStatus();
+      });
+
+      // Brightness Slider
+      const sliderBrightness = document.getElementById('slider-brightness');
+      sliderBrightness.addEventListener('input', (e) => {
+        state.brightness = parseFloat(e.target.value);
+        document.getElementById('val-brightness').innerText = state.brightness.toFixed(2) + 'x';
+        updateMaterials();
+        updateStatus();
+      });
+
+      // Sun Angle Slider
+      const sliderSun = document.getElementById('slider-sun');
+      sliderSun.addEventListener('input', (e) => {
+        state.sunAngle = parseInt(e.target.value, 10);
+        document.getElementById('val-sun').innerText = state.sunAngle + '°';
+        const rad = (state.sunAngle * Math.PI) / 180;
+        sunLight.position.set(Math.cos(rad) * 45, 45, Math.sin(rad) * 45);
+        slopeShaderMaterial.uniforms.sunDir.value.copy(sunLight.position).normalize();
+      });
+
+      // Camera Tilt Slider
+      const sliderCam = document.getElementById('slider-camera');
+      sliderCam.addEventListener('input', (e) => {
+        const deg = parseInt(e.target.value, 10);
+        document.getElementById('val-camera').innerText = deg + '°';
+        const rad = (deg * Math.PI) / 180;
+        const currentDist = camera.position.distanceTo(controls.target);
+        camera.position.y = controls.target.y + Math.sin(rad) * currentDist;
+        camera.position.z = controls.target.z + Math.cos(rad) * currentDist;
+        controls.update();
+      });
+
+      // Wireframe Toggle
+      const btnWire = document.getElementById('btn-wireframe');
+      btnWire.addEventListener('click', () => {
+        state.wireframe = !state.wireframe;
+        btnWire.innerText = `Wireframe: ${state.wireframe ? 'ON' : 'OFF'}`;
+        btnWire.classList.toggle('active', state.wireframe);
+        terrainMaterial.wireframe = state.wireframe;
+        slopeShaderMaterial.wireframe = state.wireframe;
+        terrainMaterial.needsUpdate = true;
+        slopeShaderMaterial.needsUpdate = true;
+      });
+
+      // Reset Camera
+      document.getElementById('btn-reset-cam').addEventListener('click', () => {
+        updateVisibility();
+      });
+
+      // Window Resize
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    // Initial setup
+    setupUI();
+    updateMaterials();
+    updateVisibility();
+    updateStatus();
+
+    // Render loop
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>

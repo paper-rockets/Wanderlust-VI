@@ -66,6 +66,59 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
             dithering: true
         });
 
+        // Hand-painted grass texture for flight terrain
+        const texLoader = new THREE.TextureLoader();
+        const paintedGrassTex = texLoader.load('./assets/greek_grass_seamless.png', (tex) => {
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.colorSpace = THREE.SRGBColorSpace;
+        });
+
+        const terrainGrassUniforms = {
+            uPaintedGrassTex: { value: paintedGrassTex },
+            uGrassScale: { value: 0.015625 }, // 1.0 / 64m (1x scale from sandbox)
+            uGrassTextureStrength: { value: 0.85 },
+            uGrassEnabled: { value: 1.0 }
+        };
+        window.terrainGrassUniforms = terrainGrassUniforms;
+
+        smoothTerrainMat.onBeforeCompile = (shader) => {
+            smoothTerrainMat.userData.shader = shader;
+            shader.uniforms.uPaintedGrassTex = terrainGrassUniforms.uPaintedGrassTex;
+            shader.uniforms.uGrassScale = terrainGrassUniforms.uGrassScale;
+            shader.uniforms.uGrassTextureStrength = terrainGrassUniforms.uGrassTextureStrength;
+            shader.uniforms.uGrassEnabled = terrainGrassUniforms.uGrassEnabled;
+
+            shader.vertexShader = `
+                varying vec3 vWorldGrassPos;
+            ` + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+                `#include <worldpos_vertex>`,
+                `#include <worldpos_vertex>
+                 vWorldGrassPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+            );
+
+            shader.fragmentShader = `
+                uniform sampler2D uPaintedGrassTex;
+                uniform float uGrassScale;
+                uniform float uGrassTextureStrength;
+                uniform float uGrassEnabled;
+                varying vec3 vWorldGrassPos;
+            ` + shader.fragmentShader;
+
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <color_fragment>`,
+                `#include <color_fragment>
+                 if (uGrassEnabled > 0.5) {
+                     vec2 gUv = vWorldGrassPos.xz * uGrassScale;
+                     vec4 gTex = texture2D(uPaintedGrassTex, gUv);
+                     vec3 paintedCol = diffuseColor.rgb * (gTex.rgb * 1.65);
+                     diffuseColor.rgb = mix(diffuseColor.rgb, paintedCol, uGrassTextureStrength);
+                 }`
+            );
+        };
+        smoothTerrainMat.customProgramCacheKey = () => 'smooth-terrain-painted-grass';
+
         // Shader injection for perfect pixel-smooth shorelines + Crystal Land MatCap replacement
         terrainMat.onBeforeCompile = (shader) => {
             shader.uniforms.uCrystalMatcap = crystalMatcapUniform;
@@ -536,6 +589,12 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
         }
     
 
+    function forceTerrainColorUpdate() {
+        lastTerrainGridX = -9999;
+        lastTerrainGridZ = -9999;
+    }
+    window.forceTerrainColorUpdate = forceTerrainColorUpdate;
+
     return {
         matRock,
         matBush,
@@ -543,6 +602,7 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
         matCloud,
         matWispyCloud,
         terrainMat,
+        smoothTerrainMat,
         terrainGeo,
         terrain,
         treeUniforms,
@@ -552,7 +612,9 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
         setTerrainResolution,
         getMeshHeight,
         getMeshSlope: () => _meshSlope,
-        getPathStrength
+        getPathStrength,
+        forceTerrainColorUpdate,
+        terrainGrassUniforms
     };
 }
 
