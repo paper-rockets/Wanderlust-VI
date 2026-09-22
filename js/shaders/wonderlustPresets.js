@@ -4,7 +4,7 @@ export const WONDERLUST_PRESETS = [
   {
     id: 'wonderlust_anime_water',
     name: 'Anime Caustics Water',
-    category: '🌍 Wonderlust',
+    category: 'Wonderlust',
     type: 'shader',
     description: 'Procedural Voronoi water caustics with smooth minimum edge rings, 3-tier anime depth palette, and animated wave flow.',
     generate: (ctx, w, h) => {
@@ -105,7 +105,7 @@ void main() {
   {
     id: 'wonderlust_ghibli_summer',
     name: 'Ghibli Summer Split-Toning',
-    category: '🌍 Wonderlust',
+    category: 'Wonderlust',
     type: 'shader',
     description: 'Golden sunlit highlights, soft atmospheric cerulean shadows, chlorophyll saturation boost, and celluloid vignette.',
     generate: (ctx, w, h) => {
@@ -165,7 +165,7 @@ void main() {
   {
     id: 'wonderlust_journey_sand',
     name: 'Journey Desert Sand & Shimmer',
-    category: '🌍 Wonderlust',
+    category: 'Wonderlust',
     type: 'shader',
     description: 'Warm desert dunes with Journey-inspired sparkling Blinn-Phong micro-glitter and ridge rim lighting.',
     generate: (ctx, w, h) => {
@@ -224,7 +224,7 @@ void main() {
   {
     id: 'wonderlust_glacial_snow',
     name: 'Glacial Diamond Snow & Ice',
-    category: '🌍 Wonderlust',
+    category: 'Wonderlust',
     type: 'shader',
     description: 'Crisp sky-blue rim highlight, dynamic diamond snow glitter sparkle effect, and glacial subsurface ice tones.',
     generate: (ctx, w, h) => {
@@ -282,7 +282,7 @@ void main() {
   {
     id: 'wonderlust_crystal_glow',
     name: 'Prismatic Instanced Crystal',
-    category: '🌍 Wonderlust',
+    category: 'Wonderlust',
     type: 'shader',
     description: '6-stop smooth cubic color gradient, animated hue shifting, Fresnel rim glow, and vibrance boosting.',
     generate: (ctx, w, h) => {
@@ -367,7 +367,7 @@ void main() {
   {
     id: 'wonderlust_beach_shoreline',
     name: 'Anime Beach Shoreline',
-    category: '🌍 Wonderlust',
+    category: 'Wonderlust',
     type: 'shader',
     description: 'Stylized anime beach shoreline with oscillating wave foam, turquoise shallow sea, deep waters, and warm sand.',
     generate: (ctx, w, h) => {
@@ -430,7 +430,7 @@ void main() {
   {
     id: 'wonderlust_sunset_ocean',
     name: 'Minimalist Sunset Ocean',
-    category: '🌍 Wonderlust',
+    category: 'Wonderlust',
     type: 'shader',
     description: '3-color minimalist animated ocean sunset gradient with organic wave displacement and warm twilight glow.',
     generate: (ctx, w, h) => {
@@ -490,4 +490,4 @@ void main() {
   }
 ];
 
-// ASSEMBLE ALL PRESETS
+// ASSEMBLE ALL PRESETS

@@ -4,7 +4,7 @@ export const BLOBMIXER_MATERIAL_PRESETS = [
   {
     id: 'blobmixer_deep_nebula_live',
     name: 'Blobmixer: Cosmic Blue Nebula',
-    category: '🌌 Space & Dopamine',
+    category: 'Space & Dopamine',
     type: 'shader',
     description: 'Deep cosmic space blue with vibrant aqua starlight and metallic glow.',
     generate: (ctx, w, h) => {

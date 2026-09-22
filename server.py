@@ -22,9 +22,8 @@ class NoCacheHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         })
 
     def translate_path(self, path):
-        # Fallback for /flight_models/ -> check public/flight_models/
         p = super().translate_path(path)
-        if not os.path.exists(p) and '/flight_models/' in path:
+        if not os.path.exists(p):
             alt = os.path.join(os.getcwd(), 'public', path.lstrip('/'))
             if os.path.exists(alt):
                 return alt

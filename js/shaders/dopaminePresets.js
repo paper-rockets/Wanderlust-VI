@@ -8,7 +8,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_dichroic_sunset_cyan',
     name: 'Dichroic Rainbow Film',
-    category: '✨ Iridescent & Dichroic',
+    category: 'Iridescent & Dichroic',
     type: 'matcap',
     description: 'Optical dichroic glass with shifting hot pink, sunset orange, electric cyan, and indigo sheen.',
     generate: (ctx, w, h) => {
@@ -40,7 +40,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_cyber_opal',
     name: 'Cyber Opal Crystal',
-    category: '✨ Iridescent & Dichroic',
+    category: 'Iridescent & Dichroic',
     type: 'matcap',
     description: 'Luminescent gemstone shifting between mint green, pastel lavender, and shimmering peach.',
     generate: (ctx, w, h) => {
@@ -65,7 +65,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_soap_bubble',
     name: 'Iridescent Soap Bubble',
-    category: '✨ Iridescent & Dichroic',
+    category: 'Iridescent & Dichroic',
     type: 'matcap',
     description: 'Thin-film rainbow interference sheen floating over glassy transparent pearl.',
     generate: (ctx, w, h) => {
@@ -96,7 +96,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_mermaid_scale',
     name: 'Mermaid Scales Pearl',
-    category: '✨ Iridescent & Dichroic',
+    category: 'Iridescent & Dichroic',
     type: 'matcap',
     description: 'Aquatic pearlescent finish with emerald, turquoise, violet, and sparkling gold.',
     generate: (ctx, w, h) => {
@@ -120,7 +120,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_chameleon_velvet',
     name: 'Chameleon Purple-Gold',
-    category: '✨ Iridescent & Dichroic',
+    category: 'Iridescent & Dichroic',
     type: 'matcap',
     description: 'Car-paint style color shift from deep midnight violet to bright metallic gold.',
     generate: (ctx, w, h) => {
@@ -146,7 +146,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_cherry_gummy',
     name: 'Juicy Cherry Gummy',
-    category: '🍬 Candy & Gummy',
+    category: 'Candy & Gummy',
     type: 'matcap',
     description: 'Mouth-watering translucent red gummy bear with warm golden subsurface scatter.',
     generate: (ctx, w, h) => {
@@ -171,7 +171,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_lime_jelly',
     name: 'Electric Lime Jelly',
-    category: '🍬 Candy & Gummy',
+    category: 'Candy & Gummy',
     type: 'matcap',
     description: 'Fluorescent lime green gelatin with bright cyan subsurface radiance.',
     generate: (ctx, w, h) => {
@@ -195,7 +195,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_bubblegum_gloss',
     name: 'Bubblegum Gloss',
-    category: '🍬 Candy & Gummy',
+    category: 'Candy & Gummy',
     type: 'matcap',
     description: 'Vibrant strawberry bubblegum with electric blue ambient reflection.',
     generate: (ctx, w, h) => {
@@ -219,7 +219,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_cotton_candy',
     name: 'Cotton Candy Cloud',
-    category: '🍬 Candy & Gummy',
+    category: 'Candy & Gummy',
     type: 'matcap',
     description: 'Fluffy pastel fusion of cotton candy pink and baby blue.',
     generate: (ctx, w, h) => {
@@ -243,7 +243,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_blue_raspberry',
     name: 'Blue Raspberry Slush',
-    category: '🍬 Candy & Gummy',
+    category: 'Candy & Gummy',
     type: 'matcap',
     description: 'Electric blue candy with deep purple shadow and bright cyan core.',
     generate: (ctx, w, h) => {
@@ -269,7 +269,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_holo_foil',
     name: 'Holographic Rainbow Foil',
-    category: '🌈 Holographic & Rainbow',
+    category: 'Holographic & Rainbow',
     type: 'matcap',
     description: 'Chrome metallic foil with vivid rainbow diffraction bands.',
     generate: (ctx, w, h) => {
@@ -296,7 +296,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_laser_neon',
     name: 'Laser Pop Neon',
-    category: '🌈 Holographic & Rainbow',
+    category: 'Holographic & Rainbow',
     type: 'matcap',
     description: 'Blinding electric yellow with burning magenta rim and deep cyber violet base.',
     generate: (ctx, w, h) => {
@@ -320,7 +320,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_unicorn_stardust',
     name: 'Unicorn Stardust',
-    category: '🌈 Holographic & Rainbow',
+    category: 'Holographic & Rainbow',
     type: 'matcap',
     description: 'Sparkling celestial pastel rainbow with glittering golden halo.',
     generate: (ctx, w, h) => {
@@ -347,7 +347,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_sunny_playdough',
     name: 'Sunny Play-Dough',
-    category: '🧸 Kids Toy & Clay',
+    category: 'Kids Toy & Clay',
     type: 'matcap',
     description: 'Bright cheerful yellow modeling dough with soft velvety clay finish.',
     generate: (ctx, w, h) => {
@@ -364,7 +364,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_pink_playdoh',
     name: 'Bubblegum Pink Play-Doh',
-    category: '🧸 Kids Toy & Clay',
+    category: 'Kids Toy & Clay',
     type: 'matcap',
     description: 'Soft squishy bright bubblegum pink modeling clay with velvety matte texture.',
     generate: (ctx, w, h) => {
@@ -381,7 +381,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_blue_playdoh',
     name: 'Monster Blue Play-Doh',
-    category: '🧸 Kids Toy & Clay',
+    category: 'Kids Toy & Clay',
     type: 'matcap',
     description: 'Vibrant electric sky blue modeling dough with soft tactile shading.',
     generate: (ctx, w, h) => {
@@ -398,7 +398,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_green_playdoh',
     name: 'Grasshopper Green Play-Doh',
-    category: '🧸 Kids Toy & Clay',
+    category: 'Kids Toy & Clay',
     type: 'matcap',
     description: 'Lush bright green squishy dough with warm undertones.',
     generate: (ctx, w, h) => {
@@ -415,7 +415,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_purple_playdoh',
     name: 'Grape Purple Play-Doh',
-    category: '🧸 Kids Toy & Clay',
+    category: 'Kids Toy & Clay',
     type: 'matcap',
     description: 'Sweet royal purple squishy modeling dough with velvety finish.',
     generate: (ctx, w, h) => {
@@ -432,7 +432,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_toy_car_red',
     name: 'Toy Speedster Red',
-    category: '🧸 Kids Toy & Clay',
+    category: 'Kids Toy & Clay',
     type: 'matcap',
     description: 'High-gloss die-cast toy car paint with brilliant white headlight reflection.',
     generate: (ctx, w, h) => {
@@ -456,7 +456,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_creamsicle',
     name: 'Orange Creamsicle',
-    category: '🧸 Kids Toy & Clay',
+    category: 'Kids Toy & Clay',
     type: 'matcap',
     description: 'Sweet creamy orange sherbet with smooth vanilla ice-cream core.',
     generate: (ctx, w, h) => {
@@ -480,7 +480,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_alien_slime',
     name: 'Glow Alien Slime',
-    category: '🧸 Kids Toy & Clay',
+    category: 'Kids Toy & Clay',
     type: 'matcap',
     description: 'Toxic radioactive lime slime with an ultraviolet cosmic purple outer rim.',
     generate: (ctx, w, h) => {
@@ -506,7 +506,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_starlight_prism',
     name: 'Starlight Radiant Prism',
-    category: '⭐ Stars & Space',
+    category: 'Stars & Space',
     type: 'matcap',
     description: 'Golden celestial starlight prism with diamond multi-point glints.',
     generate: (ctx, w, h) => {
@@ -535,7 +535,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_supernova_gold',
     name: 'Supernova Golden Star',
-    category: '⭐ Stars & Space',
+    category: 'Stars & Space',
     type: 'matcap',
     description: 'Blinding golden stellar explosion with solar flare corona rim.',
     generate: (ctx, w, h) => {
@@ -559,7 +559,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_cosmic_stardust',
     name: 'Cosmic Violet Stardust',
-    category: '⭐ Stars & Space',
+    category: 'Stars & Space',
     type: 'matcap',
     description: 'Deep ultraviolet nebula galaxy with scattered stardust particles.',
     generate: (ctx, w, h) => {
@@ -587,7 +587,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_shooting_star',
     name: 'Shooting Star Glitter',
-    category: '⭐ Stars & Space',
+    category: 'Stars & Space',
     type: 'matcap',
     description: 'Cyan and magenta meteor trail with brilliant sparkling focal star.',
     generate: (ctx, w, h) => {
@@ -614,7 +614,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_marshmallow_puff',
     name: 'Marshmallow Puffy Gloss',
-    category: '🍬 Candy & Gummy',
+    category: 'Candy & Gummy',
     type: 'matcap',
     description: 'Soft squishy pastel pink marshmallow puff with satin sugar sheen.',
     generate: (ctx, w, h) => {
@@ -639,7 +639,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_glazed_donut',
     name: 'Glazed Sugar Donut',
-    category: '🍬 Candy & Gummy',
+    category: 'Candy & Gummy',
     type: 'matcap',
     description: 'Ultra-glossy warm honey sugar glaze over baked golden pastry.',
     generate: (ctx, w, h) => {
@@ -664,7 +664,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_sour_apple_gummy',
     name: 'Sour Apple Neon Gummy',
-    category: '🍬 Candy & Gummy',
+    category: 'Candy & Gummy',
     type: 'matcap',
     description: 'Electric sour green apple candy with luminous neon yellow edge glow.',
     generate: (ctx, w, h) => {
@@ -688,7 +688,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_dragonfruit_pop',
     name: 'Dragon Fruit Pop',
-    category: '🍬 Candy & Gummy',
+    category: 'Candy & Gummy',
     type: 'matcap',
     description: 'Vibrant magenta dragonfruit jelly with electric violet rim light.',
     generate: (ctx, w, h) => {
@@ -712,7 +712,7 @@ export const DOPAMINE_PRESETS = [
   {
     id: 'dopamine_rainbow_lollipop',
     name: 'Rainbow Swirl Lollipop',
-    category: '🍬 Candy & Gummy',
+    category: 'Candy & Gummy',
     type: 'matcap',
     description: 'Traditional carnival rainbow lollipop spiral with glossy candy glaze.',
     generate: (ctx, w, h) => {

@@ -13,11 +13,14 @@ export let uiVisible = true;
 
     window.addEventListener('keydown', e => {
         if (!pcControlsShown && e.key !== 'F12' && e.key !== 'F5') {
-            document.getElementById('touch-controls').style.display = 'none';
-            document.getElementById('pc-controls-hint').style.display = 'block';
+            const touchEl = document.getElementById('touch-controls');
+            if (touchEl) touchEl.style.display = 'none';
+            const hintEl = document.getElementById('pc-controls-hint');
+            if (hintEl) {
+                hintEl.style.display = 'block';
+                setTimeout(() => { hintEl.style.opacity = '0'; }, 10000);
+            }
             pcControlsShown = true;
-            // Hide the hint after 10 seconds
-            setTimeout(() => { document.getElementById('pc-controls-hint').style.opacity = '0'; }, 10000);
         }
 
         if(e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') keys.w = true;

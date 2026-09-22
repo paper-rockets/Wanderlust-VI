@@ -8,7 +8,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_prismatic_dichroic',
     name: 'Prismatic Dichroic Glass',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Optical dichroic glass prism with rainbow chromatic dispersion and brilliant internal reflections.',
     generate: (ctx, w, h) => {
@@ -46,7 +46,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_crystal_clear',
     name: 'Crystal Clear Glass',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Ultra-pure optical glass with high-translucency Fresnel rim and crisp highlight reflection.',
     generate: (ctx, w, h) => {
@@ -73,7 +73,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_frosted_cyan',
     name: 'Frosted Cyan Glass',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Soft sandblasted frosted glass with radiant seafoam cyan diffuse scattering.',
     generate: (ctx, w, h) => {
@@ -97,7 +97,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_ruby_rose',
     name: 'Ruby Rose Crystal',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Deep crimson ruby gemstone glass with bright magenta refraction.',
     generate: (ctx, w, h) => {
@@ -121,7 +121,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_emerald_bottle',
     name: 'Emerald Bottle Glass',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Vintage emerald bottle glass with rich jade depth and bright mint caustic glints.',
     generate: (ctx, w, h) => {
@@ -145,7 +145,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_amethyst_tint',
     name: 'Amethyst Tint Glass',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Royal amethyst crystal glass with glowing violet facets and ultraviolet edge flare.',
     generate: (ctx, w, h) => {
@@ -169,7 +169,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_stained_rainbow',
     name: 'Stained Rainbow Glass',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Cathedral stained glass jewel with vivid kaleidoscopic color bands.',
     generate: (ctx, w, h) => {
@@ -192,7 +192,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_milk_opal',
     name: 'Luminescent Milk Opal',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Milky translucent glass with fiery inner pastel warmth and sky blue scattering.',
     generate: (ctx, w, h) => {
@@ -216,7 +216,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_diamond_facet',
     name: 'Diamond Facet Sparkle',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Brilliant high-refractive diamond crystal with scintillating white and rainbow facets.',
     generate: (ctx, w, h) => {
@@ -253,7 +253,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_honey_amber',
     name: 'Liquid Honey Amber',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Golden fossilized amber glass with rich caramel core and sunny honey highlights.',
     generate: (ctx, w, h) => {
@@ -277,7 +277,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_smoky_obsidian',
     name: 'Smoky Obsidian Glass',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Dark semi-translucent volcanic glass with smooth charcoal sheen.',
     generate: (ctx, w, h) => {
@@ -295,7 +295,7 @@ export const GLASS_PRESETS = [
   {
     id: 'glass_neon_edge',
     name: 'Neon Edge Cyber Glass',
-    category: '🔮 Glass & Crystal',
+    category: 'Glass & Crystal',
     type: 'matcap',
     description: 'Futuristic acrylic glass with illuminated electric cyan rim and laser magenta backlight.',
     generate: (ctx, w, h) => {

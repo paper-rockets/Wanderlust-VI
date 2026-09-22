@@ -142,9 +142,26 @@
     </div>
 
     <div class="section-label">2. Ground Texture</div>
+    <div style="margin: 6px 0;">
+      <label for="select-grass-texture" style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 4px;">Choose Grass Texture:</label>
+      <select id="select-grass-texture" style="width: 100%; background: #21262d; color: #e2e8f0; border: 1px solid #30363d; padding: 6px 8px; font-family: monospace; font-size: 11px; border-radius: 4px; cursor: pointer;">
+        <option value="seamless_grass_01" selected>seamless_grass_01.png (with Normal Map)</option>
+        <option value="grass">grass.png</option>
+        <option value="grass2">grass2.png</option>
+        <option value="grass_01_color_2k">grass_01_color_2k.png</option>
+        <option value="grass_02_base_2k">grass_02_base_2k.png</option>
+        <option value="grass_03">grass_03.png</option>
+        <option value="grass_04_basecolor_1k">grass_04_basecolor_1k.png</option>
+        <option value="grass_05_basecolor_1k">grass_05_basecolor_1k.png</option>
+        <option value="Stylized_HandpaintedGrass_01_basecolor">Stylized_HandpaintedGrass_01_basecolor.jpg</option>
+        <option value="Stylized_HandpaintedGrass_02_basecolor">Stylized_HandpaintedGrass_02_basecolor.jpg</option>
+        <option value="Stylized_HandpaintedGrassAndDirt_01_basecolor">Stylized_HandpaintedGrassAndDirt_01_basecolor.jpg</option>
+        <option value="greek_seamless">Original Greek Grass (greek_grass_seamless.png)</option>
+        <option value="greek_diffuse">Original Model Diffuse (greek_GroundTEX.png)</option>
+      </select>
+    </div>
     <div class="btn-row">
-      <button id="btn-tex-seamless" class="active">Seamless Painted Grass</button>
-      <button id="btn-tex-diffuse">Raw Model Diffuse</button>
+      <button id="btn-normal-toggle" class="btn-wide active">Normal Map (3D Bumps): ON</button>
       <button id="btn-tex-cliff">Grass + Cliff Slope</button>
       <button id="btn-tex-plain">Flat Green (No Texture)</button>
     </div>
@@ -192,7 +209,9 @@
     // State
     const state = {
       viewMode: 'hill', // 'hill', 'villa', 'combo', 'flat'
-      texMode: 'seamless', // 'seamless', 'diffuse', 'cliff', 'plain'
+      texMode: 'seamless_grass_01', // active texture key
+      specialMode: 'normal', // 'normal', 'cliff', 'plain'
+      useNormalMap: true,
       repeat: 12,
       brightness: 1.0,
       showTrees: true,
@@ -236,30 +255,92 @@
     const hemiLight = new THREE.HemisphereLight('#87ceeb', '#4d6932', 0.4);
     scene.add(hemiLight);
 
-    // Texture Loader
-    const texLoader = new THREE.TextureLoader();
-    const textures = {
-      seamless: null,
-      diffuse: null
+    // Texture Catalog (all 11 grass textures + original Greek assets)
+    const textureCatalog = {
+      'seamless_grass_01': {
+        name: 'seamless_grass_01.png',
+        colorPath: 'assets/textures/Grass/seamless_grass_01.png',
+        normalPath: 'assets/textures/Grass/seamless_grass_01_normal.png',
+        roughnessPath: 'assets/textures/Grass/seamless_grass_01_roughness.png'
+      },
+      'grass': {
+        name: 'grass.png',
+        colorPath: 'assets/textures/Grass/grass.png'
+      },
+      'grass2': {
+        name: 'grass2.png',
+        colorPath: 'assets/textures/Grass/grass2.png'
+      },
+      'grass_01_color_2k': {
+        name: 'grass_01_color_2k.png',
+        colorPath: 'assets/textures/Grass/grass_01_color_2k.png',
+        normalPath: 'assets/textures/Grass/grass_01_normal_gl_2k.png'
+      },
+      'grass_02_base_2k': {
+        name: 'grass_02_base_2k.png',
+        colorPath: 'assets/textures/Grass/grass_02_base_2k.png',
+        normalPath: 'assets/textures/Grass/grass_02_normal_gl_2k.png'
+      },
+      'grass_03': {
+        name: 'grass_03.png',
+        colorPath: 'assets/textures/Grass/grass_03.png',
+        normalPath: 'assets/textures/Grass/grass_03_norm.png'
+      },
+      'grass_04_basecolor_1k': {
+        name: 'grass_04_basecolor_1k.png',
+        colorPath: 'assets/textures/Grass/grass_04_basecolor_1k.png',
+        normalPath: 'assets/textures/Grass/grass_04_normal_gl_1k.png'
+      },
+      'grass_05_basecolor_1k': {
+        name: 'grass_05_basecolor_1k.png',
+        colorPath: 'assets/textures/Grass/grass_05_basecolor_1k.png',
+        normalPath: 'assets/textures/Grass/grass_05_normal_gl_1k.png'
+      },
+      'Stylized_HandpaintedGrass_01_basecolor': {
+        name: 'Stylized_HandpaintedGrass_01_basecolor.jpg',
+        colorPath: 'assets/textures/Grass/Stylized_HandpaintedGrass_01_basecolor.jpg',
+        normalPath: 'assets/textures/Grass/Stylized_HandpaintedGrass_01_normalogl.jpg'
+      },
+      'Stylized_HandpaintedGrass_02_basecolor': {
+        name: 'Stylized_HandpaintedGrass_02_basecolor.jpg',
+        colorPath: 'assets/textures/Grass/Stylized_HandpaintedGrass_02_basecolor.jpg',
+        normalPath: 'assets/textures/Grass/Stylized_HandpaintedGrass_02_normalogl.jpg'
+      },
+      'Stylized_HandpaintedGrassAndDirt_01_basecolor': {
+        name: 'Stylized_HandpaintedGrassAndDirt_01_basecolor.jpg',
+        colorPath: 'assets/textures/Grass/Stylized_HandpaintedGrassAndDirt_01_basecolor.jpg',
+        normalPath: 'assets/textures/Grass/Stylized_HandpaintedGrassAndDirt_01_normalogl.jpg'
+      },
+      'greek_seamless': {
+        name: 'Original Greek Grass (greek_grass_seamless.png)',
+        colorPath: 'assets/greek_grass_seamless.png'
+      },
+      'greek_diffuse': {
+        name: 'Original Model Diffuse (greek_GroundTEX.png)',
+        colorPath: 'assets/greek_GroundTEX.png'
+      }
     };
 
-    // Load textures
-    textures.seamless = texLoader.load('assets/greek_grass_seamless.png', (tex) => {
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.RepeatWrapping;
-      tex.repeat.set(state.repeat, state.repeat);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      updateMaterials();
-      updateStatus();
-    });
+    const texLoader = new THREE.TextureLoader();
+    const textureCache = {};
 
-    textures.diffuse = texLoader.load('assets/greek_GroundTEX.png', (tex) => {
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.RepeatWrapping;
-      tex.repeat.set(state.repeat, state.repeat);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      updateMaterials();
-    });
+    function getOrLoadTexture(path) {
+      if (!path) return null;
+      if (!textureCache[path]) {
+        textureCache[path] = texLoader.load(path, (tex) => {
+          tex.wrapS = THREE.RepeatWrapping;
+          tex.wrapT = THREE.RepeatWrapping;
+          tex.repeat.set(state.repeat, state.repeat);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          updateMaterials();
+          updateStatus();
+        });
+        textureCache[path].wrapS = THREE.RepeatWrapping;
+        textureCache[path].wrapT = THREE.RepeatWrapping;
+        textureCache[path].repeat.set(state.repeat, state.repeat);
+      }
+      return textureCache[path];
+    }
 
     // Materials
     const terrainMaterial = new THREE.MeshStandardMaterial({
@@ -466,30 +547,38 @@
 
     // Update Materials based on state
     function updateMaterials() {
-      const activeTex = (state.texMode === 'seamless') ? textures.seamless : textures.diffuse;
+      const entry = textureCatalog[state.texMode];
+      const activeTex = entry ? getOrLoadTexture(entry.colorPath) : null;
+      const activeNormal = (state.useNormalMap && entry && entry.normalPath) ? getOrLoadTexture(entry.normalPath) : null;
       
       if (activeTex) {
         activeTex.repeat.set(state.repeat, state.repeat);
       }
+      if (activeNormal) {
+        activeNormal.repeat.set(state.repeat, state.repeat);
+      }
 
-      if (state.texMode === 'plain') {
+      if (state.specialMode === 'plain') {
         terrainMaterial.map = null;
+        terrainMaterial.normalMap = null;
         terrainMaterial.color.set('#5b823e'); // Current game flat green
         terrainMaterial.needsUpdate = true;
         hillMesh.material = terrainMaterial;
         flatMesh.material = terrainMaterial;
-      } else if (state.texMode === 'cliff') {
-        slopeShaderMaterial.uniforms.grassTex.value = textures.seamless;
+      } else if (state.specialMode === 'cliff') {
+        slopeShaderMaterial.uniforms.grassTex.value = activeTex;
         slopeShaderMaterial.uniforms.grassScale.value = state.repeat;
         slopeShaderMaterial.uniforms.brightness.value = state.brightness;
         slopeShaderMaterial.wireframe = state.wireframe;
         hillMesh.material = slopeShaderMaterial;
         flatMesh.material = terrainMaterial;
-        terrainMaterial.map = textures.seamless;
+        terrainMaterial.map = activeTex;
+        terrainMaterial.normalMap = activeNormal;
         terrainMaterial.color.setRGB(state.brightness, state.brightness, state.brightness);
         terrainMaterial.needsUpdate = true;
       } else {
         terrainMaterial.map = activeTex;
+        terrainMaterial.normalMap = activeNormal;
         terrainMaterial.color.setRGB(state.brightness, state.brightness, state.brightness);
         terrainMaterial.wireframe = state.wireframe;
         terrainMaterial.needsUpdate = true;
@@ -538,16 +627,14 @@
         combo: 'Villa on Grassy Hill',
         flat: 'Flat Ground'
       };
-      const texNames = {
-        seamless: 'Seamless Painted Grass (assets/greek_grass_seamless.png)',
-        diffuse: 'Original Model Ground Diffuse (assets/greek_GroundTEX.png)',
-        cliff: 'Painted Grass + Stone Cliff Slope Shading',
-        plain: 'Flat Green (No Texture - Current Game Look)'
-      };
+      const entry = textureCatalog[state.texMode];
+      const texName = entry ? entry.name : state.texMode;
+      const normalStatus = (state.useNormalMap && entry && entry.normalPath) ? 'ACTIVE' : (entry && entry.normalPath ? 'OFF' : 'NONE');
       
       const txt = 
         `Active Mode: ${modeNames[state.viewMode]}\n` +
-        `Ground Style: ${texNames[state.texMode]}\n` +
+        `Grass Texture: ${texName} [${state.specialMode.toUpperCase()}]\n` +
+        `Normal Map (3D Bumps): ${normalStatus}\n` +
         `Tiling: ${state.repeat}x | Brightness: ${state.brightness.toFixed(2)}x\n` +
         `Cypress Trees: ${state.showTrees ? 'ENABLED' : 'DISABLED'}\n` +
         `Controls: Left-drag = Orbit | Right-drag = Pan | Wheel = Zoom`;
@@ -569,23 +656,64 @@
         });
       });
 
-      // Textures
-      const texMap = {
-        'btn-tex-seamless': 'seamless',
-        'btn-tex-diffuse': 'diffuse',
-        'btn-tex-cliff': 'cliff',
-        'btn-tex-plain': 'plain'
-      };
-      Object.keys(texMap).forEach(btnId => {
-        const btn = document.getElementById(btnId);
-        btn.addEventListener('click', () => {
-          Object.keys(texMap).forEach(b => document.getElementById(b).classList.remove('active'));
-          btn.classList.add('active');
-          state.texMode = texMap[btnId];
+      // Texture Selector Dropdown
+      const selectTex = document.getElementById('select-grass-texture');
+      if (selectTex) {
+        selectTex.addEventListener('change', (e) => {
+          state.texMode = e.target.value;
+          state.specialMode = 'normal';
+          document.getElementById('btn-tex-cliff').classList.remove('active');
+          document.getElementById('btn-tex-plain').classList.remove('active');
           updateMaterials();
           updateStatus();
         });
-      });
+      }
+
+      // Normal Map Toggle
+      const btnNormal = document.getElementById('btn-normal-toggle');
+      if (btnNormal) {
+        btnNormal.addEventListener('click', () => {
+          state.useNormalMap = !state.useNormalMap;
+          btnNormal.classList.toggle('active', state.useNormalMap);
+          btnNormal.innerText = `Normal Map (3D Bumps): ${state.useNormalMap ? 'ON' : 'OFF'}`;
+          updateMaterials();
+          updateStatus();
+        });
+      }
+
+      // Cliff Slope Toggle
+      const btnCliff = document.getElementById('btn-tex-cliff');
+      if (btnCliff) {
+        btnCliff.addEventListener('click', () => {
+          if (state.specialMode === 'cliff') {
+            state.specialMode = 'normal';
+            btnCliff.classList.remove('active');
+          } else {
+            state.specialMode = 'cliff';
+            btnCliff.classList.add('active');
+            document.getElementById('btn-tex-plain').classList.remove('active');
+          }
+          updateMaterials();
+          updateStatus();
+        });
+      }
+
+      // Plain Color Toggle
+      const btnPlain = document.getElementById('btn-tex-plain');
+      if (btnPlain) {
+        btnPlain.addEventListener('click', () => {
+          if (state.specialMode === 'plain') {
+            state.specialMode = 'normal';
+            btnPlain.classList.remove('active');
+          } else {
+            state.specialMode = 'plain';
+            btnPlain.classList.add('active');
+            document.getElementById('btn-tex-cliff').classList.remove('active');
+          }
+          updateMaterials();
+          updateStatus();
+        });
+      }
 
       // Cypress Trees Toggle
       const btnTrees = document.getElementById('btn-toggle-trees');

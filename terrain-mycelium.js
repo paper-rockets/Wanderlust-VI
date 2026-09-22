@@ -10,7 +10,7 @@ const colorNightRock = new THREE.Color(0x130a24);
 const colorAbyssDirt = new THREE.Color(0x07020d);
 
 export default {
-    name: "🍄 Mycelium Forest",
+    name: "Mycelium Forest",
     shoreName: "░ Twilight Shore",
     getHeight(x, z, snoise) {
         // Rolling whimsical hills with mystical spore dunes and spires

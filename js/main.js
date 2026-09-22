@@ -48,12 +48,14 @@ import { setupToonCloudShader, initClouds } from './clouds.js';
 import { CloudManager, getCloudFactoryParams } from './cloud-manager.js';
 import { initTreesAndOctree } from './trees.js';
 import { initPropsAndWildlife } from './props.js';
+import { initProceduralRocks, updateRocks } from './rocks.js';
 import { initPlayer } from './player.js';
 import { initPostProcessingShaders } from './postprocessing.js';
 import { initFlight } from './flight.js';
 import { initSettingsPanels } from './ui-settings.js';
 import { initFlightEffects } from './flight-effects.js';
 import { initAtmosphereLife } from './atmosphere-life.js';
+import { initModelPlacer } from './model-placer.js';
 
 // ==========================================
 // MAIN GAME INITIALIZATION & RENDER LOOP
@@ -246,7 +248,7 @@ gui.add({
         gui.title('Saved!');
         setTimeout(() => gui.title('Settings'), 1500);
     }
-}, 'saveAll').name('💾 Save All Settings');
+}, 'saveAll').name('Save All Settings');
 
 gui.add({
     saveSetting: () => {
@@ -260,7 +262,7 @@ gui.add({
             }
         }
     }
-}, 'saveSetting').name('💾 Save Per-Biome');
+}, 'saveSetting').name('Save Per-Biome');
 
 const perfFolder = gui.addFolder('Performance');
 perfFolder.add(params, 'quality', ['Regular', 'Low']).name('Quality').onChange(v => {
@@ -386,6 +388,9 @@ if (topBiomeSel) {
             playerGrp.position.set(targetIsland.centerX, Math.max(90, groundY + 50), targetIsland.centerZ);
             window.lastTerrainGridX = -9999;
             window.lastTerrainGridZ = -9999;
+            if (typeof window.revalidatePlacedModels === 'function') {
+                window.revalidatePlacedModels();
+            }
         }
     });
 }
@@ -671,7 +676,28 @@ const {
 const { waterMesh, waterMat, waterUniforms } = initWater(scene, LOW_GFX);
 window.waterMesh = waterMesh;
 window.waterMat = waterMat;
+const _origUpdateTerrainGeometry = updateTerrainGeometry;
+window.updateTerrainGeometry = function(x, z) {
+    _origUpdateTerrainGeometry(x, z);
+    if (typeof window.revalidatePlacedModels === 'function') {
+        window.revalidatePlacedModels();
+    }
+};
 window.waterUniforms = waterUniforms;
+
+// 6.5 In-Game 3D Model Picker & Placement System
+const modelPlacer = initModelPlacer({
+    scene,
+    camera,
+    renderer,
+    terrain,
+    gltfLoader,
+    getWorldHeight,
+    godCamera,
+    godControls,
+    setGodMode
+});
+window.modelPlacer = modelPlacer;
 
 // 7. Diorama Props, Instanced Foliage & Trails
 const spawnX = worldLayout.spawnPosition ? worldLayout.spawnPosition.x : 0;
@@ -803,6 +829,11 @@ const {
     updateGroundCrystalColors
 } = initPropsAndWildlife(scene, gltfLoader, params, LOW_GFX, gradientMap);
 
+// 10b. Procedural Rocks & Boulders (PBR Textured)
+const { rocksGroup, setRocksVisible } = initProceduralRocks(scene);
+window.rocksGroup = rocksGroup;
+window.setRocksVisible = setRocksVisible;
+
 // 11. Post-Processing Shaders (God Rays & Summer Filter)
 const {
     GodRaysShader,
@@ -823,6 +854,7 @@ const {
     getCurrentYaw,
     isPaused
 } = initFlight(scene, camera, renderer, playerGrp, playerVisuals, starField, params);
+window.cameraBase = cameraBase;
 
 // 12b. Flight Visual Juice & Atmosphere Life
 const flightEffects = initFlightEffects(scene, camera, playerGrp, params);
@@ -1059,6 +1091,9 @@ function animate() {
     if (typeof treeUniforms !== 'undefined') {
         treeUniforms.uPlayerPos.value.copy(playerGrp.position);
     }
+    if (window.modelPlacer) {
+        window.modelPlacer.update(dt);
+    }
 
 
 
@@ -1265,6 +1300,9 @@ function animate() {
     updateInstances(playerGrp.position.x, playerGrp.position.z, time, dt, currentYaw);
     if (typeof updateCrystals === 'function') {
         updateCrystals(playerGrp.position, time);
+    }
+    if (typeof updateRocks === 'function') {
+        updateRocks(playerGrp.position);
     }
     if (currentFrame % 4 === 0 && typeof updateTreeLOD === 'function') updateTreeLOD(playerGrp.position.x, playerGrp.position.z);
     updateBirds(playerGrp.position.x, playerGrp.position.y, playerGrp.position.z, time, dt);

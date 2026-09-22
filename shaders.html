@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Shader Presets Reviewer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #0a0c12;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(15, 18, 26, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #1e293b;
+      padding: 12px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0284c7, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .header-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      font-weight: 600;
+    }
+    .header-subtitle {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn {
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid transparent;
+    }
+    .btn-primary {
+      background: #0284c7;
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: #0369a1;
+    }
+    .filter-bar {
+      background: #111522;
+      border-bottom: 1px solid #1e293b;
+      padding: 10px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+    .search-input {
+      flex: 1 1 240px;
+      max-width: 360px;
+      background: #0f131f;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 8px 14px;
+      color: #ffffff;
+      font-size: 12px;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: #38bdf8;
+    }
+    .cat-select {
+      background: #0f131f;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 8px 12px;
+      color: #ffffff;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+    }
+    .grid-container {
+      flex: 1;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 18px;
+    }
+    .card {
+      background: #111522;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      background: #161c2d;
+      border-color: #38bdf8;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .card-sphere {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      margin-bottom: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.2), 0 8px 20px rgba(0, 0, 0, 0.6);
+    }
+    .card-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin-bottom: 4px;
+      line-height: 1.3;
+    }
+    .card-cat {
+      font-size: 10px;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+    .card-btn {
+      margin-top: auto;
+      font-size: 11px;
+      color: #38bdf8;
+      font-weight: 600;
+    }
+    /* 3D Sphere Modal */
+    #viewer-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #viewer-modal.is-open {
+      display: flex;
+    }
+    .viewer-content {
+      background: #0f131f;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      width: min(92vw, 680px);
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+    }
+    .viewer-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .viewer-canvas-wrap {
+      width: 100%;
+      height: 380px;
+      position: relative;
+      background: radial-gradient(circle at center, #1a2333 0%, #0a0c12 100%);
+    }
+    .viewer-footer {
+      padding: 14px 20px;
+      border-top: 1px solid #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <div class="header-icon">⚛</div>
+      <div>
+        <div class="header-title">
+          Shader Presets Reviewer
+          <span class="header-badge" id="total-badge">...</span>
+        </div>
+        <div class="header-subtitle">Full procedural and curated MatCap shader collection</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <a href="/" class="btn btn-primary">← Back to Flight Game</a>
+    </div>
+  </header>
+
+  <div class="filter-bar">
+    <input type="text" class="search-input" id="search-box" placeholder="Search shaders (Toon, Gold, Jade, Opal)..." />
+    <select class="cat-select" id="cat-select" aria-label="Category Filter"></select>
+  </div>
+
+  <div class="grid-container" id="grid"></div>
+
+  <!-- 3D Sphere Interactive Modal -->
+  <div id="viewer-modal">
+    <div class="viewer-content">
+      <div class="viewer-header">
+        <div>
+          <h3 id="modal-title" style="font-size:16px; color:#fff;">Preset Name</h3>
+          <span id="modal-cat" style="font-size:11px; color:#38bdf8;">Category</span>
+        </div>
+        <button id="modal-close" style="background:none; border:none; color:#94a3b8; font-size:24px; cursor:pointer;">&times;</button>
+      </div>
+      <div class="viewer-canvas-wrap" id="canvas-container"></div>
+      <div class="viewer-footer">
+        <span>Drag with mouse to rotate 3D sphere</span>
+        <button id="modal-apply-btn" class="btn btn-primary" style="padding:6px 12px;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import {
+      ALL_MATERIAL_PRESETS,
+      PRESET_CATEGORIES,
+      createMatCap,
+      getMatcapTexture
+    } from './js/shaders/materialPresets.js';
+
+    document.getElementById('total-badge').textContent = `${ALL_MATERIAL_PRESETS.length} Total`;
+
+    const catSelect = document.getElementById('cat-select');
+    PRESET_CATEGORIES.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      const count = cat === 'All' ? ALL_MATERIAL_PRESETS.length : ALL_MATERIAL_PRESETS.filter(p => p.category === cat).length;
+      opt.textContent = `${cat} (${count})`;
+      catSelect.appendChild(opt);
+    });
+
+    let activeCategory = 'All';
+    let searchQuery = '';
+
+    const grid = document.getElementById('grid');
+
+    function renderCards() {
+      grid.innerHTML = '';
+      const filtered = ALL_MATERIAL_PRESETS.filter(p => {
+        const matchesCat = activeCategory === 'All' || p.category === activeCategory;
+        const matchesQuery = !searchQuery ||
+          p.name.toLowerCase().includes(searchQuery) ||
+          (p.category && p.category.toLowerCase().includes(searchQuery));
+        return matchesCat && matchesQuery;
+      });
+
+      filtered.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const previewUrl = p.url || (typeof p.generate === 'function' ? createMatCap(p.generate) : '');
+
+        card.innerHTML = `
+          <div class="card-sphere" style="background-image: url('${previewUrl}')"></div>
+          <div class="card-name">${p.name}</div>
+          <div class="card-cat">${p.category || 'Shader'}</div>
+          <div class="card-btn">Inspect 3D →</div>
+        `;
+
+        card.addEventListener('click', () => open3DViewer(p));
+        grid.appendChild(card);
+      });
+    }
+
+    document.getElementById('search-box').addEventListener('input', (e) => {
+      searchQuery = e.target.value.toLowerCase().trim();
+      renderCards();
+    });
+
+    catSelect.addEventListener('change', (e) => {
+      activeCategory = e.target.value;
+      renderCards();
+    });
+
+    renderCards();
+
+    // 3D Viewer Logic
+    const viewerModal = document.getElementById('viewer-modal');
+    const container = document.getElementById('canvas-container');
+    let renderer, scene, camera, controls, sphereMesh, animFrameId;
+
+    function init3D() {
+      if (renderer) return;
+      const w = container.clientWidth || 640;
+      const h = container.clientHeight || 380;
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+      camera.position.z = 2.8;
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      container.appendChild(renderer.domElement);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 1.2;
+
+      const light = new THREE.AmbientLight(0xffffff, 0.8);
+      scene.add(light);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.set(3, 4, 3);
+      scene.add(dirLight);
+
+      const geom = new THREE.SphereGeometry(1, 64, 64);
+      const defaultMat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+      sphereMesh = new THREE.Mesh(geom, defaultMat);
+      scene.add(sphereMesh);
+
+      function animate() {
+        animFrameId = requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+
+    function open3DViewer(preset) {
+      viewerModal.classList.add('is-open');
+      document.getElementById('modal-title').textContent = preset.name;
+      document.getElementById('modal-cat').textContent = preset.category || 'Shader';
+
+      init3D();
+
+      const tex = getMatcapTexture(preset);
+      if (tex) {
+        sphereMesh.material = new THREE.MeshMatcapMaterial({ matcap: tex });
+      } else {
+        sphereMesh.material = new THREE.MeshStandardMaterial({ color: 0x38bdf8 });
+      }
+
+      setTimeout(() => {
+        if (renderer && container) {
+          const w = container.clientWidth;
+          const h = container.clientHeight;
+          renderer.setSize(w, h);
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+        }
+      }, 50);
+    }
+
+    function close3DViewer() {
+      viewerModal.classList.remove('is-open');
+    }
+
+    document.getElementById('modal-close').addEventListener('click', close3DViewer);
+    document.getElementById('modal-apply-btn').addEventListener('click', close3DViewer);
+    viewerModal.addEventListener('click', (e) => {
+      if (e.target === viewerModal) close3DViewer();
+    });
+  </script>
+</body>
+</html>

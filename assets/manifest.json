@@ -1,0 +1,110 @@
+{
+  "4_houses_fantasy": [
+    "fantasy_house_orange_roof.glb",
+    "fantasy_house_round_mushroom.glb",
+    "fantasy_house_tall_timber.glb",
+    "fantasy_tower_teal.glb"
+  ],
+  "castle_town": [
+    "armory.glb",
+    "castle.glb",
+    "entrence_main.glb",
+    "entrence_small.glb",
+    "house02.glb",
+    "house03.glb",
+    "house04.glb",
+    "house05.glb",
+    "tower.glb",
+    "wall_tower_main.glb",
+    "wall_tower_small.glb"
+  ],
+  "free_medieval": [
+    "blacksmith.glb",
+    "house.glb",
+    "canopy.glb",
+    "tent.glb"
+  ],
+  "german_village": [
+    "german_house_1.glb",
+    "german_house_2.glb",
+    "german_house_4.glb",
+    "german_house_5.glb",
+    "german_house_6.glb",
+    "german_lighthouse.glb"
+  ],
+  "greek_sculptor": [
+    "greek_sculptor_house.glb"
+  ],
+  "terrains": [
+    "issum_island_clean.glb"
+  ],
+  "little_village": [
+    "house_small.glb",
+    "houseplus_small.glb",
+    "windmill.glb"
+  ],
+  "simple_low_poly": [
+    "farm_house_lvl1.glb",
+    "farm_house_lvl2.glb",
+    "farm_house_lvl3.glb",
+    "farm_house_lvl4.glb",
+    "farm_house_lvl5.glb",
+    "farm_house_lvl6.glb",
+    "farm_house_lvl7.glb",
+    "farm_lvl1.glb",
+    "farm_lvl2.glb",
+    "farm_lvl3.glb",
+    "farm_lvl4.glb",
+    "farm_lvl5.glb",
+    "farm_lvl6.glb",
+    "farm_lvl7.glb",
+    "house_lvl1.glb",
+    "house_lvl2.glb",
+    "house_lvl3.glb",
+    "house_lvl4.glb",
+    "house_lvl5.glb",
+    "house_lvl6.glb",
+    "house_lvl7.glb",
+    "tower_lvl1.glb",
+    "tower_lvl2.glb",
+    "tower_lvl3.glb",
+    "tower_lvl4.glb",
+    "tower_lvl5.glb",
+    "tower_lvl6.glb",
+    "tower_lvl7.glb"
+  ],
+  "village_pack": [
+    "house_1.glb",
+    "house_2.glb",
+    "house_3.glb",
+    "house_4.glb"
+  ],
+  "village_town": [
+    "barn.glb",
+    "chapel.glb",
+    "house.glb",
+    "house_2story_purple.glb",
+    "house_blue.glb",
+    "house_purple.glb",
+    "house_red.glb",
+    "windmill.glb"
+  ],
+  "winter_castle": [
+    "castle.glb",
+    "church.glb",
+    "house1.glb",
+    "house2.glb",
+    "house3.glb",
+    "house4.glb",
+    "house5.glb",
+    "tent1.glb",
+    "tent2.glb",
+    "tent3.glb",
+    "tent4.glb",
+    "tent5.glb",
+    "tower1.glb",
+    "tower2.glb",
+    "tower3.glb",
+    "windmill.glb"
+  ]
+}

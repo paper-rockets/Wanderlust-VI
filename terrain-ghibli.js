@@ -14,7 +14,7 @@ const colorDirt = new THREE.Color(0xdcb58a);
 const scratchPatchColor = new THREE.Color();
 
 export default {
-    name: "🌳 Ghibli Land",
+    name: "Ghibli Land",
     shoreName: "░ Continental Shore",
     getHeight(x, z, snoise) {
         // Multi-octave natural rolling hills, gentle valleys, and green meadows

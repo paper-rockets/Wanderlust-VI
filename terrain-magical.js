@@ -8,7 +8,7 @@ const colorMagicalRock = new THREE.Color(0x311b92);   // Deep indigo basalt rock
 const colorDirt = new THREE.Color(0x1a0933);          // Dark void ground
 
 export default {
-    name: "✨ Magical Sanctuary",
+    name: "Magical Sanctuary",
     shoreName: "░ Magical Shore",
     getHeight(x, z, snoise) {
         // Broad, gentle terrain for an approachable sanctuary rather than sharp cliffs.

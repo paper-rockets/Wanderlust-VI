@@ -10,7 +10,7 @@ const colorCrystalHigh= new THREE.Color(0xe0b0ff);
 const colorSpire      = new THREE.Color(0xffffff);
 
 export default {
-    name: '💎 Crystal Land',
+    name: 'Crystal Land',
     nightGlowMult: 1.5,
     setNightGlowMult(val) {
         this.nightGlowMult = typeof val === 'number' ? val : parseFloat(val);

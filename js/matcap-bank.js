@@ -291,8 +291,8 @@ export function initMatcapBank() {
       <div class="mc-title-group">
         <span class="mc-title">MatCap Shader Bank</span>
         <div class="mc-target-tabs">
-          <button class="mc-target-tab" id="mc-target-trees" data-target="trees" title="Style cartoon tree foliage">🌲 Cartoon Trees</button>
-          <button class="mc-target-tab is-active is-crystal" id="mc-target-crystal" data-target="crystal" title="Replace full terrain shader in Crystal Land">💎 Crystal Land Ground</button>
+          <button class="mc-target-tab" id="mc-target-trees" data-target="trees" title="Style cartoon tree foliage">Cartoon Trees</button>
+          <button class="mc-target-tab is-active is-crystal" id="mc-target-crystal" data-target="crystal" title="Replace full terrain shader in Crystal Land">Crystal Land Ground</button>
         </div>
         <span class="mc-badge" id="mc-count-badge">${ALL_MATERIAL_PRESETS.length} Shaders</span>
         <span class="mc-active-pill" id="mc-active-indicator">Crystal Ground: Default</span>

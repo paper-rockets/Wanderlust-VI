@@ -57,7 +57,7 @@ const taggedMaterials = new WeakSet();
  * Preserves any prior onBeforeCompile callbacks.
  */
 export function applyRoystanShader(material) {
-    if (!material || taggedMaterials.has(material)) return;
+    if (!material || taggedMaterials.has(material) || material.isMeshBasicMaterial) return;
     taggedMaterials.add(material);
 
     const prevOnBeforeCompile = material.onBeforeCompile;

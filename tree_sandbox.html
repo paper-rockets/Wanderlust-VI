@@ -1,0 +1,2192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Model Viewer - In-Game Toon Shaders</title>
+  
+  <style>
+    * { box-sizing: border-box; }
+    
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: monospace;
+      
+      /* Visual checkerboard to prove transparency */
+      background-color: #f0f0f0;
+      background-image: 
+        linear-gradient(45deg, #e0e0e0 25%, transparent 25%, transparent 75%, #e0e0e0 75%, #e0e0e0),
+        linear-gradient(45deg, #e0e0e0 25%, transparent 25%, transparent 75%, #e0e0e0 75%, #e0e0e0);
+      background-size: 20px 20px;
+      background-position: 0 0, 10px 10px;
+      user-select: none;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+      outline: none;
+    }
+
+    /* Terminal-style geometric UI container */
+    .ui-container {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      z-index: 10;
+      max-width: calc(100vw - 48px);
+      justify-content: flex-end;
+    }
+
+    .btn {
+      background: #ffffff;
+      color: #000000;
+      border: 1px solid #000000;
+      padding: 9px 14px;
+      font-family: monospace;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+
+    .btn:hover {
+      background: #000000;
+      color: #ffffff;
+    }
+
+    .btn-active {
+      background: #000000;
+      color: #ffffff;
+    }
+
+    .btn-toon {
+      border-color: #238636;
+      color: #238636;
+      font-weight: bold;
+    }
+
+    .btn-toon.btn-active {
+      background: #238636;
+      color: #ffffff;
+    }
+
+    .btn-season {
+      border-color: #0969da;
+      color: #0969da;
+      font-weight: bold;
+    }
+
+    .btn-season.autumn {
+      border-color: #c7611a;
+      color: #c7611a;
+    }
+
+    .btn-season.winter {
+      border-color: #0969da;
+      color: #0969da;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    #labels-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+    }
+    
+    .label {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.95);
+      color: #000;
+      border: 1px solid #000;
+      padding: 8px 12px;
+      font-family: monospace;
+      font-size: 13px;
+      transform: translate(-50%, -100%);
+      white-space: nowrap;
+      box-shadow: 2px 2px 0px rgba(0,0,0,0.2);
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 190px;
+      transition: all 0.15s ease;
+    }
+
+    .label.selected {
+      border: 2px solid #000000;
+      background: #ffffff;
+      box-shadow: 3px 3px 0px rgba(0,0,0,0.35);
+    }
+
+    .label-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .checkbox-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      overflow: hidden;
+      max-width: 100%;
+      user-select: none;
+    }
+
+    .model-checkbox {
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      accent-color: #000000;
+      margin: 0;
+      flex-shrink: 0;
+    }
+
+    .name-input {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: bold;
+      border: 1px dashed transparent;
+      border-bottom: 1px dashed #ccc;
+      background: transparent;
+      color: #000;
+      padding: 2px 4px;
+      width: 140px;
+      outline: none;
+      transition: all 0.2s;
+      text-overflow: ellipsis;
+    }
+
+    .name-input:hover, .name-input:focus {
+      border: 1px dashed #000;
+      background: #fff;
+    }
+
+    .label-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .anim-select {
+      background: #fff;
+      color: #000;
+      border: 1px solid #000;
+      font-family: monospace;
+      font-size: 12px;
+      padding: 4px 6px;
+      cursor: pointer;
+      outline: none;
+      flex: 1;
+      max-width: 180px;
+    }
+
+    .anim-select:hover {
+      background: #eee;
+    }
+
+    .anim-btn {
+      background: #fff;
+      color: #000;
+      border: 1px solid #000;
+      padding: 4px 8px;
+      font-family: monospace;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .anim-btn:hover {
+      background: #000;
+      color: #fff;
+    }
+
+    /* Modal Pop-up */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      font-family: monospace;
+    }
+    .modal-box {
+      background: #ffffff;
+      border: 2px solid #000000;
+      width: 92vw;
+      max-width: 960px;
+      height: 82vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 6px 6px 0px rgba(0,0,0,0.4);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 2px solid #000;
+      background: #f8f9fa;
+    }
+    .modal-title {
+      font-weight: bold;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+    }
+    .modal-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 18px;
+      border-bottom: 1px solid #ddd;
+      background: #fff;
+      align-items: center;
+    }
+    .modal-search {
+      flex: 1;
+      min-width: 220px;
+      padding: 8px 12px;
+      border: 1px solid #000;
+      font-family: monospace;
+      font-size: 13px;
+      outline: none;
+    }
+    .modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+      background: #fdfdfd;
+    }
+    .picker-card {
+      background: #ffffff;
+      border: 1px solid #000000;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .picker-card:hover {
+      background: #f0fdf4;
+      border-color: #10b981;
+      transform: translateY(-2px);
+      box-shadow: 2px 4px 0 rgba(0,0,0,0.15);
+    }
+    .picker-card-title {
+      font-weight: bold;
+      font-size: 13px;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+    .picker-card-tag {
+      font-size: 11px;
+      color: #555;
+      background: #e2e8f0;
+      padding: 2px 6px;
+      border-radius: 2px;
+      align-self: flex-start;
+      margin-bottom: 10px;
+    }
+    .picker-card-btn {
+      background: #000;
+      color: #fff;
+      border: 1px solid #000;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      text-align: center;
+      font-family: monospace;
+    }
+    .picker-card:hover .picker-card-btn {
+      background: #10b981;
+      border-color: #059669;
+    }
+
+    /* Floating In-App Placement Toolbar */
+    .placement-bar {
+      position: absolute;
+      top: 96px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 35;
+      background: #ffffff;
+      border: 2px solid #10b981;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+      padding: 8px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      max-width: 92vw;
+    }
+
+    /* Floating In-App Selected Model Inspector */
+    .selected-bar {
+      position: absolute;
+      bottom: 85px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      background: #ffffff;
+      border: 2px solid #000000;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+      padding: 8px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      max-width: 92vw;
+    }
+  </style>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+  <div id="labels-container"></div>
+
+  <!-- Top Asset Browser Toolbar -->
+  <div class="top-nav-bar" style="position: absolute; top: 16px; left: 16px; z-index: 20; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: rgba(255,255,255,0.95); padding: 8px 12px; border: 1px solid #000; box-shadow: 2px 2px 0 rgba(0,0,0,0.25); font-family: monospace;">
+    <span style="font-weight: bold; font-size: 13px; letter-spacing: 0.5px;">SANDBOX:</span>
+    <select id="pack-dropdown" class="btn" style="padding: 6px 10px; font-size: 12px; cursor: pointer;">
+      <option value="favorites">⭐ My 64 Favorites (Curated)</option>
+      <option value="winter_castle">Winter Castle & Town (50)</option>
+      <option value="showcase">Featured Showcase (12 Models)</option>
+      <option value="4_houses_fantasy">Fantasy Houses (4)</option>
+      <option value="castle_town">Castle Town (14)</option>
+      <option value="german_village">German Village (6)</option>
+      <option value="little_village">Little Village (3)</option>
+      <option value="village_pack">Village Pack (47)</option>
+      <option value="village_town">Village Town Assets (47)</option>
+      <option value="greek_sculptor">Greek Sculptor (2)</option>
+      <option value="free_medieval">Free Medieval (11)</option>
+      <option value="simple_low_poly">Simple Low Poly (44)</option>
+      <option value="terrains">Issum Island (1)</option>
+    </select>
+    <button class="btn" id="load-selected-pack-btn" style="background:#000; color:#fff;">[ Load Pack ]</button>
+    <select id="single-model-dropdown" class="btn" style="padding: 6px 10px; font-size: 12px; max-width: 200px; cursor: pointer;">
+      <option value="">-- Add Single Model... --</option>
+    </select>
+    <button class="btn" id="open-picker-btn" style="background: #10b981; color: #fff; font-weight: bold; border-color: #059669; padding: 6px 12px; cursor: pointer;">[ 📦 Pick &amp; Place Model ]</button>
+    <button class="btn" id="rotate-model-btn" title="Rotate selected model 45° (or press R)">[ Rotate 45° (R) ]</button>
+    <button class="btn" id="toggle-scale-mode-btn" title="Toggle normalized 4m height vs real-world proportions">[ Scale: NORMALIZED (4m) ]</button>
+    <span style="font-size: 11px; color: #555; margin-left: 4px;">(Click &amp; drag any model to move)</span>
+    <span id="selected-model-badge" style="font-size: 11px; font-weight: bold; color: #065f46; background: #d1fae5; border: 1px solid #10b981; padding: 3px 8px; display: none;"></span>
+  </div>
+
+  <!-- Model Picker Pop-Up Modal -->
+  <div id="model-picker-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title">📦 3D MODEL CATALOG &amp; PLACEMENT PICKER</span>
+        <button class="btn" id="close-picker-btn" style="background:#000; color:#fff; font-weight:bold;">[ ✕ Close ]</button>
+      </div>
+      <div class="modal-controls">
+        <select id="picker-pack-select" class="btn" style="padding: 7px 12px; font-size: 12px;">
+          <option value="favorites">⭐ My 64 Favorites (Curated)</option>
+          <option value="all">🌐 All Available Models (229)</option>
+          <option value="winter_castle">Winter Castle & Town (50)</option>
+          <option value="4_houses_fantasy">Fantasy Houses (4)</option>
+          <option value="castle_town">Castle Town (14)</option>
+          <option value="german_village">German Village (6)</option>
+          <option value="little_village">Little Village (3)</option>
+          <option value="village_pack">Village Pack (47)</option>
+          <option value="village_town">Village Town Assets (47)</option>
+          <option value="greek_sculptor">Greek Sculptor (2)</option>
+          <option value="free_medieval">Free Medieval (11)</option>
+          <option value="simple_low_poly">Simple Low Poly (44)</option>
+          <option value="terrains">Issum Island (1)</option>
+        </select>
+        <input type="text" id="picker-search-input" class="modal-search" placeholder="Type to filter by name (e.g. castle, house, tree, mill)...">
+        <span id="picker-count-badge" style="font-size: 12px; color: #555; font-weight: bold;">64 models</span>
+      </div>
+      <div id="picker-grid" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Floating In-App Placement Toolbar (Active when placing) -->
+  <div id="placement-toolbar" class="placement-bar" style="display: none;">
+    <span style="font-weight: bold; color: #065f46;">PLACING: <span id="placement-model-name" style="text-decoration: underline;">Model</span></span>
+    <span style="color:#aaa;">|</span>
+    <span>Rotate:</span>
+    <button class="btn" id="place-rot-left-btn" title="Rotate Left 45°">[ ⟲ -45° ]</button>
+    <button class="btn" id="place-rot-right-btn" title="Rotate Right 45°">[ ⟳ +45° ]</button>
+    <span style="color:#aaa;">|</span>
+    <span>Scale:</span>
+    <button class="btn" id="place-scale-down-btn" title="Scale Down">[ - Smaller ]</button>
+    <span id="place-scale-label" style="font-weight:bold; padding: 2px 6px; background:#eef; border:1px solid #ccd;">1.0x</span>
+    <button class="btn" id="place-scale-up-btn" title="Scale Up">[ + Bigger ]</button>
+    <span style="color:#aaa;">|</span>
+    <span style="color:#059669; font-weight:bold;">👉 Click ground to place!</span>
+    <button class="btn" id="cancel-placement-btn" style="background: #fee2e2; color: #991b1b; border-color: #ef4444; font-weight: bold;">[ ✕ Exit Placement ]</button>
+  </div>
+
+  <!-- Floating In-App Selected Model Toolbar (Active when a placed model is clicked) -->
+  <div id="selected-model-toolbar" class="selected-bar" style="display: none;">
+    <span style="font-weight: bold; color: #1e293b;">SELECTED: <span id="sel-toolbar-name" style="color:#059669;">None</span></span>
+    <span style="color:#aaa;">|</span>
+    <span>Rotate:</span>
+    <button class="btn" id="sel-rot-left-btn" title="Rotate Left 45°">[ ⟲ -45° ]</button>
+    <button class="btn" id="sel-rot-right-btn" title="Rotate Right 45°">[ ⟳ +45° ]</button>
+    <span style="color:#aaa;">|</span>
+    <span>Scale:</span>
+    <button class="btn" id="sel-scale-down-btn" title="Decrease Scale">[ - Smaller ]</button>
+    <span id="sel-scale-label" style="font-weight:bold; padding: 2px 6px; background:#eef; border:1px solid #ccd;">1.0x</span>
+    <button class="btn" id="sel-scale-up-btn" title="Increase Scale">[ + Bigger ]</button>
+    <span style="color:#aaa;">|</span>
+    <button class="btn" id="sel-duplicate-btn" style="background:#f0fdf4; color:#166534; border-color:#22c55e; font-weight:bold;" title="Duplicate this model and place more">[ 📋 Duplicate ]</button>
+    <button class="btn" id="sel-delete-btn" style="background:#fee2e2; color:#991b1b; border-color:#ef4444; font-weight:bold;" title="Delete this model from scene">[ 🗑️ Delete ]</button>
+    <button class="btn" id="sel-close-btn" title="Deselect model">[ ✕ Done ]</button>
+  </div>
+  
+  <div class="ui-container">
+    <label class="btn" for="file-upload">
+      [ Load GLB(s) ]
+    </label>
+    <input type="file" id="file-upload" accept=".glb,.gltf" multiple>
+    
+    <button class="btn" id="toggle-shading-btn">
+      [ Shader: ORIGINAL PBR ]
+    </button>
+
+    <button class="btn btn-season" id="toggle-season-btn">
+      [ Season: SPRING ]
+    </button>
+
+    <button class="btn" id="toggle-wind-btn">
+      [ Wind: ON ]
+    </button>
+
+    <button class="btn" id="select-all-btn">
+      [ Deselect All ]
+    </button>
+
+    <button class="btn" id="export-folder-btn" title="Copy checkmarked models directly into a selected folder on your computer">
+      [ Save to Folder (0) ]
+    </button>
+
+    <button class="btn" id="export-zip-btn" title="Download checkmarked models as a ZIP file">
+      [ Download ZIP (0) ]
+    </button>
+
+    <button class="btn" id="master-anim-btn">
+      [ Pause ]
+    </button>
+
+    <button class="btn" id="speed-btn">
+      [ 1.0x ]
+    </button>
+    
+    <button class="btn" id="export-btn">
+      [ Export PNG ]
+    </button>
+    
+    <button class="btn" id="toggle-names-btn">
+      [ Names: ON ]
+    </button>
+
+    <button class="btn" id="fs-btn">
+      [ Fullscreen ]
+    </button>
+
+    <button class="btn" id="clear-btn">
+      [ Clear ]
+    </button>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+    import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+    import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+
+    // Seasonal Presets matching the in-game shader system
+    const PRESETS = {
+      spring: {
+        name: 'SPRING',
+        leafBottom: '#1c3b23',
+        leafTop: '#5c8338',
+        leafVarColor: '#1e4430',
+        leafBrightness: 1.05,
+        leafGradPower: 1.1,
+        leafVarStrength: 0.60,
+        leafVarScale: 2.5,
+        barkBase: '#422817',
+        barkTop: '#784728',
+        barkBrightness: 1.50
+      },
+      autumn: {
+        name: 'AUTUMN',
+        leafBottom: '#ffaf36',
+        leafTop: '#d94d1a',
+        leafVarColor: '#8f2409',
+        leafBrightness: 1.05,
+        leafGradPower: 1.1,
+        leafVarStrength: 0.60,
+        leafVarScale: 2.5,
+        barkBase: '#3b2214',
+        barkTop: '#6b3f22',
+        barkBrightness: 1.50
+      },
+      winter: {
+        name: 'WINTER',
+        leafBottom: '#203a3d',
+        leafTop: '#eaf5fa',
+        leafVarColor: '#8bb6c9',
+        leafBrightness: 1.15,
+        leafGradPower: 1.3,
+        leafVarStrength: 0.60,
+        leafVarScale: 2.5,
+        barkBase: '#382b22',
+        barkTop: '#5c4536',
+        barkBrightness: 1.50
+      }
+    };
+
+    let activeSeason = 'spring';
+    let currentShaderMode = 'PBR'; // 'PBR' (default authentic), 'TOON' (cel-shading), 'FOLIAGE' (procedural tree recoloring)
+    let useNormalizedScale = true; // Default normalized to 4m height as requested by user
+    let isWindActive = true;
+    let modelSlotIndex = 0;
+
+    // Shared Shader Uniforms
+    const shaderUniforms = {
+      uTime: { value: 0 },
+      uWindSpeed: { value: 1.2 },
+      uLeafWindStrength: { value: 0.15 },
+      uLeafFlutterAmp: { value: 0.03 },
+      uLeafFlutterSpeed: { value: 2.5 },
+      uLeafDip: { value: 0.05 },
+      uLeafBottom: { value: new THREE.Color(PRESETS.spring.leafBottom) },
+      uLeafTop: { value: new THREE.Color(PRESETS.spring.leafTop) },
+      uLeafBrightness: { value: PRESETS.spring.leafBrightness },
+      uLeafGradPower: { value: PRESETS.spring.leafGradPower },
+      uLeafVarColor: { value: new THREE.Color(PRESETS.spring.leafVarColor) },
+      uLeafVarStrength: { value: PRESETS.spring.leafVarStrength },
+      uLeafVarScale: { value: PRESETS.spring.leafVarScale },
+      uBarkBase: { value: new THREE.Color(PRESETS.spring.barkBase) },
+      uBarkTop: { value: new THREE.Color(PRESETS.spring.barkTop) },
+      uBarkBrightness: { value: PRESETS.spring.barkBrightness },
+      uLeafYMin: { value: 0.0 },
+      uLeafYMax: { value: 8.5 }
+    };
+
+    // Scene setup
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 8, 25);
+
+    // preserveDrawingBuffer is true to allow PNG export
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 0.1;
+    controls.maxDistance = 600;
+
+    // Ground grid helper for real-world depth and scale awareness
+    const gridHelper = new THREE.GridHelper(400, 80, 0xaaaaaa, 0xd0d0d0);
+    gridHelper.position.y = 0.0;
+    scene.add(gridHelper);
+
+    // Lighting (Environment calibrated for vibrant low-poly rendering)
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.9);
+    hemiLight.position.set(0, 30, 0);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfffaf0, 1.8);
+    dirLight.position.set(20, 35, 25);
+    scene.add(dirLight);
+
+    const dirLight2 = new THREE.DirectionalLight(0xb0d8ff, 0.6);
+    dirLight2.position.set(-15, -10, -15);
+    scene.add(dirLight2);
+
+    // Loaders setup with Draco, KTX2, and Meshopt decoders
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+    dracoLoader.preload();
+    
+    const ktx2Loader = new KTX2Loader()
+        .setTranscoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/')
+        .detectSupport(renderer);
+
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setDRACOLoader(dracoLoader);
+    gltfLoader.setKTX2Loader(ktx2Loader);
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+
+    // State variables
+    let models = [];
+    window.models = models;
+    let modelIndex = 0;
+    const MAX_COLS = 8;
+    const SPACING_X = 5.5; // Horizontal spacing between models
+    const SPACING_Y = 7.0; // Vertical spacing between rows
+
+    const SPEEDS = [0.25, 0.5, 1.0, 1.5, 2.0];
+    let currentSpeedIndex = 2; // 1.0x
+    let globalPlaybackSpeed = 1.0;
+    let isMasterPlaying = true;
+
+    const clock = new THREE.Clock();
+
+    const fileUpload = document.getElementById('file-upload');
+    const clearBtn = document.getElementById('clear-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const fsBtn = document.getElementById('fs-btn');
+    const toggleNamesBtn = document.getElementById('toggle-names-btn');
+    const toggleShadingBtn = document.getElementById('toggle-shading-btn');
+    const toggleSeasonBtn = document.getElementById('toggle-season-btn');
+    const toggleWindBtn = document.getElementById('toggle-wind-btn');
+    const masterAnimBtn = document.getElementById('master-anim-btn');
+    const speedBtn = document.getElementById('speed-btn');
+    const labelsContainer = document.getElementById('labels-container');
+    const selectAllBtn = document.getElementById('select-all-btn');
+    const exportFolderBtn = document.getElementById('export-folder-btn');
+    const exportZipBtn = document.getElementById('export-zip-btn');
+    const selectedModelBadge = document.getElementById('selected-model-badge');
+
+    let showNames = false;
+    labelsContainer.style.display = 'none';
+    if (toggleNamesBtn) {
+      toggleNamesBtn.textContent = '[ Names: OFF ]';
+      toggleNamesBtn.classList.add('btn-active');
+    }
+
+    // Apply in-game Toon Shader to tree material
+    function applyInGameToonShader(material, bounds, isBark = false) {
+      if (!bounds) {
+        bounds = { min: new THREE.Vector3(0, 0, 0), max: new THREE.Vector3(1, 8, 1) };
+      }
+      shaderUniforms.uLeafYMin.value = bounds.min.y;
+      shaderUniforms.uLeafYMax.value = bounds.max.y;
+
+      material.onBeforeCompile = (shader) => {
+        Object.assign(shader.uniforms, shaderUniforms, {
+          uIsBarkMesh: { value: isBark ? 1.0 : 0.0 }
+        });
+
+        shader.vertexShader = `
+          attribute float _aisbark;
+          uniform float uIsBarkMesh;
+          varying float vIsBark;
+          varying vec3 vLeafLocal;
+          varying vec3 vLeafWorld;
+
+          uniform float uTime;
+          uniform float uWindSpeed;
+          uniform float uLeafWindStrength;
+          uniform float uLeafFlutterAmp;
+          uniform float uLeafFlutterSpeed;
+          uniform float uLeafDip;
+          uniform float uLeafYMin;
+          uniform float uLeafYMax;
+
+          ${shader.vertexShader}
+        `.replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+           vIsBark = max(_aisbark, uIsBarkMesh);
+           vLeafLocal = position;
+           vLeafWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+
+           float _pnT = clamp((position.y - uLeafYMin) / max(uLeafYMax - uLeafYMin, 0.001), 0.0, 1.0);
+           float _pnMask = _pnT * _pnT;
+           vec3 _pnOrigin = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+
+           float _w1 = sin(uTime * uWindSpeed + _pnOrigin.x * 0.025 + _pnOrigin.z * 0.02) * 0.06;
+           float _w2 = cos(uTime * uWindSpeed * 1.8 + _pnOrigin.x * 0.05 + _pnOrigin.z * 0.035) * 0.03;
+           float _pnFlutter = sin(uTime * uWindSpeed * uLeafFlutterSpeed + position.y * 2.3 + position.x) * uLeafFlutterAmp;
+           // Trunks sway with tree mass but do not flutter like leaves
+           float _trunkSwayFactor = mix(0.70, 1.0, 1.0 - vIsBark);
+           float _pnWave = (_w1 + _w2 + _pnFlutter * (1.0 - vIsBark)) * uLeafWindStrength * _pnMask * _trunkSwayFactor;
+
+           transformed.x += _pnWave;
+           transformed.z += _pnWave * 0.7;
+           transformed.y -= abs(_pnWave) * uLeafDip;`
+        );
+
+        shader.fragmentShader = `
+          varying float vIsBark;
+          varying vec3 vLeafLocal;
+          varying vec3 vLeafWorld;
+
+          uniform vec3 uLeafBottom;
+          uniform vec3 uLeafTop;
+          uniform float uLeafBrightness;
+          uniform float uLeafGradPower;
+          uniform vec3 uLeafVarColor;
+          uniform float uLeafVarStrength;
+          uniform float uLeafVarScale;
+          uniform float uLeafYMin;
+          uniform float uLeafYMax;
+
+          uniform vec3 uBarkBase;
+          uniform vec3 uBarkTop;
+          uniform float uBarkBrightness;
+
+          float _lfHash(vec3 p) {
+              p = fract(p * vec3(127.1, 311.7, 74.7));
+              p += dot(p, p.yzx + 19.19);
+              return fract((p.x + p.y) * p.z);
+          }
+
+          float _lfNoise(vec3 p) {
+              vec3 i = floor(p);
+              vec3 f = fract(p);
+              vec3 w = f * f * (3.0 - 2.0 * f);
+              return mix(
+                  mix(mix(_lfHash(i), _lfHash(i + vec3(1,0,0)), w.x), mix(_lfHash(i + vec3(0,1,0)), _lfHash(i + vec3(1,1,0)), w.x), w.y),
+                  mix(mix(_lfHash(i + vec3(0,0,1)), _lfHash(i + vec3(1,0,1)), w.x), mix(_lfHash(i + vec3(0,1,1)), _lfHash(i + vec3(1,1,1)), w.x), w.y),
+                  w.z
+              );
+          }
+
+          ${shader.fragmentShader}
+        `.replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+           float _t = clamp((vLeafLocal.y - uLeafYMin) / max(uLeafYMax - uLeafYMin, 0.001), 0.0, 1.0);
+
+           // Foliage height gradient + 3D noise color variation
+           float _leafGrad = pow(_t, uLeafGradPower);
+           vec3 _leaf = mix(uLeafBottom, uLeafTop, _leafGrad);
+           float _n = _lfNoise(vLeafWorld * uLeafVarScale) - 0.5;
+           _leaf += (uLeafVarColor - _leaf) * _n * uLeafVarStrength;
+           vec3 finalLeafColor = max(_leaf, vec3(0.0)) * uLeafBrightness;
+
+           // Trunk bark gradient (Warm rich brown bark)
+           float barkT = smoothstep(0.0, 0.6, _t);
+           vec3 finalBarkColor = mix(uBarkBase, uBarkTop, barkT) * uBarkBrightness;
+
+           #ifdef USE_MAP
+           if (vIsBark > 0.5) {
+               // Blend texture grain with warm brown bark
+               finalBarkColor = mix(diffuseColor.rgb * 1.35, finalBarkColor, 0.65);
+           }
+           #endif
+
+           // Select between foliage and bark
+           diffuseColor.rgb = mix(finalLeafColor, finalBarkColor, vIsBark);`
+        ).replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+           if (vIsBark < 0.5) {
+             vec3 viewDir = normalize(cameraPosition - vLeafWorld);
+             vec3 lightDirToSun = normalize(vec3(0.3, 0.8, 0.5));
+             vec3 norm = normalize(vNormal);
+             float backDot = clamp(dot(-viewDir, lightDirToSun), 0.0, 1.0);
+             float foliageRim = pow(1.0 - clamp(dot(norm, viewDir), 0.0, 1.0), 2.8);
+             vec3 sunSubsurface = pow(backDot, 3.2) * (foliageRim * 1.2 + 0.15) * vec3(0.08, 0.18, 0.04);
+             float skyBounceFactor = clamp(norm.y * 0.5 + 0.5, 0.0, 1.0);
+             vec3 skyBounce = skyBounceFactor * vec3(0.01, 0.025, 0.04);
+             totalEmissiveRadiance += (sunSubsurface + skyBounce) * uLeafBrightness;
+           } else {
+             totalEmissiveRadiance += uBarkBase * 0.12 * uBarkBrightness;
+           }`
+        );
+
+        material.userData.shader = shader;
+      };
+    }
+
+    // Apply clean unified cel-shading that preserves authentic textures
+    function applyUnifiedToonShader(mat) {
+      mat.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <dithering_fragment>',
+          `#include <dithering_fragment>
+           // Stepped cel-shading light quantization (preserves real authored textures)
+           float lum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+           float cel = 1.0;
+           if (lum < 0.25) cel = 0.72;
+           else if (lum < 0.60) cel = 0.90;
+           else cel = 1.05;
+           gl_FragColor.rgb *= cel;`
+        );
+        mat.userData.shader = shader;
+      };
+      mat.needsUpdate = true;
+    }
+
+    // Configure materials matching in-game technical checks
+    function setupInGameMaterials(model) {
+      const box = new THREE.Box3().setFromObject(model);
+
+      model.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const mat = child.material;
+
+          // Accurately classify trunk vs foliage
+          const mName = (child.name || '').toLowerCase();
+          const matName = (mat.name || '').toLowerCase();
+          const isBark = /trunk|bark|wood|stem|branch/i.test(mName) || /trunk|bark|wood|stem|branch/i.test(matName);
+
+          // Technical Check 1: Alpha Testing vs Alpha Blending (Zero sorting glitches)
+          mat.transparent = false;
+          mat.alphaTest = isBark ? 0.0 : 0.45;
+          mat.depthWrite = true;
+          mat.side = THREE.DoubleSide;
+
+          if (child.geometry && child.geometry.attributes.position) {
+            const count = child.geometry.attributes.position.count;
+            const barkAttr = new Float32Array(count);
+            barkAttr.fill(isBark ? 1.0 : 0.0);
+            child.geometry.setAttribute('_aisbark', new THREE.BufferAttribute(barkAttr, 1));
+          }
+
+          // Technical Check 7: Mipmapping & Anisotropy
+          if (mat.map) {
+            mat.map.generateMipmaps = true;
+            mat.map.minFilter = THREE.LinearMipmapLinearFilter;
+            mat.map.magFilter = THREE.LinearFilter;
+            mat.map.wrapS = THREE.RepeatWrapping;
+            mat.map.wrapT = THREE.RepeatWrapping;
+            mat.map.anisotropy = 8;
+            mat.map.needsUpdate = true;
+          }
+
+          // Respect selected Shader Mode
+          if (currentShaderMode === 'PBR') {
+            mat.onBeforeCompile = () => {};
+          } else if (currentShaderMode === 'TOON') {
+            applyUnifiedToonShader(mat);
+          } else if (currentShaderMode === 'FOLIAGE') {
+            applyInGameToonShader(mat, box, isBark);
+          }
+          mat.needsUpdate = true;
+        }
+      });
+    }
+
+    // Drag & Drop handlers
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        loadFiles(e.dataTransfer.files);
+      }
+    });
+
+    fileUpload.addEventListener('change', (event) => {
+      if (event.target.files && event.target.files.length > 0) {
+        loadFiles(event.target.files);
+      }
+      event.target.value = '';
+    });
+
+    function updateSelectionUI() {
+      const selectedCount = models.filter(m => m.isSelected).length;
+      const totalCount = models.length;
+
+      exportFolderBtn.textContent = `[ Save to Folder (${selectedCount}) ]`;
+      exportZipBtn.textContent = `[ Download ZIP (${selectedCount}) ]`;
+
+      if (totalCount > 0 && selectedCount === totalCount) {
+        selectAllBtn.textContent = '[ Deselect All ]';
+      } else {
+        selectAllBtn.textContent = '[ Select All ]';
+      }
+    }
+
+    let cameraFramingTimeout = null;
+    let userMovedCamera = false;
+    controls.addEventListener('start', () => { userMovedCamera = true; });
+
+    function updateCameraFraming(force = false) {
+      if (userMovedCamera && !force) return;
+      clearTimeout(cameraFramingTimeout);
+      cameraFramingTimeout = setTimeout(() => {
+        if (models.length === 0) {
+          controls.target.set(0, 2, 0);
+          camera.position.set(0, 8, 25);
+          return;
+        }
+
+        const overallBox = new THREE.Box3();
+        models.forEach(m => overallBox.expandByObject(m.wrapper));
+
+        const center = overallBox.getCenter(new THREE.Vector3());
+        const size = overallBox.getSize(new THREE.Vector3());
+
+        const maxHorizontal = Math.max(size.x, size.z);
+        controls.target.set(center.x, 1.0, center.z);
+        const elev = Math.max(maxHorizontal * 0.55, 14);
+        const dist = Math.max(maxHorizontal * 0.85, 22);
+        camera.position.set(center.x, elev, center.z + dist);
+      }, 120);
+    }
+
+    function processGltfModel(gltf, fileName, fileBlob = null) {
+      const model = gltf.scene;
+
+      // Apply in-game technical setup and Toon Shading
+      setupInGameMaterials(model);
+
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const normalizedScale = maxDim > 0 ? (4.0 / maxDim) : 1.0;
+      const scale = useNormalizedScale ? normalizedScale : 1.0;
+
+      const wrapper = new THREE.Group();
+      // Put base exactly on ground (Y = 0) and center on X/Z
+      model.position.set(-center.x, -box.min.y, -center.z);
+      wrapper.add(model);
+      wrapper.scale.setScalar(scale);
+
+      // Dedicated slot on ground grid (so async loads never pile up at 0,0)
+      const slot = modelSlotIndex++;
+      const COLS = 8;
+      const spacingX = useNormalizedScale ? 6.5 : 14.0;
+      const spacingZ = useNormalizedScale ? 6.5 : 14.0;
+      const col = slot % COLS;
+      const row = Math.floor(slot / COLS);
+      const posX = (col - (COLS - 1) / 2) * spacingX;
+      const posZ = row * spacingZ;
+      wrapper.position.set(posX, 0, posZ);
+      scene.add(wrapper);
+
+      // Animation setup
+      let mixer = null;
+      let actions = [];
+      let currentAction = null;
+      let isModelPlaying = isMasterPlaying;
+
+      const clips = gltf.animations || [];
+      if (clips.length > 0) {
+        mixer = new THREE.AnimationMixer(model);
+        clips.forEach((clip, i) => {
+          const action = mixer.clipAction(clip);
+          actions.push({
+            index: i,
+            name: clip.name || `Anim_${i + 1}`,
+            duration: clip.duration,
+            action: action
+          });
+        });
+
+        currentAction = actions[0].action;
+        currentAction.play();
+        if (!isModelPlaying) {
+          currentAction.paused = true;
+        }
+      }
+
+      // Create HTML Label with checkmark
+      const labelEl = document.createElement('div');
+      labelEl.className = 'label selected';
+      
+      const headerEl = document.createElement('div');
+      headerEl.className = 'label-header';
+
+      const checkboxLabel = document.createElement('label');
+      checkboxLabel.className = 'checkbox-label';
+      
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'model-checkbox';
+      checkbox.checked = true;
+
+      checkboxLabel.appendChild(checkbox);
+
+      const nameEl = document.createElement('input');
+      nameEl.type = 'text';
+      nameEl.className = 'name-input';
+      nameEl.value = fileName;
+      nameEl.title = 'Edit to rename file';
+
+      nameEl.addEventListener('change', (e) => {
+        let newName = e.target.value.trim() || fileName;
+        if (!newName.toLowerCase().endsWith('.glb') && !newName.toLowerCase().endsWith('.gltf')) {
+          const ext = fileName.split('.').pop();
+          newName += '.' + ext;
+        }
+        e.target.value = newName;
+        modelData.customName = newName;
+      });
+      nameEl.addEventListener('pointerdown', (e) => e.stopPropagation());
+      nameEl.addEventListener('keydown', (e) => e.stopPropagation());
+
+      headerEl.appendChild(checkboxLabel);
+      headerEl.appendChild(nameEl);
+      headerEl.style.justifyContent = 'flex-start';
+      labelEl.appendChild(headerEl);
+
+      checkbox.addEventListener('pointerdown', (e) => e.stopPropagation());
+      checkbox.addEventListener('change', (e) => {
+        e.stopPropagation();
+        modelData.isSelected = checkbox.checked;
+        if (modelData.isSelected) {
+          labelEl.classList.add('selected');
+        } else {
+          labelEl.classList.remove('selected');
+        }
+        updateSelectionUI();
+      });
+
+      let selectEl = null;
+      let toggleBtn = null;
+
+      if (clips.length > 0) {
+        const controlsEl = document.createElement('div');
+        controlsEl.className = 'label-controls';
+
+        toggleBtn = document.createElement('button');
+        toggleBtn.className = 'anim-btn';
+        toggleBtn.textContent = isModelPlaying ? '[ PAUSE ]' : '[ PLAY ]';
+        
+        toggleBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+        toggleBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          modelData.isPlaying = !modelData.isPlaying;
+          toggleBtn.textContent = modelData.isPlaying ? '[ PAUSE ]' : '[ PLAY ]';
+          if (modelData.currentAction) {
+            modelData.currentAction.paused = !modelData.isPlaying;
+          }
+        });
+        controlsEl.appendChild(toggleBtn);
+
+        selectEl = document.createElement('select');
+        selectEl.className = 'anim-select';
+        
+        actions.forEach((act, idx) => {
+          const opt = document.createElement('option');
+          opt.value = idx;
+          opt.textContent = `${act.name} (${act.duration.toFixed(1)}s)`;
+          selectEl.appendChild(opt);
+        });
+
+        selectEl.addEventListener('pointerdown', (e) => e.stopPropagation());
+        selectEl.addEventListener('change', (e) => {
+          e.stopPropagation();
+          const newIdx = parseInt(e.target.value, 10);
+          switchAnimation(modelData, newIdx);
+        });
+        controlsEl.appendChild(selectEl);
+
+        labelEl.appendChild(controlsEl);
+      }
+
+      labelsContainer.appendChild(labelEl);
+
+      // Position label higher up above model
+      const labelOffsetY = Math.max(size.y * scale + 1.2, 2.5);
+      const labelWorldPos = new THREE.Vector3(posX, labelOffsetY, posZ);
+
+      const modelData = {
+        wrapper,
+        model,
+        normalizedScale,
+        baseSize: size,
+        slot,
+        url: typeof fileName === 'string' ? fileName : '',
+        file: fileBlob || { name: fileName },
+        customName: fileName,
+        mixer,
+        clips,
+        actions,
+        currentAction,
+        currentClipIndex: 0,
+        isPlaying: isModelPlaying,
+        isSelected: true,
+        checkbox,
+        labelEl,
+        toggleBtn,
+        selectEl,
+        position: labelWorldPos
+      };
+
+      models.push(modelData);
+      updateCameraFraming();
+      updateSelectionUI();
+    }
+
+    function loadFromUrl(url, name) {
+      gltfLoader.load(url, (gltf) => {
+        try {
+          processGltfModel(gltf, name);
+        } catch (e) {
+          console.error('Error processing model:', name, url, e);
+        }
+      }, undefined, (err) => {
+        console.warn('Could not load tree from URL:', url, err);
+      });
+    }
+
+    function loadFiles(files) {
+      if (!files.length) return;
+
+      Array.from(files).forEach((file) => {
+        if (!file.name.toLowerCase().endsWith('.glb') && !file.name.toLowerCase().endsWith('.gltf')) {
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const arrayBuffer = event.target.result;
+
+          gltfLoader.parse(
+            arrayBuffer,
+            '',
+            (gltf) => {
+              processGltfModel(gltf, file.name, file);
+            },
+            (error) => {
+              console.error('Error parsing ' + file.name, error);
+              alert('Error parsing ' + file.name);
+            }
+          );
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    // Interactive Click-and-Drag to Move on Ground Plane Setup
+    // Model Picker Pop-Up & In-App Placement System
+    const openPickerBtn = document.getElementById('open-picker-btn');
+    const modelPickerModal = document.getElementById('model-picker-modal');
+    const closePickerBtn = document.getElementById('close-picker-btn');
+    const pickerPackSelect = document.getElementById('picker-pack-select');
+    const pickerSearchInput = document.getElementById('picker-search-input');
+    const pickerCountBadge = document.getElementById('picker-count-badge');
+    const pickerGrid = document.getElementById('picker-grid');
+
+    // In-App Placement Toolbar
+    const placementToolbar = document.getElementById('placement-toolbar');
+    const placementModelName = document.getElementById('placement-model-name');
+    const placeRotLeftBtn = document.getElementById('place-rot-left-btn');
+    const placeRotRightBtn = document.getElementById('place-rot-right-btn');
+    const placeScaleDownBtn = document.getElementById('place-scale-down-btn');
+    const placeScaleLabel = document.getElementById('place-scale-label');
+    const placeScaleUpBtn = document.getElementById('place-scale-up-btn');
+    const cancelPlacementBtn = document.getElementById('cancel-placement-btn');
+
+    // In-App Selected Model Toolbar
+    const selectedModelToolbar = document.getElementById('selected-model-toolbar');
+    const selToolbarName = document.getElementById('sel-toolbar-name');
+    const selRotLeftBtn = document.getElementById('sel-rot-left-btn');
+    const selRotRightBtn = document.getElementById('sel-rot-right-btn');
+    const selScaleDownBtn = document.getElementById('sel-scale-down-btn');
+    const selScaleLabel = document.getElementById('sel-scale-label');
+    const selScaleUpBtn = document.getElementById('sel-scale-up-btn');
+    const selDuplicateBtn = document.getElementById('sel-duplicate-btn');
+    const selDeleteBtn = document.getElementById('sel-delete-btn');
+    const selCloseBtn = document.getElementById('sel-close-btn');
+
+    // Placement Mode State & Ghost Preview
+    let isPlacementActive = false;
+    let currentPlacingItem = null;
+    let ghostRotationY = 0;
+    let ghostScaleMultiplier = 1.0;
+    const ghostWrapper = new THREE.Group();
+    ghostWrapper.visible = false;
+    scene.add(ghostWrapper);
+
+    // Interactive Click-and-Drag Setup
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    let draggedModel = null;
+    let selectedModel = null;
+    const dragOffset = new THREE.Vector3();
+    let isDragging = false;
+
+    // Selection Visual Ring on ground
+    const selectionRingGeo = new THREE.RingGeometry(1.6, 1.9, 32);
+    selectionRingGeo.rotateX(-Math.PI / 2);
+    const selectionRingMat = new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide });
+    const selectionRing = new THREE.Mesh(selectionRingGeo, selectionRingMat);
+    selectionRing.position.y = 0.02;
+    selectionRing.visible = false;
+    scene.add(selectionRing);
+
+    function selectModel(m) {
+      selectedModel = m;
+      window.selectedModel = selectedModel;
+      if (selectedModelBadge) {
+        if (m) {
+          selectedModelBadge.style.display = 'inline-block';
+          selectedModelBadge.textContent = `Selected: ${m.customName}`;
+        } else {
+          selectedModelBadge.style.display = 'none';
+        }
+      }
+      if (selectedModelToolbar) {
+        if (m) {
+          selectedModelToolbar.style.display = 'flex';
+          if (selToolbarName) selToolbarName.textContent = m.customName;
+          if (selScaleLabel) selScaleLabel.textContent = (m.userScaleMultiplier || 1.0).toFixed(2) + 'x';
+        } else {
+          selectedModelToolbar.style.display = 'none';
+        }
+      }
+      if (!selectionRing) return;
+      if (selectedModel) {
+        selectionRing.visible = true;
+        selectionRing.position.set(selectedModel.wrapper.position.x, 0.02, selectedModel.wrapper.position.z);
+        const b = new THREE.Box3().setFromObject(selectedModel.wrapper);
+        const sz = b.getSize(new THREE.Vector3());
+        const radius = Math.max(Math.max(sz.x, sz.z) * 0.65, 1.5);
+        selectionRing.scale.set(radius, radius, radius);
+        models.forEach(mod => mod.labelEl && mod.labelEl.classList.remove('selected'));
+        if (selectedModel.labelEl) selectedModel.labelEl.classList.add('selected');
+      } else {
+        selectionRing.visible = false;
+        models.forEach(mod => mod.labelEl && mod.labelEl.classList.remove('selected'));
+      }
+    }
+
+    function clearAllModels() {
+      models.forEach((m) => {
+        if (m.mixer) m.mixer.stopAllAction();
+        scene.remove(m.wrapper);
+        if (m.labelEl) m.labelEl.remove();
+      });
+      models = [];
+      window.models = models;
+      modelIndex = 0;
+      modelSlotIndex = 0;
+      selectModel(null);
+      updateCameraFraming(true);
+      updateSelectionUI();
+    }
+
+    function loadModelList(list) {
+      clearAllModels();
+      userMovedCamera = false;
+      list.forEach(item => loadFromUrl(item.url, item.name));
+    }
+
+    function loadFavorites() {
+      userMovedCamera = false;
+      fetch('assets/favorites_64.json')
+        .then(r => r.json())
+        .then(files => {
+          const list = files.map(f => ({ name: f.replace('.glb', ''), url: 'assets/all_models/' + f }));
+          loadModelList(list);
+        })
+        .catch(err => {
+          console.warn('Could not load favorites_64.json, fallback to showcase:', err);
+          loadModelList(SHOWCASE_MODELS);
+        });
+    }
+
+    // Showcase Models displayed as fallback
+    const SHOWCASE_MODELS = [
+      { name: 'Mushroom House', url: 'assets/all_models/4_houses_fantasy_fantasy_house_round_mushroom.glb' },
+      { name: 'Castle Keep (30m)', url: 'assets/all_models/winter_castle_castle.glb' },
+      { name: 'German House', url: 'assets/all_models/german_village_german_house_4.glb' },
+      { name: 'Winter Church (10m)', url: 'assets/all_models/winter_castle_church.glb' },
+      { name: 'Little Windmill', url: 'assets/all_models/little_village_windmill.glb' },
+      { name: 'Greek House', url: 'assets/all_models/greek_sculptor_greek_sculptor_house.glb' },
+      { name: 'Blacksmith', url: 'assets/all_models/free_medieval_blacksmith.glb' },
+      { name: 'Market Stall', url: 'assets/all_models/village_town_market_stall_blue.glb' },
+      { name: 'Pine Tree', url: 'assets/all_models/village_town_tree_pine.glb' },
+      { name: 'Village Barrel (1m)', url: 'assets/all_models/simple_low_poly_barrel.glb' }
+    ];
+
+    // --- Placement Mode Functions ---
+    function startPlacementMode(item) {
+      if (modelPickerModal) modelPickerModal.style.display = 'none';
+      selectModel(null);
+      isPlacementActive = true;
+      currentPlacingItem = item;
+      ghostRotationY = 0;
+      ghostScaleMultiplier = 1.0;
+
+      if (placementModelName) placementModelName.textContent = item.cleanName || item.name;
+      if (placeScaleLabel) placeScaleLabel.textContent = '1.0x';
+      if (placementToolbar) placementToolbar.style.display = 'flex';
+
+      while (ghostWrapper.children.length > 0) {
+        ghostWrapper.remove(ghostWrapper.children[0]);
+      }
+      ghostWrapper.visible = false;
+
+      gltfLoader.load(item.url, (gltf) => {
+        if (!isPlacementActive || currentPlacingItem !== item) return;
+        const model = gltf.scene;
+        setupInGameMaterials(model);
+
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const normScale = maxDim > 0 ? (4.0 / maxDim) : 1.0;
+
+        model.position.set(-center.x, -box.min.y, -center.z);
+
+        model.traverse((c) => {
+          if (c.isMesh) {
+            c.material = c.material.clone();
+            c.material.transparent = true;
+            c.material.opacity = 0.65;
+            c.material.depthWrite = false;
+          }
+        });
+
+        ghostWrapper.userData = { normScale, baseSize: size };
+        ghostWrapper.add(model);
+        const baseScale = useNormalizedScale ? normScale : 1.0;
+        ghostWrapper.scale.setScalar(baseScale * ghostScaleMultiplier);
+        ghostWrapper.rotation.y = ghostRotationY;
+        ghostWrapper.visible = true;
+      });
+    }
+
+    function cancelPlacementMode() {
+      isPlacementActive = false;
+      currentPlacingItem = null;
+      ghostWrapper.visible = false;
+      while (ghostWrapper.children.length > 0) {
+        ghostWrapper.remove(ghostWrapper.children[0]);
+      }
+      if (placementToolbar) placementToolbar.style.display = 'none';
+      controls.enabled = true;
+    }
+
+    function placeModelInstance(item, posX, posZ, rotY, scaleMult) {
+      gltfLoader.load(item.url, (gltf) => {
+        const model = gltf.scene;
+        setupInGameMaterials(model);
+
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const normalizedScale = maxDim > 0 ? (4.0 / maxDim) : 1.0;
+        const scale = (useNormalizedScale ? normalizedScale : 1.0) * scaleMult;
+
+        const wrapper = new THREE.Group();
+        model.position.set(-center.x, -box.min.y, -center.z);
+        wrapper.add(model);
+        wrapper.scale.setScalar(scale);
+        wrapper.rotation.y = rotY;
+        wrapper.position.set(posX, 0, posZ);
+        scene.add(wrapper);
+
+        let mixer = null;
+        let actions = [];
+        let currentAction = null;
+        const clips = gltf.animations || [];
+        if (clips.length > 0) {
+          mixer = new THREE.AnimationMixer(model);
+          const act = mixer.clipAction(clips[0]);
+          act.play();
+          currentAction = act;
+        }
+
+        const labelOffsetY = Math.max(size.y * scale + 1.2, 2.5);
+        const labelWorldPos = new THREE.Vector3(posX, labelOffsetY, posZ);
+
+        const modelData = {
+          wrapper,
+          model,
+          normalizedScale,
+          userScaleMultiplier: scaleMult,
+          baseSize: size,
+          slot: modelSlotIndex++,
+          url: item.url,
+          file: { name: item.name },
+          customName: item.cleanName || item.name,
+          mixer,
+          clips,
+          actions,
+          currentAction,
+          isPlaying: isMasterPlaying,
+          isSelected: true,
+          position: labelWorldPos
+        };
+
+        models.push(modelData);
+        selectModel(modelData);
+        updateSelectionUI();
+      });
+    }
+
+    // --- In-App Buttons: Placement Mode Controls ---
+    if (placeRotLeftBtn) {
+      placeRotLeftBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        ghostRotationY -= Math.PI / 4;
+        ghostWrapper.rotation.y = ghostRotationY;
+      });
+    }
+    if (placeRotRightBtn) {
+      placeRotRightBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        ghostRotationY += Math.PI / 4;
+        ghostWrapper.rotation.y = ghostRotationY;
+      });
+    }
+    if (placeScaleDownBtn) {
+      placeScaleDownBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        ghostScaleMultiplier = Math.max(0.2, ghostScaleMultiplier * 0.8);
+        if (placeScaleLabel) placeScaleLabel.textContent = ghostScaleMultiplier.toFixed(2) + 'x';
+        const normScale = ghostWrapper.userData?.normScale || 1.0;
+        const baseScale = useNormalizedScale ? normScale : 1.0;
+        ghostWrapper.scale.setScalar(baseScale * ghostScaleMultiplier);
+      });
+    }
+    if (placeScaleUpBtn) {
+      placeScaleUpBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        ghostScaleMultiplier = Math.min(5.0, ghostScaleMultiplier * 1.25);
+        if (placeScaleLabel) placeScaleLabel.textContent = ghostScaleMultiplier.toFixed(2) + 'x';
+        const normScale = ghostWrapper.userData?.normScale || 1.0;
+        const baseScale = useNormalizedScale ? normScale : 1.0;
+        ghostWrapper.scale.setScalar(baseScale * ghostScaleMultiplier);
+      });
+    }
+    if (cancelPlacementBtn) {
+      cancelPlacementBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancelPlacementMode();
+      });
+    }
+
+    // --- In-App Buttons: Selected Model Controls ---
+    if (selRotLeftBtn) {
+      selRotLeftBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!selectedModel) return;
+        selectedModel.wrapper.rotation.y -= Math.PI / 4;
+      });
+    }
+    if (selRotRightBtn) {
+      selRotRightBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!selectedModel) return;
+        selectedModel.wrapper.rotation.y += Math.PI / 4;
+      });
+    }
+    if (selScaleDownBtn) {
+      selScaleDownBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!selectedModel) return;
+        selectedModel.userScaleMultiplier = (selectedModel.userScaleMultiplier || 1.0) * 0.8;
+        const s = (useNormalizedScale ? (selectedModel.normalizedScale || 1.0) : 1.0) * selectedModel.userScaleMultiplier;
+        selectedModel.wrapper.scale.setScalar(s);
+        if (selScaleLabel) selScaleLabel.textContent = selectedModel.userScaleMultiplier.toFixed(2) + 'x';
+        if (selectedModel.position) {
+          selectedModel.position.y = Math.max((selectedModel.baseSize?.y || 4.0) * s + 1.2, 2.5);
+        }
+        selectModel(selectedModel);
+      });
+    }
+    if (selScaleUpBtn) {
+      selScaleUpBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!selectedModel) return;
+        selectedModel.userScaleMultiplier = (selectedModel.userScaleMultiplier || 1.0) * 1.25;
+        const s = (useNormalizedScale ? (selectedModel.normalizedScale || 1.0) : 1.0) * selectedModel.userScaleMultiplier;
+        selectedModel.wrapper.scale.setScalar(s);
+        if (selScaleLabel) selScaleLabel.textContent = selectedModel.userScaleMultiplier.toFixed(2) + 'x';
+        if (selectedModel.position) {
+          selectedModel.position.y = Math.max((selectedModel.baseSize?.y || 4.0) * s + 1.2, 2.5);
+        }
+        selectModel(selectedModel);
+      });
+    }
+    if (selDuplicateBtn) {
+      selDuplicateBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!selectedModel) return;
+        const item = {
+          name: selectedModel.customName,
+          cleanName: selectedModel.customName,
+          url: selectedModel.url || ('assets/all_models/' + selectedModel.customName + '.glb')
+        };
+        startPlacementMode(item);
+      });
+    }
+    if (selDeleteBtn) {
+      selDeleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!selectedModel) return;
+        if (selectedModel.mixer) selectedModel.mixer.stopAllAction();
+        scene.remove(selectedModel.wrapper);
+        if (selectedModel.labelEl) selectedModel.labelEl.remove();
+        models = models.filter(m => m !== selectedModel);
+        window.models = models;
+        selectModel(null);
+        updateSelectionUI();
+      });
+    }
+    if (selCloseBtn) {
+      selCloseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectModel(null);
+      });
+    }
+
+    const rotateModelBtn = document.getElementById('rotate-model-btn');
+    if (rotateModelBtn) {
+      rotateModelBtn.addEventListener('click', () => {
+        if (selectedModel) {
+          selectedModel.wrapper.rotation.y += Math.PI / 4;
+        } else if (models.length > 0) {
+          selectModel(models[models.length - 1]);
+          selectedModel.wrapper.rotation.y += Math.PI / 4;
+        }
+      });
+    }
+
+    const canvasEl = renderer.domElement;
+
+    canvasEl.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return; // Only left click
+
+      const rect = canvasEl.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      // In Placement Mode: Click to Place
+      if (isPlacementActive && currentPlacingItem) {
+        const groundHit = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(groundPlane, groundHit)) {
+          placeModelInstance(currentPlacingItem, groundHit.x, groundHit.z, ghostRotationY, ghostScaleMultiplier);
+        }
+        return;
+      }
+
+      // Normal Selection & Drag Mode
+      const interactable = [];
+      models.forEach(m => {
+        m.wrapper.traverse(c => {
+          if (c.isMesh) {
+            c.userData.modelRef = m;
+            interactable.push(c);
+          }
+        });
+      });
+
+      const hits = raycaster.intersectObjects(interactable, false);
+      if (hits.length > 0) {
+        draggedModel = hits[0].object.userData.modelRef;
+        selectModel(draggedModel);
+        controls.enabled = false;
+        isDragging = true;
+        canvasEl.style.cursor = 'grabbing';
+
+        const groundHit = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(groundPlane, groundHit)) {
+          dragOffset.copy(draggedModel.wrapper.position).sub(groundHit);
+        }
+      } else {
+        selectModel(null);
+      }
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      const rect = canvasEl.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      // Placement Mode Ghost Follow
+      if (isPlacementActive) {
+        raycaster.setFromCamera(mouse, camera);
+        const groundHit = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(groundPlane, groundHit)) {
+          ghostWrapper.position.set(groundHit.x, 0, groundHit.z);
+        }
+        canvasEl.style.cursor = 'crosshair';
+        return;
+      }
+
+      if (isDragging && draggedModel) {
+        raycaster.setFromCamera(mouse, camera);
+        const groundHit = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(groundPlane, groundHit)) {
+          draggedModel.wrapper.position.x = groundHit.x + dragOffset.x;
+          draggedModel.wrapper.position.z = groundHit.z + dragOffset.z;
+
+          selectionRing.position.set(draggedModel.wrapper.position.x, 0.02, draggedModel.wrapper.position.z);
+
+          if (draggedModel.position) {
+            draggedModel.position.x = draggedModel.wrapper.position.x;
+            draggedModel.position.z = draggedModel.wrapper.position.z;
+          }
+        }
+      } else if (!isDragging) {
+        raycaster.setFromCamera(mouse, camera);
+        const interactable = [];
+        models.forEach(m => {
+          m.wrapper.traverse(c => { if (c.isMesh) interactable.push(c); });
+        });
+        const hits = raycaster.intersectObjects(interactable, false);
+        canvasEl.style.cursor = hits.length > 0 ? 'grab' : 'default';
+      }
+    });
+
+    window.addEventListener('pointerup', () => {
+      if (isDragging) {
+        isDragging = false;
+        draggedModel = null;
+        controls.enabled = true;
+        canvasEl.style.cursor = 'default';
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'r') {
+        if (isPlacementActive) {
+          ghostRotationY += Math.PI / 4;
+          ghostWrapper.rotation.y = ghostRotationY;
+        } else if (selectedModel) {
+          selectedModel.wrapper.rotation.y += Math.PI / 4;
+        }
+      } else if (e.key === 'Escape' && isPlacementActive) {
+        cancelPlacementMode();
+      }
+    });
+
+    // Asset Library Manifest Loader & UI Dropdowns
+    let libraryManifest = null;
+    const packDropdown = document.getElementById('pack-dropdown');
+    const loadSelectedPackBtn = document.getElementById('load-selected-pack-btn');
+    const singleModelDropdown = document.getElementById('single-model-dropdown');
+    const toggleScaleModeBtn = document.getElementById('toggle-scale-mode-btn');
+
+    let fullCatalog = [];
+    let favoritesCatalog = [];
+
+    fetch('assets/favorites_64.json')
+      .then(r => r.json())
+      .then(files => {
+        favoritesCatalog = files.map(file => {
+          const clean = file.replace('.glb', '');
+          const pack = file.split('_')[0] || 'favorites';
+          return {
+            name: file,
+            cleanName: clean,
+            pack: pack,
+            url: 'assets/all_models/' + file
+          };
+        });
+      })
+      .catch(err => console.warn('Could not load favorites_64.json:', err));
+
+    fetch('assets/manifest.json')
+      .then(res => res.json())
+      .then(manifest => {
+        libraryManifest = manifest;
+        fullCatalog = [];
+        Object.keys(manifest).sort().forEach(pack => {
+          manifest[pack].forEach(file => {
+            const clean = file.replace('.glb', '');
+            const url = pack === 'terrains' ? `assets/all_models/${file}` : `assets/all_models/${pack}_${file}`;
+            fullCatalog.push({
+              name: file,
+              cleanName: clean,
+              pack: pack,
+              url: url
+            });
+          });
+        });
+        if (singleModelDropdown) {
+          // Populate all 229 models alphabetically
+          Object.keys(manifest).sort().forEach(pack => {
+            const optGroup = document.createElement('optgroup');
+            optGroup.label = pack.toUpperCase();
+            manifest[pack].forEach(file => {
+              const opt = document.createElement('option');
+              const url = pack === 'terrains' ? `assets/all_models/${file}` : `assets/all_models/${pack}_${file}`;
+              opt.value = url;
+              opt.textContent = `${pack} / ${file}`;
+              optGroup.appendChild(opt);
+            });
+            singleModelDropdown.appendChild(optGroup);
+          });
+        }
+      })
+      .catch(err => console.warn('Could not load assets/manifest.json:', err));
+
+    function renderPickerGrid() {
+      if (!pickerGrid) return;
+      pickerGrid.innerHTML = '';
+      const packFilter = pickerPackSelect ? pickerPackSelect.value : 'favorites';
+      const searchText = pickerSearchInput ? pickerSearchInput.value.toLowerCase().trim() : '';
+
+      let list = [];
+      if (packFilter === 'favorites') {
+        list = favoritesCatalog.length > 0 ? favoritesCatalog : fullCatalog.slice(0, 64);
+      } else if (packFilter === 'all') {
+        list = fullCatalog;
+      } else {
+        list = fullCatalog.filter(item => item.pack === packFilter);
+      }
+
+      if (searchText) {
+        list = list.filter(item => item.cleanName.toLowerCase().includes(searchText) || item.pack.toLowerCase().includes(searchText));
+      }
+
+      if (pickerCountBadge) {
+        pickerCountBadge.textContent = `${list.length} model${list.length === 1 ? '' : 's'}`;
+      }
+
+      if (list.length === 0) {
+        pickerGrid.innerHTML = '<div style="grid-column: 1/-1; padding: 30px; text-align: center; color: #888;">No models found matching your filter.</div>';
+        return;
+      }
+
+      list.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'picker-card';
+
+        const topEl = document.createElement('div');
+        const titleEl = document.createElement('div');
+        titleEl.className = 'picker-card-title';
+        titleEl.textContent = item.cleanName;
+        const tagEl = document.createElement('div');
+        tagEl.className = 'picker-card-tag';
+        tagEl.textContent = item.pack.toUpperCase().replace(/_/g, ' ');
+        topEl.appendChild(titleEl);
+        topEl.appendChild(tagEl);
+
+        const btnEl = document.createElement('button');
+        btnEl.className = 'picker-card-btn';
+        btnEl.textContent = '[ Select & Place ]';
+
+        card.appendChild(topEl);
+        card.appendChild(btnEl);
+
+        card.addEventListener('click', (e) => {
+          e.stopPropagation();
+          startPlacementMode(item);
+        });
+
+        pickerGrid.appendChild(card);
+      });
+    }
+
+    if (openPickerBtn) {
+      openPickerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (modelPickerModal) {
+          modelPickerModal.style.display = 'flex';
+          renderPickerGrid();
+          if (pickerSearchInput) pickerSearchInput.focus();
+        }
+      });
+    }
+
+    if (closePickerBtn) {
+      closePickerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (modelPickerModal) modelPickerModal.style.display = 'none';
+      });
+    }
+
+    if (modelPickerModal) {
+      modelPickerModal.addEventListener('click', (e) => {
+        if (e.target === modelPickerModal) {
+          modelPickerModal.style.display = 'none';
+        }
+      });
+    }
+
+    if (pickerPackSelect) {
+      pickerPackSelect.addEventListener('change', renderPickerGrid);
+    }
+
+    if (pickerSearchInput) {
+      pickerSearchInput.addEventListener('input', renderPickerGrid);
+    }
+
+    if (loadSelectedPackBtn) {
+      loadSelectedPackBtn.addEventListener('click', () => {
+        const selectedPack = packDropdown.value;
+        if (selectedPack === 'favorites') {
+          loadFavorites();
+          return;
+        }
+        if (selectedPack === 'showcase') {
+          loadModelList(SHOWCASE_MODELS);
+          return;
+        }
+        if (!libraryManifest || !libraryManifest[selectedPack]) {
+          alert('Manifest not ready yet or pack not found.');
+          return;
+        }
+        const fileList = libraryManifest[selectedPack];
+        const list = fileList.map(file => ({
+          name: file.replace('.glb', ''),
+          url: selectedPack === 'terrains' ? `assets/all_models/${file}` : `assets/all_models/${selectedPack}_${file}`
+        }));
+        loadModelList(list);
+      });
+    }
+
+    if (singleModelDropdown) {
+      singleModelDropdown.addEventListener('change', (e) => {
+        const url = e.target.value;
+        if (!url) return;
+        const name = url.split('/').pop().replace('.glb', '');
+        loadFromUrl(url, name);
+        e.target.value = '';
+      });
+    }
+
+    if (toggleScaleModeBtn) {
+      toggleScaleModeBtn.addEventListener('click', () => {
+        useNormalizedScale = !useNormalizedScale;
+        toggleScaleModeBtn.textContent = useNormalizedScale ? '[ Scale: NORMALIZED (4m) ]' : '[ Scale: REAL-WORLD ]';
+        const COLS = 8;
+        const spacing = useNormalizedScale ? 6.5 : 14.0;
+        models.forEach((m, idx) => {
+          const s = useNormalizedScale ? (m.normalizedScale || 1.0) : 1.0;
+          m.wrapper.scale.setScalar(s);
+          const col = idx % COLS;
+          const row = Math.floor(idx / COLS);
+          const posX = (col - (COLS - 1) / 2) * spacing;
+          const posZ = row * spacing;
+          m.wrapper.position.set(posX, 0, posZ);
+          if (m.position) {
+            const h = (m.baseSize ? m.baseSize.y : 4.0);
+            m.position.set(posX, Math.max(h * s + 1.2, 2.5), posZ);
+          }
+        });
+        if (selectedModel) selectModel(selectedModel);
+        updateCameraFraming(true);
+      });
+    }
+
+    // Toggle 3 Shader Modes: ORIGINAL PBR -> UNIFIED TOON -> FOLIAGE RECOLOR
+    const SHADER_MODES = ['PBR', 'TOON', 'FOLIAGE'];
+    toggleShadingBtn.addEventListener('click', () => {
+      const currentIdx = SHADER_MODES.indexOf(currentShaderMode);
+      currentShaderMode = SHADER_MODES[(currentIdx + 1) % SHADER_MODES.length];
+
+      if (currentShaderMode === 'PBR') {
+        toggleShadingBtn.textContent = '[ Shader: ORIGINAL PBR ]';
+        toggleShadingBtn.classList.remove('btn-active');
+        toggleShadingBtn.style.color = '#000';
+      } else if (currentShaderMode === 'TOON') {
+        toggleShadingBtn.textContent = '[ Shader: UNIFIED TOON ]';
+        toggleShadingBtn.classList.add('btn-active');
+        toggleShadingBtn.style.color = '#238636';
+      } else if (currentShaderMode === 'FOLIAGE') {
+        toggleShadingBtn.textContent = '[ Shader: FOLIAGE RECOLOR ]';
+        toggleShadingBtn.classList.add('btn-active');
+        toggleShadingBtn.style.color = '#c7611a';
+      }
+      models.forEach(m => setupInGameMaterials(m.model));
+    });
+
+    // Cycle Seasonal Presets (Spring -> Autumn -> Winter)
+    toggleSeasonBtn.addEventListener('click', () => {
+      if (activeSeason === 'spring') activeSeason = 'autumn';
+      else if (activeSeason === 'autumn') activeSeason = 'winter';
+      else activeSeason = 'spring';
+
+      const p = PRESETS[activeSeason];
+      toggleSeasonBtn.textContent = `[ Season: ${p.name} ]`;
+      toggleSeasonBtn.className = `btn btn-season ${activeSeason}`;
+
+      shaderUniforms.uLeafBottom.value.set(p.leafBottom);
+      shaderUniforms.uLeafTop.value.set(p.leafTop);
+      shaderUniforms.uLeafVarColor.value.set(p.leafVarColor);
+      shaderUniforms.uLeafBrightness.value = p.leafBrightness;
+      shaderUniforms.uLeafGradPower.value = p.leafGradPower;
+      shaderUniforms.uLeafVarStrength.value = p.leafVarStrength;
+      shaderUniforms.uLeafVarScale.value = p.leafVarScale;
+      shaderUniforms.uBarkBase.value.set(p.barkBase);
+      shaderUniforms.uBarkTop.value.set(p.barkTop);
+      shaderUniforms.uBarkBrightness.value = p.barkBrightness;
+    });
+
+    // Toggle Wind Sway
+    toggleWindBtn.addEventListener('click', () => {
+      isWindActive = !isWindActive;
+      toggleWindBtn.textContent = isWindActive ? '[ Wind: ON ]' : '[ Wind: OFF ]';
+      if (isWindActive) {
+        toggleWindBtn.classList.remove('btn-active');
+        shaderUniforms.uLeafWindStrength.value = 0.15;
+      } else {
+        toggleWindBtn.classList.add('btn-active');
+        shaderUniforms.uLeafWindStrength.value = 0.0;
+      }
+    });
+
+    // Selection buttons
+    selectAllBtn.addEventListener('click', () => {
+      const allSelected = models.length > 0 && models.every(m => m.isSelected);
+      const targetState = !allSelected;
+
+      models.forEach((m) => {
+        m.isSelected = targetState;
+        if (m.checkbox) m.checkbox.checked = targetState;
+        if (m.labelEl) {
+          if (targetState) {
+            m.labelEl.classList.add('selected');
+          } else {
+            m.labelEl.classList.remove('selected');
+          }
+        }
+      });
+
+      updateSelectionUI();
+    });
+
+    // Direct Copy to chosen Folder (File System Access API)
+    exportFolderBtn.addEventListener('click', async () => {
+      const selected = models.filter(m => m.isSelected);
+      if (selected.length === 0) {
+        alert('No models selected! Please check the checkmark on the models you wish to export.');
+        return;
+      }
+
+      if ('showDirectoryPicker' in window) {
+        try {
+          const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+          let count = 0;
+          for (const m of selected) {
+            const exportName = m.customName || m.file.name;
+            const fileHandle = await dirHandle.getFileHandle(exportName, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(m.file);
+            await writable.close();
+            count++;
+          }
+          alert(`Successfully copied ${count} model(s) directly to your selected folder!`);
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            console.error('Directory export error:', err);
+            alert('Error copying to folder: ' + err.message);
+          }
+        }
+      } else {
+        alert('Direct folder selection is not supported in this browser. Downloading as a ZIP bundle instead...');
+        downloadZip(selected);
+      }
+    });
+
+    // ZIP export
+    exportZipBtn.addEventListener('click', () => {
+      const selected = models.filter(m => m.isSelected);
+      if (selected.length === 0) {
+        alert('No models selected! Please check the checkmark on the models you wish to export.');
+        return;
+      }
+      downloadZip(selected);
+    });
+
+    async function downloadZip(selected) {
+      if (typeof JSZip === 'undefined') {
+        alert('Downloading selected files individually...');
+        selected.forEach((m) => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(m.file);
+          a.download = m.customName || m.file.name;
+          a.click();
+          URL.revokeObjectURL(a.href);
+        });
+        return;
+      }
+
+      const zip = new JSZip();
+      selected.forEach((m) => {
+        zip.file(m.customName || m.file.name, m.file);
+      });
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `exported_models_${selected.length}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Master Animation Toggle
+    masterAnimBtn.addEventListener('click', () => {
+      isMasterPlaying = !isMasterPlaying;
+      masterAnimBtn.textContent = isMasterPlaying ? '[ Pause ]' : '[ Play ]';
+
+      models.forEach((m) => {
+        if (m.mixer && m.currentAction) {
+          m.isPlaying = isMasterPlaying;
+          m.currentAction.paused = !isMasterPlaying;
+          if (m.toggleBtn) {
+            m.toggleBtn.textContent = isMasterPlaying ? '[ PAUSE ]' : '[ PLAY ]';
+          }
+        }
+      });
+    });
+
+    // Speed Toggle
+    speedBtn.addEventListener('click', () => {
+      currentSpeedIndex = (currentSpeedIndex + 1) % SPEEDS.length;
+      globalPlaybackSpeed = SPEEDS[currentSpeedIndex];
+      speedBtn.textContent = `[ ${globalPlaybackSpeed.toFixed(globalPlaybackSpeed % 1 === 0 ? 1 : 2)}x ]`;
+    });
+
+    // Clear
+    clearBtn.addEventListener('click', () => {
+      models.forEach((m) => {
+        if (m.mixer) m.mixer.stopAllAction();
+        scene.remove(m.wrapper);
+        if (m.labelEl) m.labelEl.remove();
+      });
+      models = [];
+      modelIndex = 0;
+      
+      updateCameraFraming();
+      updateSelectionUI();
+    });
+
+    // Export PNG
+    exportBtn.addEventListener('click', () => {
+      renderer.render(scene, camera);
+      const url = renderer.domElement.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'multiviewer-export.png';
+      a.click();
+    });
+
+    // Toggle Model Names
+    toggleNamesBtn.addEventListener('click', () => {
+      showNames = !showNames;
+      toggleNamesBtn.textContent = showNames ? '[ Names: ON ]' : '[ Names: OFF ]';
+      if (showNames) {
+        toggleNamesBtn.classList.remove('btn-active');
+      } else {
+        toggleNamesBtn.classList.add('btn-active');
+      }
+      labelsContainer.style.display = showNames ? 'block' : 'none';
+    });
+
+    // Fullscreen
+    fsBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.body.requestFullscreen().catch(err => console.error(err));
+      } else {
+        document.exitFullscreen();
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      fsBtn.textContent = document.fullscreenElement ? '[ Exit ]' : '[ Fullscreen ]';
+    });
+
+    // Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      const delta = clock.getDelta() * globalPlaybackSpeed;
+      shaderUniforms.uTime.value = clock.getElapsedTime();
+
+      controls.update();
+
+      models.forEach((m) => {
+        if (m.mixer && m.isPlaying) {
+          m.mixer.update(delta);
+        }
+      });
+
+      if (showNames) {
+        models.forEach((m) => {
+          if (!m.labelEl) return;
+          
+          const tempV = m.position.clone();
+          tempV.project(camera);
+
+          if (tempV.z > 1) {
+            m.labelEl.style.display = 'none';
+          } else {
+            m.labelEl.style.display = 'flex';
+            const x = (tempV.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (tempV.y * -0.5 + 0.5) * window.innerHeight;
+            m.labelEl.style.left = `${x}px`;
+            m.labelEl.style.top = `${y}px`;
+          }
+        });
+      }
+
+      renderer.render(scene, camera);
+    }
+    
+    animate();
+    loadFavorites();
+  </script>
+</body>
+</html>

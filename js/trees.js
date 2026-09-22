@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
-import { getWorldHeight, getBiomeAt, isTreeZone } from './world.js';
+import { getWorldHeight, getBiomeAt, isTreeZone, worldLayout } from './world.js';
 import { snoise } from './noise.js';
 
 // ==========================================
@@ -73,7 +73,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         scale: 1.0,
         density: 0.75,
         count: 550,
-        minDistance: 16.0,
+        minDistance: 6.5,
         minHeight: 3.0,
         maxHeight: 140.0,
         foliageColor: '#5c8338',
@@ -87,7 +87,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         scale: 0.95,
         density: 0.65,
         count: 500,
-        minDistance: 18.0,
+        minDistance: 7.0,
         minHeight: 2.8,
         maxHeight: 90.0,
         foliageColor: '#3cb371',
@@ -101,7 +101,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         scale: 1.0,
         density: 0.70,
         count: 500,
-        minDistance: 16.0,
+        minDistance: 6.5,
         minHeight: 3.0,
         maxHeight: 135.0,
         foliageColor: '#5c8338',
@@ -115,7 +115,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         scale: 0.85,
         density: 0.45,
         count: 380,
-        minDistance: 22.0,
+        minDistance: 7.5,
         minHeight: 25.0,
         maxHeight: 220.0,
         foliageColor: '#2d5a3f',
@@ -129,7 +129,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         scale: 0.85,
         density: 0.45,
         count: 380,
-        minDistance: 22.0,
+        minDistance: 7.5,
         minHeight: 25.0,
         maxHeight: 220.0,
         foliageColor: '#345842',
@@ -143,7 +143,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         scale: 1.25,
         density: 0.55,
         count: 400,
-        minDistance: 20.0,
+        minDistance: 9.0,
         minHeight: 3.0,
         maxHeight: 180.0,
         foliageColor: '#00d2ff',
@@ -157,7 +157,7 @@ export const DEFAULT_BIOME_TREE_CONFIGS = {
         scale: 1.15,
         density: 0.60,
         count: 420,
-        minDistance: 18.0,
+        minDistance: 7.5,
         minHeight: 3.0,
         maxHeight: 160.0,
         foliageColor: '#d946ef',
@@ -187,6 +187,10 @@ try {
                     // means “no trees” and must stay empty after a restart.
                     if (!Array.isArray(savedConfig.activeModels)) {
                         biomeTreeConfigs[k].activeModels = [...(DEFAULT_BIOME_TREE_CONFIGS[k]?.activeModels || [])];
+                    }
+                    // Migrate legacy wide grid spacing (16m-22m) to new natural grove clustering
+                    if (savedConfig.minDistance === 16.0 || savedConfig.minDistance === 18.0 || savedConfig.minDistance === 22.0 || savedConfig.minDistance === 20.0) {
+                        biomeTreeConfigs[k].minDistance = DEFAULT_BIOME_TREE_CONFIGS[k]?.minDistance || 7.0;
                     }
                     if (k === 'ghibli_land') {
                         if (biomeTreeConfigs[k].maxHeight < 100) biomeTreeConfigs[k].maxHeight = 140.0;
@@ -262,6 +266,7 @@ if (typeof window !== 'undefined') {
     window.biomeTreeConfigs = biomeTreeConfigs;
     window.getBiomeTreeConfig = getBiomeTreeConfig;
     window.setBiomeTreeConfig = setBiomeTreeConfig;
+    window.saveBiomeTreeSettings = saveBiomeTreeSettings;
     window.TREE_CATEGORIES = TREE_CATEGORIES;
     window.ALL_TREE_MODELS = ALL_TREE_MODELS;
     window.DEFAULT_BIOME_TREE_CONFIGS = DEFAULT_BIOME_TREE_CONFIGS;
@@ -298,6 +303,92 @@ export function applyColorVariation(hexColor, hueVar = 0, tintVar = 0) {
 export const treeMatcapUniform = { value: null };
 export const treeUseMatcapUniform = { value: 0.0 };
 export const treeMatcapTintUniform = { value: 0.35 };
+
+// Stylized leaf variation & season uniforms (ported from sandbox)
+export const treeLeafBottomUniform = { value: new THREE.Color('#1c3b23') };
+export const treeLeafTopUniform = { value: new THREE.Color('#5c8338') };
+export const treeLeafVarColorUniform = { value: new THREE.Color('#1e4430') };
+export const treeLeafVarStrengthUniform = { value: 0.65 };
+export const treeLeafGradPowerUniform = { value: 1.2 };
+export const treeLeafBrightnessUniform = { value: 1.05 };
+
+export const TREE_SEASON_PRESETS = {
+    spring: {
+        name: 'Spring',
+        foliageColor: '#5c8338',
+        trunkColor: '#8b5a2b',
+        leafBottom: '#1c3b23',
+        leafTop: '#5c8338',
+        leafVarColor: '#1e4430',
+        leafBrightness: 1.05,
+        leafGradPower: 1.2,
+        leafVarStrength: 0.65
+    },
+    autumn: {
+        name: 'Fall / Autumn',
+        foliageColor: '#d94d1a',
+        trunkColor: '#784728',
+        leafBottom: '#ffaf36',
+        leafTop: '#d94d1a',
+        leafVarColor: '#8f2409',
+        leafBrightness: 1.05,
+        leafGradPower: 1.1,
+        leafVarStrength: 0.70
+    },
+    winter: {
+        name: 'Winter',
+        foliageColor: '#eaf5fa',
+        trunkColor: '#5c4536',
+        leafBottom: '#203a3d',
+        leafTop: '#eaf5fa',
+        leafVarColor: '#8bb6c9',
+        leafBrightness: 1.15,
+        leafGradPower: 1.3,
+        leafVarStrength: 0.65
+    }
+};
+
+export function setTreeSeasonPreset(seasonKey, applyToBiomes = true) {
+    const p = TREE_SEASON_PRESETS[seasonKey] || TREE_SEASON_PRESETS.spring;
+    treeLeafBottomUniform.value.set(p.leafBottom);
+    treeLeafTopUniform.value.set(p.leafTop);
+    treeLeafVarColorUniform.value.set(p.leafVarColor);
+    treeLeafBrightnessUniform.value = p.leafBrightness;
+    treeLeafGradPowerUniform.value = p.leafGradPower;
+    treeLeafVarStrengthUniform.value = p.leafVarStrength;
+
+    if (typeof window !== 'undefined') {
+        window.currentTreeSeason = seasonKey;
+        const topSel = document.getElementById('top-season-select');
+        if (topSel && topSel.value !== seasonKey) {
+            topSel.value = seasonKey;
+        }
+        if (typeof window.syncSeasonDropdown === 'function') {
+            window.syncSeasonDropdown(seasonKey);
+        }
+    }
+
+    if (applyToBiomes) {
+        Object.keys(biomeTreeConfigs).forEach(bId => {
+            if (bId !== 'crystal_land' && bId !== 'magical_sanctuary') {
+                biomeTreeConfigs[bId].foliageColor = p.foliageColor;
+                biomeTreeConfigs[bId].trunkColor = p.trunkColor;
+            }
+        });
+        refreshAllTrees();
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.treeLeafBottomUniform = treeLeafBottomUniform;
+    window.treeLeafTopUniform = treeLeafTopUniform;
+    window.treeLeafVarColorUniform = treeLeafVarColorUniform;
+    window.treeLeafVarStrengthUniform = treeLeafVarStrengthUniform;
+    window.treeLeafGradPowerUniform = treeLeafGradPowerUniform;
+    window.treeLeafBrightnessUniform = treeLeafBrightnessUniform;
+    window.setTreeSeasonPreset = setTreeSeasonPreset;
+    window.TREE_SEASON_PRESETS = TREE_SEASON_PRESETS;
+}
 
 export function setTreeMatcap(texture, tintFactor = 0.35) {
     treeMatcapUniform.value = texture || null;
@@ -515,7 +606,9 @@ export function initTreesAndOctree(...args) {
     // Implements volumetric canopy gradient (inner/underside #1c3b23 to outer #5c8338),
     // 3D spherical normal curvature, 2-tone cel lighting, backlight translucency rim,
     // procedural trunk bark striations with under-canopy AO, and vertex wind sway/flutter.
-    function makeInstancedTreeMaterial(sourceMaterial, isFoliage = false, isPine = false, axialBillboard = false) {
+    const propWhiteColor = new THREE.Color(1, 1, 1);
+
+    function makeInstancedTreeMaterial(sourceMaterial, isFoliage = false, isPine = false, axialBillboard = false, isProp = false) {
         const source = Array.isArray(sourceMaterial) ? sourceMaterial[0] : sourceMaterial;
         const hasMap = !!(source && source.map);
         const usesCutout = !!(source && (source.alphaTest > 0 || source.transparent || source.alphaMap || (isPine && hasMap)));
@@ -526,7 +619,7 @@ export function initTreesAndOctree(...args) {
             map: hasMap ? source.map : null,
             gradientMap: gradientMap,
             dithering: true,
-            side: isFoliage ? THREE.DoubleSide : THREE.FrontSide
+            side: (isFoliage || isProp) ? THREE.DoubleSide : THREE.FrontSide
         });
 
         material.alphaTest = usesCutout ? Math.max(source?.alphaTest || 0, 0.45) : 0;
@@ -540,6 +633,12 @@ export function initTreesAndOctree(...args) {
             shader.uniforms.uTreeMatcap = treeMatcapUniform;
             shader.uniforms.uUseTreeMatcap = treeUseMatcapUniform;
             shader.uniforms.uTreeMatcapTint = treeMatcapTintUniform;
+            shader.uniforms.uLeafBottom = treeLeafBottomUniform;
+            shader.uniforms.uLeafTop = treeLeafTopUniform;
+            shader.uniforms.uLeafVarColor = treeLeafVarColorUniform;
+            shader.uniforms.uLeafVarStrength = treeLeafVarStrengthUniform;
+            shader.uniforms.uLeafGradPower = treeLeafGradPowerUniform;
+            shader.uniforms.uLeafBrightness = treeLeafBrightnessUniform;
 
             const vVaryings = `
 uniform float uTreeLightFactor;
@@ -580,6 +679,7 @@ varying vec3 vBlendedNormal;
                  vec4 instWorldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
                  vTreeWorldPos = instWorldPos.xyz;
 
+                 ${!isProp ? `
                  // Wind Sway & Flutter (Stylized Tree Sandbox parameters)
                  // Wind Strength: 0.15, Wind Speed: 1.2, Pendulum Dip: 0.05
                  float hFactor = clamp(position.y / 11.0, 0.0, 1.0);
@@ -604,7 +704,7 @@ varying vec3 vBlendedNormal;
                      float flutterAmt = sin(flutterPhase) * 0.03 * clamp(branchDist * 0.35, 0.0, 1.0) * flutterFade;
                      transformed += normal * flutterAmt;
                  }
-                 ` : ''}`
+                 ` : ''}` : ''}`
             );
 
             if (useAxialBillboard) {
@@ -634,11 +734,34 @@ uniform float uTreeTime;
 uniform sampler2D uTreeMatcap;
 uniform float uUseTreeMatcap;
 uniform float uTreeMatcapTint;
+uniform vec3 uLeafBottom;
+uniform vec3 uLeafTop;
+uniform vec3 uLeafVarColor;
+uniform float uLeafVarStrength;
+uniform float uLeafGradPower;
+uniform float uLeafBrightness;
 varying vec3 vTreeLocalPos;
 varying vec3 vTreeWorldPos;
 varying vec3 vTreeInstanceColor;
 varying float vTreeTone;
 varying vec3 vBlendedNormal;
+
+float _lfHash(vec3 p) {
+    p = fract(p * vec3(127.1, 311.7, 74.7));
+    p += dot(p, p.yzx + 19.19);
+    return fract((p.x + p.y) * p.z);
+}
+
+float _lfNoise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    vec3 w = f * f * (3.0 - 2.0 * f);
+    return mix(
+        mix(mix(_lfHash(i), _lfHash(i + vec3(1,0,0)), w.x), mix(_lfHash(i + vec3(0,1,0)), _lfHash(i + vec3(1,1,0)), w.x), w.y),
+        mix(mix(_lfHash(i + vec3(0,0,1)), _lfHash(i + vec3(1,0,1)), w.x), mix(_lfHash(i + vec3(0,1,1)), _lfHash(i + vec3(1,1,1)), w.x), w.y),
+        w.z
+    );
+}
 `;
             shader.fragmentShader = fVaryings + shader.fragmentShader;
             shader.fragmentShader = shader.fragmentShader.replace(
@@ -647,7 +770,40 @@ varying vec3 vBlendedNormal;
                  float distToCamera = length(cameraPosition - vTreeWorldPos);
                  float distBlur = smoothstep(100.0, 360.0, distToCamera);
 
-                 ${isFoliage ? `
+                 ${isProp ? `
+                 // PROP SHADING (Crystals, minerals, cactus, mushrooms)
+                 vec3 basePropColor = gl_FragColor.rgb;
+                 if (dot(vTreeInstanceColor, vTreeInstanceColor) > 0.05 && dot(vTreeInstanceColor, vec3(1.0)) < 2.9) {
+                     basePropColor *= vTreeInstanceColor;
+                 }
+
+                 vec3 sunDir = normalize(vec3(0.588, 0.784, 0.196));
+                 float NdotL = dot(normalize(vBlendedNormal), sunDir);
+                 float halfLambert = clamp(NdotL * 0.5 + 0.5, 0.0, 1.0);
+                 float toonStep = smoothstep(0.36, 0.44, halfLambert) * 0.48 + smoothstep(0.66, 0.74, halfLambert) * 0.52;
+                 float softLighting = mix(toonStep, halfLambert, distBlur * 0.75);
+
+                 vec3 sunlitTint = vec3(1.15, 1.08, 0.94);
+                 vec3 skyShadowTint = vec3(0.62, 0.78, 0.92);
+                 vec3 lightRamp = mix(skyShadowTint * 0.65, sunlitTint, softLighting);
+
+                 vec3 litProp = basePropColor * lightRamp;
+                 float propDayNight = mix(0.42, 1.0, uTreeLightFactor);
+                 float propFloor = mix(0.20, 0.35, uTreeLightFactor);
+                 vec3 finalPropColor = max(litProp * propDayNight, basePropColor * propFloor);
+
+                 #ifdef USE_FOG
+                 #ifdef FOG_EXP2
+                 float fFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+                 #else
+                 float fFactor = smoothstep( fogNear, fogFar, vFogDepth );
+                 #endif
+                 finalPropColor = mix( finalPropColor, fogColor, fFactor );
+                 #endif
+
+                 gl_FragColor.rgb = finalPropColor;
+
+                 ` : isFoliage ? `
                  // 1. VOLUMETRIC CANOPY GRADIENT & PUFF DEPTH
                  float normH = clamp((vTreeLocalPos.y - 0.5) / 8.5, 0.0, 1.0);
                  float normRadius = clamp(length(vTreeLocalPos.xz) / 3.0, 0.0, 1.0);
@@ -656,47 +812,30 @@ varying vec3 vBlendedNormal;
                  // Underside puff ambient occlusion
                  float upFactor = clamp(vBlendedNormal.y * 0.5 + 0.5, 0.0, 1.0);
                  float puffExposure = clamp(upFactor * 0.55 + canopyHeightExposure * 0.45, 0.0, 1.0);
-                 float tGradient = pow(puffExposure, 1.9);
+                 float tGradient = pow(puffExposure, uLeafGradPower);
 
                  // Outer / Top color from tree instance color
                  vec3 colOuter = vTreeInstanceColor;
                  if (dot(colOuter, colOuter) < 0.02) {
-                     colOuter = vec3(0.361, 0.514, 0.220);
+                     colOuter = uLeafTop;
                  }
 
-                 // Inner / Underside color: deep forest viridian #1c3b23 tone
-                 vec3 colInner = mix(vec3(0.110, 0.231, 0.137), colOuter * 0.26, 0.42);
+                 // Inner / Underside color
+                 vec3 colInner = uLeafBottom;
 
-                 // Crown color patches.  These use the mesh position plus the tree's
-                 // world position, so every individual tree keeps a stable, hand-painted
-                 // looking mix of cool shadow branches and warmer sun-facing branches.
-                 // It deliberately happens before lighting, preserving the biome color.
-                 float crownAngle = atan(vTreeLocalPos.z, vTreeLocalPos.x);
-                 float crownSlice = floor((crownAngle + 3.14159) * 2.15 + vTreeLocalPos.y * 0.52);
-                 float crownPatch = fract(sin(crownSlice * 19.19 + floor(vTreeLocalPos.y * 1.35) * 43.71 + vTreeTone * 97.13) * 43758.5453);
-                 float crownPatchSoft = smoothstep(0.18, 0.82, crownPatch);
-                 vec3 coolBranchColor = clamp(colOuter * vec3(0.56, 0.98, 1.20), 0.0, 1.0);
-                 vec3 warmBranchColor = clamp(colOuter * vec3(1.20, 1.14, 0.64), 0.0, 1.0);
-                 vec3 crownPatchColor = mix(coolBranchColor, warmBranchColor, crownPatchSoft);
-                 float patchStrength = 0.20 + (1.0 - tGradient) * 0.16;
-                 colInner = mix(colInner, crownPatchColor * 0.62, patchStrength);
+                 // 3D Noise color variation on branches (from Stylized Tree Sandbox)
+                 float branchNoise = _lfNoise(vTreeWorldPos * 0.35 + vTreeLocalPos * 2.0) - 0.5;
+                 vec3 variedTop = colOuter + (uLeafVarColor - colOuter) * branchNoise * uLeafVarStrength;
 
                  // Procedural micro-leaf cellular grain: only evaluate nearby (< 120m) to save fillrate and eliminate far shimmering
                  float activeGrain = 1.0;
                  if (distToCamera < 120.0) {
                      float grainFade = 1.0 - smoothstep(60.0, 120.0, distToCamera);
-                     float leafGrain = sin(vTreeLocalPos.x * 20.0) * sin(vTreeLocalPos.y * 20.0) * sin(vTreeLocalPos.z * 20.0) * 0.08;
+                     float leafGrain = sin(vTreeLocalPos.x * 20.0) * sin(vTreeLocalPos.y * 20.0) * sin(vTreeLocalPos.z * 20.0) * 0.06;
                      activeGrain += leafGrain * grainFade;
                  }
 
-                 vec3 baseCanopyColor = mix(colInner, colOuter, tGradient);
-
-                 // Let the colored branch facets remain visible on the outer canopy too.
-                 // The height mask keeps a clean, sunlit crown tip while the lower layers
-                 // gain the richer teal/lime or red/gold variation seen in stylized trees.
-                 float outerPatchMask = (1.0 - smoothstep(0.72, 0.98, tGradient)) * (0.34 + 0.26 * (1.0 - crownPatchSoft));
-                 baseCanopyColor = mix(baseCanopyColor, crownPatchColor, outerPatchMask);
-                 baseCanopyColor *= activeGrain;
+                 vec3 baseCanopyColor = mix(colInner, variedTop, tGradient) * activeGrain * uLeafBrightness;
 
                  // MatCap Shader Bank blending
                  if (uUseTreeMatcap > 0.5) {
@@ -731,27 +870,12 @@ varying vec3 vBlendedNormal;
                      litFoliage = mix(baseCanopyColor, baseCanopyColor * lightRamp, 0.35);
                  }
 
-                 ${hasMap ? `
-                 // Textured leaves: at distance soften texture contrast so it looks like blurred painterly foliage
-                 // Texture supplies leaf detail only; it no longer flattens the new
-                 // per-branch color treatment into one dull overall tint.
-                 vec3 needleTex = mix(gl_FragColor.rgb * 1.22, vec3(1.0), distBlur * 0.60);
-                 litFoliage *= needleTex;
-                 ` : ''}
-
                  // 5. AMBIENT FLOOR (Guarantees visible depth, never pitch black)
                  float dayNightScale = mix(0.42, 1.0, uTreeLightFactor);
                  float ambientFloor = mix(0.25, 0.38, uTreeLightFactor);
                  vec3 finalTreeColor = max(litFoliage * dayNightScale, baseCanopyColor * ambientFloor);
 
-                 // 6. ATMOSPHERIC DISTANCE BLUR & FOG (Softens & blurs further trees into sky haze)
-                 vec3 skyAtmosphereColor = mix(vec3(0.64, 0.78, 0.92), vec3(0.30, 0.40, 0.55), 1.0 - uTreeLightFactor);
-                 #ifdef USE_FOG
-                 skyAtmosphereColor = fogColor;
-                 #endif
-                 float atmosBlurFactor = smoothstep(110.0, 360.0, distToCamera) * 0.70;
-                 finalTreeColor = mix(finalTreeColor, skyAtmosphereColor, atmosBlurFactor);
-
+                 // Atmospheric distance fog (standard Three.js horizon fog only)
                  #ifdef USE_FOG
                  #ifdef FOG_EXP2
                  float fFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
@@ -773,27 +897,24 @@ varying vec3 vBlendedNormal;
 
                  vec3 trunkBase = vTreeInstanceColor;
                  if (dot(trunkBase, trunkBase) < 0.02) {
-                     trunkBase = vec3(0.47, 0.35, 0.28);
+                     trunkBase = vec3(0.48, 0.32, 0.18);
                  }
+
+                 // Vertical trunk bark gradient: earthy dark base up to sunlit warm wood
+                 float trunkH = clamp(vTreeLocalPos.y / 7.5, 0.0, 1.0);
+                 vec3 warmBark = mix(trunkBase * 0.80, trunkBase * 1.15, trunkH);
 
                  ${hasMap ? `
                  vec3 litTrunk = gl_FragColor.rgb * barkGrain * trunkAO * 1.25;
                  ` : `
-                 vec3 litTrunk = trunkBase * barkGrain * trunkAO * 1.25;
+                 vec3 litTrunk = warmBark * barkGrain * trunkAO * 1.25;
                  `}
 
                  float trunkDayNight = mix(0.42, 1.0, uTreeLightFactor);
                  float trunkFloor = mix(0.20, 0.30, uTreeLightFactor);
                  vec3 finalTrunkColor = max(litTrunk * trunkDayNight, trunkBase * trunkFloor);
 
-                 // Atmospheric distance blur for trunks
-                 vec3 skyAtmosphereColor = mix(vec3(0.64, 0.78, 0.92), vec3(0.30, 0.40, 0.55), 1.0 - uTreeLightFactor);
-                 #ifdef USE_FOG
-                 skyAtmosphereColor = fogColor;
-                 #endif
-                 float atmosBlurFactor = smoothstep(110.0, 360.0, distToCamera) * 0.70;
-                 finalTrunkColor = mix(finalTrunkColor, skyAtmosphereColor, atmosBlurFactor);
-
+                 // Atmospheric distance fog (standard Three.js horizon fog only)
                  #ifdef USE_FOG
                  #ifdef FOG_EXP2
                  float fFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
@@ -808,7 +929,7 @@ varying vec3 vBlendedNormal;
             );
         };
 
-        material.customProgramCacheKey = () => `stylized-tree-${isFoliage ? 'foliage' : 'trunk'}-${hasMap ? 'map' : 'nomap'}-${useAxialBillboard ? 'axial' : 'fixed'}`;
+        material.customProgramCacheKey = () => `stylized-tree-${isProp ? 'prop' : (isFoliage ? 'foliage' : 'trunk')}-${hasMap ? 'map' : 'nomap'}-${useAxialBillboard ? 'axial' : 'fixed'}`;
         return material;
     }
 
@@ -846,25 +967,38 @@ varying vec3 vBlendedNormal;
             const childMeshes = [];
             const isPine = modelDef.id.startsWith('pine_');
             const axialBillboard = modelDef.id.startsWith('pine_c_');
+            const isProp = modelDef.category === 'Magic A' || modelDef.category === 'Magic B' || modelDef.id.startsWith('magic_');
+            entry.isProp = isProp;
+
             gltf.scene.traverse((child) => {
                 if (child.isMesh) childMeshes.push(child);
             });
 
             if (childMeshes.length >= 2) {
                 entry.isTwoPart = true;
-                const trunkGeo = childMeshes[0].geometry.clone();
-                const leavesGeo = childMeshes[1].geometry.clone();
+                let trunkMesh = childMeshes.find(m => /trunk|bark|wood|stem/i.test(m.name) || (m.material && /trunk|bark|wood|stem/i.test(m.material.name)));
+                let leavesMesh = childMeshes.find(m => /leaf|leaves|needle|foliage|crown/i.test(m.name) || (m.material && /leaf|leaves|needle|foliage|crown/i.test(m.material.name)));
+                if (!trunkMesh && !leavesMesh) {
+                    trunkMesh = childMeshes[0];
+                    leavesMesh = childMeshes[1];
+                } else if (!trunkMesh) {
+                    trunkMesh = childMeshes.find(m => m !== leavesMesh) || childMeshes[0];
+                } else if (!leavesMesh) {
+                    leavesMesh = childMeshes.find(m => m !== trunkMesh) || childMeshes[1];
+                }
+                const trunkGeo = trunkMesh.geometry.clone();
+                const leavesGeo = leavesMesh.geometry.clone();
                 trunkGeo.computeVertexNormals();
                 leavesGeo.computeVertexNormals();
 
                 entry.instTrunk = new THREE.InstancedMesh(
                     trunkGeo,
-                    makeInstancedTreeMaterial(childMeshes[0].material, false, isPine, axialBillboard),
+                    makeInstancedTreeMaterial(trunkMesh.material, false, isPine, axialBillboard, false),
                     MODEL_POOL_CAP
                 );
                 entry.instLeaves = new THREE.InstancedMesh(
                     leavesGeo,
-                    makeInstancedTreeMaterial(childMeshes[1].material, true, isPine, axialBillboard),
+                    makeInstancedTreeMaterial(leavesMesh.material, true, isPine, axialBillboard, false),
                     MODEL_POOL_CAP
                 );
 
@@ -895,7 +1029,7 @@ varying vec3 vBlendedNormal;
 
                 entry.instSingle = new THREE.InstancedMesh(
                     singleGeo,
-                    makeInstancedTreeMaterial(childMeshes[0].material, true, isPine, axialBillboard),
+                    makeInstancedTreeMaterial(childMeshes[0].material, !isProp, isPine, axialBillboard, isProp),
                     MODEL_POOL_CAP
                 );
                 entry.instSingle.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MODEL_POOL_CAP * 3).fill(1), 3);
@@ -912,15 +1046,33 @@ varying vec3 vBlendedNormal;
             }
 
             entry.isLoaded = true;
-            // A checkbox can be enabled while its GLB is still downloading.
-            // Request a complete placement pass now that the mesh exists.
-            forceFullTreeUpdate = true;
+            // When an enabled model finishes downloading, trigger an immediate
+            // repopulation pass so its instances are placed into the world.
+            const isModelActiveAnywhere = Object.keys(biomeTreeConfigs).some(bId => {
+                const c = biomeTreeConfigs[bId];
+                return c && c.enabled && c.activeModels && c.activeModels.includes(modelDef.id);
+            });
+            if (isModelActiveAnywhere) {
+                scheduleRefreshAllTrees();
+            } else {
+                forceFullTreeUpdate = true;
+            }
             if (onReady) onReady(entry);
         }, undefined, (err) => {
             console.warn('Could not load tree GLB:', modelDef.file, err);
         });
 
         return entry;
+    }
+
+    let refreshTreesScheduled = false;
+    function scheduleRefreshAllTrees() {
+        if (refreshTreesScheduled) return;
+        refreshTreesScheduled = true;
+        requestAnimationFrame(() => {
+            refreshTreesScheduled = false;
+            doRefreshAllTrees();
+        });
     }
 
     function preloadActiveModels() {
@@ -985,7 +1137,13 @@ varying vec3 vBlendedNormal;
 
                     if (entry.instLeaves) entry.instLeaves.setColorAt(i, folCol);
                     if (entry.instTrunk) entry.instTrunk.setColorAt(i, trkCol);
-                    if (entry.instSingle) entry.instSingle.setColorAt(i, folCol);
+                    if (entry.instSingle) {
+                        if (entry.isProp) {
+                            entry.instSingle.setColorAt(i, propWhiteColor);
+                        } else {
+                            entry.instSingle.setColorAt(i, folCol);
+                        }
+                    }
                     updated = true;
                 }
             }
@@ -999,12 +1157,14 @@ varying vec3 vBlendedNormal;
 
     activeTreeManager = {
         refreshAllTrees: doRefreshAllTrees,
+        scheduleRefreshAllTrees: scheduleRefreshAllTrees,
         refreshBiomeColors: doRefreshBiomeColors
     };
 
     if (typeof window !== 'undefined') {
         window.loadModelEntry = loadModelEntry;
         window.__treeInstanceManager = activeTreeManager;
+        window.__loadedTreeModels = loadedModels;
     }
 
     // ==========================================
@@ -1014,7 +1174,7 @@ varying vec3 vBlendedNormal;
     // share one reliable collision check. The previous variable-sized keys only
     // prevented duplicates in the exact same cell, so trees could overlap at
     // cell borders and different model types could stack on one another.
-    const TREE_GRID_CELL_SIZE = 6.0;
+    const TREE_GRID_CELL_SIZE = 5.0;
     const WATER_CLEARANCE_HEIGHT = 3.25;
 
     function getTreeGridKey(x, z) {
@@ -1043,10 +1203,20 @@ varying vec3 vBlendedNormal;
     }
 
     function passesDensity(nx, nz, density) {
-        const clampedDensity = Math.max(0.1, Math.min(1.0, density ?? 0.75));
-        const stand = (snoise(nx * 0.002, nz * 0.002) + 1.0) * 0.5;
-        const site = (snoise(nx * 0.025 + 100.0, nz * 0.025 - 100.0) + 1.0) * 0.5;
-        return site <= (clampedDensity * 0.78 + stand * 0.22);
+        const d = Math.max(0.1, Math.min(1.0, density ?? 0.75));
+        // Macro grove mask: creates expansive woodland copses separated by sunlit natural clearings
+        const macroGrove = (snoise(nx * 0.0014, nz * 0.0014) + 1.0) * 0.5;
+        // Clearing cutoff: lower density yields larger open clearings
+        const clearingCutoff = 0.44 - (d * 0.22);
+        if (macroGrove < clearingCutoff) {
+            return false; // Open clearing/meadow
+        }
+        // Clumping noise inside groves: produces organic multi-tree stands
+        const groveClump = (snoise(nx * 0.0055 + 71.3, nz * 0.0055 - 38.2) + 1.0) * 0.5;
+        const localJitter = (snoise(nx * 0.024 + 110.0, nz * 0.024 + 210.0) + 1.0) * 0.5;
+        const groveIntensity = (macroGrove - clearingCutoff) / (1.0 - clearingCutoff);
+        const targetDensity = (groveClump * 0.60 + groveIntensity * 0.40) * d;
+        return localJitter <= targetDensity * 1.12;
     }
 
     function getModelBiomeQuota(cfg, poolCap) {
@@ -1072,196 +1242,252 @@ varying vec3 vBlendedNormal;
         }
 
         const playerY = (typeof window !== 'undefined' && window.playerGrp) ? window.playerGrp.position.y : 0;
-        const treesCulledByAlt = playerY > 650;
+        const treesCulledByAlt = playerY > 2000;
+
+        function getNearbyBiomeIds(px, pz, maxDist) {
+            const nearby = new Set();
+            if (worldLayout && Array.isArray(worldLayout.islands)) {
+                for (let i = 0; i < worldLayout.islands.length; i++) {
+                    const isl = worldLayout.islands[i];
+                    const dx = px - isl.centerX;
+                    const dz = pz - isl.centerZ;
+                    const reach = (isl.maxRadius || 2000) * 1.4 + maxDist;
+                    if (dx * dx + dz * dz <= reach * reach) {
+                        nearby.add(isl.biomeId);
+                    }
+                }
+            }
+            const curB = getBiomeAt(px, pz);
+            if (curB && curB.id && curB.id !== 'open_ocean') {
+                nearby.add(curB.id);
+            }
+            return nearby;
+        }
+
+        const nearbyBiomeIds = getNearbyBiomeIds(playerX, playerZ, treeDist);
 
         loadedModels.forEach(entry => {
-            const isVis = params.showTrees && !treesCulledByAlt;
-            if (entry.instTrunk) entry.instTrunk.visible = isVis;
-            if (entry.instLeaves) entry.instLeaves.visible = isVis;
-            if (entry.instSingle) entry.instSingle.visible = isVis;
+            const hasPlaced = (entry.activeCount || 0) > 0;
+            const isVis = params.showTrees && !treesCulledByAlt && hasPlaced;
+            if (entry.instTrunk) {
+                entry.instTrunk.visible = isVis;
+                if (hasPlaced) entry.instTrunk.count = Math.min(entry.poolCap, (entry.maxActiveSlot ?? (entry.poolCap - 1)) + 1);
+            }
+            if (entry.instLeaves) {
+                entry.instLeaves.visible = isVis;
+                if (hasPlaced) entry.instLeaves.count = Math.min(entry.poolCap, (entry.maxActiveSlot ?? (entry.poolCap - 1)) + 1);
+            }
+            if (entry.instSingle) {
+                entry.instSingle.visible = isVis;
+                if (hasPlaced) entry.instSingle.count = Math.min(entry.poolCap, (entry.maxActiveSlot ?? (entry.poolCap - 1)) + 1);
+            }
         });
 
         if (shouldUpdateTerrain && !treesCulledByAlt && params.showTrees) {
             const runFullTreeUpdate = forceFullTreeUpdate;
+            const modelUpdatedMap = new Map();
+            const nearbyCountsByModelAndBiome = new Map();
+
+            // Track active counts and prune out-of-range or disallowed instances
             loadedModels.forEach((entry, modelId) => {
                 if (!entry.isLoaded) return;
+                nearbyCountsByModelAndBiome.set(modelId, new Map());
+                modelUpdatedMap.set(modelId, false);
 
-                const count = entry.poolCap;
-                let modelUpdated = false;
-                const nearbySlotsByBiome = new Map();
-
-                // A biome's count is a total vegetation budget, not a budget for
-                // every selected model. This keeps "Select All" from multiplying
-                // instance count and protects frame time.
-                for (const slot of entry.slots) {
+                let liveCount = 0;
+                let maxSlot = -1;
+                for (let s = 0; s < entry.poolCap; s++) {
+                    const slot = entry.slots[s];
                     if (!slot) continue;
+
+                    const curCfg = getBiomeTreeConfig(slot.biomeId);
+                    if (!curCfg || !curCfg.enabled || !curCfg.activeModels || !curCfg.activeModels.includes(modelId)) {
+                        treeGrid.delete(slot.cellKey);
+                        entry.slots[s] = null;
+                        if (entry.instTrunk) entry.instTrunk.setMatrixAt(s, dummyMatrix);
+                        if (entry.instLeaves) entry.instLeaves.setMatrixAt(s, dummyMatrix);
+                        if (entry.instSingle) entry.instSingle.setMatrixAt(s, dummyMatrix);
+                        modelUpdatedMap.set(modelId, true);
+                        continue;
+                    }
+
                     const dx = slot.x - playerX;
                     const dz = slot.z - playerZ;
-                    if (dx * dx + dz * dz <= treeDist * treeDist) {
-                        nearbySlotsByBiome.set(slot.biomeId, (nearbySlotsByBiome.get(slot.biomeId) || 0) + 1);
+                    if (dx * dx + dz * dz > treeDist * treeDist) {
+                        treeGrid.delete(slot.cellKey);
+                        entry.slots[s] = null;
+                        if (entry.instTrunk) entry.instTrunk.setMatrixAt(s, dummyMatrix);
+                        if (entry.instLeaves) entry.instLeaves.setMatrixAt(s, dummyMatrix);
+                        if (entry.instSingle) entry.instSingle.setMatrixAt(s, dummyMatrix);
+                        modelUpdatedMap.set(modelId, true);
+                        continue;
                     }
-                }
 
-                // 1. If this model is not active in any enabled biome right now, despawn all its slots
-                const isModelActiveAnywhere = Object.keys(biomeTreeConfigs).some(bId => {
-                    const c = biomeTreeConfigs[bId];
-                    return c && c.enabled && c.activeModels && c.activeModels.includes(modelId);
+                    const mCounts = nearbyCountsByModelAndBiome.get(modelId);
+                    const curCount = mCounts.get(slot.biomeId) || 0;
+                    const quota = getModelBiomeQuota(curCfg, entry.poolCap);
+                    if (curCount >= quota) {
+                        treeGrid.delete(slot.cellKey);
+                        entry.slots[s] = null;
+                        if (entry.instTrunk) entry.instTrunk.setMatrixAt(s, dummyMatrix);
+                        if (entry.instLeaves) entry.instLeaves.setMatrixAt(s, dummyMatrix);
+                        if (entry.instSingle) entry.instSingle.setMatrixAt(s, dummyMatrix);
+                        modelUpdatedMap.set(modelId, true);
+                        continue;
+                    }
+
+                    mCounts.set(slot.biomeId, curCount + 1);
+                    liveCount++;
+                    maxSlot = s;
+                }
+                entry.activeCount = liveCount;
+                entry.maxActiveSlot = maxSlot;
+            });
+
+            // Only models active in nearby biomes are eligible for repositioning
+            const repositionEligibleEntries = [];
+            if (nearbyBiomeIds.size > 0) {
+                loadedModels.forEach((entry, modelId) => {
+                    if (!entry.isLoaded) return;
+                    const isActiveNearby = Array.from(nearbyBiomeIds).some(bId => {
+                        const c = biomeTreeConfigs[bId];
+                        return c && c.enabled && c.activeModels && c.activeModels.includes(modelId);
+                    });
+                    if (isActiveNearby) {
+                        repositionEligibleEntries.push({ modelId, entry });
+                    }
                 });
+            }
 
-                if (!isModelActiveAnywhere) {
-                    let hadLive = false;
-                    for (let s = 0; s < count; s++) {
-                        if (entry.slots[s]) {
-                            treeGrid.delete(entry.slots[s].cellKey);
-                            entry.slots[s] = null;
-                            if (entry.instTrunk) entry.instTrunk.setMatrixAt(s, dummyMatrix);
-                            if (entry.instLeaves) entry.instLeaves.setMatrixAt(s, dummyMatrix);
-                            if (entry.instSingle) entry.instSingle.setMatrixAt(s, dummyMatrix);
-                            hadLive = true;
-                        }
-                    }
-                    if (hadLive) {
-                        if (entry.instTrunk) entry.instTrunk.instanceMatrix.needsUpdate = true;
-                        if (entry.instLeaves) entry.instLeaves.instanceMatrix.needsUpdate = true;
-                        if (entry.instSingle) entry.instSingle.instanceMatrix.needsUpdate = true;
-                    }
-                    return;
-                }
+            const slotStart = runFullTreeUpdate ? 0 : currentFrame % 6;
+            const slotStep = runFullTreeUpdate ? 1 : 6;
 
-                const slotStart = runFullTreeUpdate ? 0 : currentFrame % 6;
-                const slotStep = runFullTreeUpdate ? 1 : 6;
-                for (let i = slotStart; i < count; i += slotStep) {
+            for (let i = slotStart; i < MODEL_POOL_CAP; i += slotStep) {
+                for (let mIdx = 0; mIdx < repositionEligibleEntries.length; mIdx++) {
+                    const { modelId, entry } = repositionEligibleEntries[mIdx];
+                    if (i >= entry.poolCap) continue;
+
                     const slotData = entry.slots[i];
-                    let needsReposition = false;
+                    if (slotData) continue; // Already occupied and valid within treeDist
 
-                    if (!slotData) {
-                        needsReposition = true;
-                    } else {
-                        // 2. Validate that this tree instance is STILL permitted in its assigned biome
-                        const curCfg = getBiomeTreeConfig(slotData.biomeId);
-                        if (!curCfg || !curCfg.enabled || !curCfg.activeModels || !curCfg.activeModels.includes(modelId)) {
-                            needsReposition = false;
-                            treeGrid.delete(slotData.cellKey);
-                            entry.slots[i] = null;
-                            if (entry.instTrunk) entry.instTrunk.setMatrixAt(i, dummyMatrix);
-                            if (entry.instLeaves) entry.instLeaves.setMatrixAt(i, dummyMatrix);
-                            if (entry.instSingle) entry.instSingle.setMatrixAt(i, dummyMatrix);
-                            modelUpdated = true;
-                            continue;
-                        }
-
-                        const tdx = slotData.x - playerX;
-                        const tdz = slotData.z - playerZ;
-                        if (tdx * tdx + tdz * tdz > treeDist * treeDist) {
-                            needsReposition = true;
-                            treeGrid.delete(slotData.cellKey);
-                            entry.slots[i] = null;
+                    // Check if quota across all nearby biomes for this model is already full
+                    let canFitInAnyBiome = false;
+                    for (const bId of nearbyBiomeIds) {
+                        const cfg = getBiomeTreeConfig(bId);
+                        if (cfg && cfg.enabled && cfg.activeModels && cfg.activeModels.includes(modelId)) {
+                            const quota = getModelBiomeQuota(cfg, entry.poolCap);
+                            const mCounts = nearbyCountsByModelAndBiome.get(modelId);
+                            if ((mCounts.get(bId) || 0) < quota) {
+                                canFitInAnyBiome = true;
+                                break;
+                            }
                         }
                     }
+                    if (!canFitInAnyBiome) continue;
 
-                    if (needsReposition) {
-                        let valid = false;
-                        let nx, nz, h, cellKey, treeSlope = 0;
-                        let chosenBiome = null;
-                        let bConfig = null;
-                        let attempts = 0;
+                    let valid = false;
+                    let nx, nz, h, cellKey, treeSlope = 0;
+                    let chosenBiome = null;
+                    let bConfig = null;
+                    let attempts = 0;
+                    while (!valid && attempts < 5) {
+                        const ang = Math.random() * Math.PI * 2.0;
+                        const rad = treeDist * Math.sqrt(Math.random());
+                        nx = playerX + Math.cos(ang) * rad;
+                        nz = playerZ + Math.sin(ang) * rad;
 
-                        while (!valid && attempts < 5) {
-                            const ang = Math.random() * Math.PI * 2.0;
-                            const rad = treeDist * Math.sqrt(Math.random());
-                            nx = playerX + Math.cos(ang) * rad;
-                            nz = playerZ + Math.sin(ang) * rad;
+                        const inFrust = vegOctree.isPointInViewFrustum(nx, 10, nz);
+                        let curB = null;
+                        let biomeId = null;
+                        let cfg = null;
 
-                            if (vegOctree.isPointInViewFrustum(nx, 10, nz) || attempts > 2) {
-                                const curB = getBiomeAt(nx, nz);
-                                const biomeId = curB ? curB.id : null;
-                                if (!biomeId || biomeId === 'open_ocean') {
+                        if (inFrust || attempts > 2) {
+                            curB = getBiomeAt(nx, nz);
+                            biomeId = curB ? curB.id : null;
+                            if (!biomeId || biomeId === 'open_ocean') {
+                                attempts++;
+                                continue;
+                            }
+                            cfg = getBiomeTreeConfig(biomeId);
+
+                            if (cfg && cfg.enabled && cfg.activeModels && cfg.activeModels.includes(modelId)) {
+                                const biomeQuota = getModelBiomeQuota(cfg, entry.poolCap);
+                                const mCounts = nearbyCountsByModelAndBiome.get(modelId);
+                                if ((mCounts.get(biomeId) || 0) >= biomeQuota) {
                                     attempts++;
                                     continue;
                                 }
-                                const cfg = getBiomeTreeConfig(biomeId);
 
-                                if (cfg && cfg.enabled && cfg.activeModels && cfg.activeModels.includes(modelId)) {
-                                    const biomeQuota = getModelBiomeQuota(cfg, count);
-                                    if ((nearbySlotsByBiome.get(biomeId) || 0) >= biomeQuota) {
-                                        attempts++;
-                                        continue;
-                                    }
+                                h = getMeshHeight ? getMeshHeight(nx, nz) : getWorldHeight(nx, nz);
+                                treeSlope = getMeshSlope ? getMeshSlope() : 0;
 
-                                    h = getMeshHeight ? getMeshHeight(nx, nz) : getWorldHeight(nx, nz);
-                                    treeSlope = getMeshSlope ? getMeshSlope() : 0;
+                                const minGroundHeight = Math.max(cfg.minHeight, WATER_CLEARANCE_HEIGHT);
+                                if (h >= minGroundHeight && h <= cfg.maxHeight) {
+                                    if (treeSlope < 0.52) {
+                                        const pathVal = getPathStrength ? getPathStrength(nx, nz) : 0;
+                                        if (pathVal < 0.08) {
+                                            if (passesDensity(nx, nz, cfg.density)) {
+                                                const minDistance = Math.max(6.0, cfg.minDistance || 16.0);
+                                                cellKey = getTreeGridKey(nx, nz);
 
-                                    // Keep roots above the visible waterline as well as each
-                                    // biome's configured altitude range.
-                                    const minGroundHeight = Math.max(cfg.minHeight, WATER_CLEARANCE_HEIGHT);
-                                    if (h >= minGroundHeight && h <= cfg.maxHeight) {
-                                        if (treeSlope < 0.52) {
-                                            const pathVal = getPathStrength ? getPathStrength(nx, nz) : 0;
-                                            if (pathVal < 0.08) {
-                                                if (passesDensity(nx, nz, cfg.density)) {
-                                                    const minDistance = Math.max(6.0, cfg.minDistance || 16.0);
-                                                    cellKey = getTreeGridKey(nx, nz);
-
-                                                    if (!hasNearbyTree(nx, nz, minDistance)) {
-                                                        valid = true;
-                                                        chosenBiome = biomeId;
-                                                        bConfig = cfg;
-                                                    }
+                                                if (!hasNearbyTree(nx, nz, minDistance)) {
+                                                    valid = true;
+                                                    chosenBiome = biomeId;
+                                                    bConfig = cfg;
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                            attempts++;
                         }
+                        attempts++;
+                    }
 
-                        if (valid && bConfig) {
-                            const minDistance = Math.max(6.0, bConfig.minDistance || 16.0);
-                            treeGrid.set(cellKey, { x: nx, z: nz, modelId, slot: i, minDistance });
-                            entry.slots[i] = { x: nx, z: nz, cellKey, biomeId: chosenBiome };
-                            nearbySlotsByBiome.set(chosenBiome, (nearbySlotsByBiome.get(chosenBiome) || 0) + 1);
+                    if (valid && bConfig) {
+                        const minDistance = Math.max(6.0, bConfig.minDistance || 16.0);
+                        treeGrid.set(cellKey, { x: nx, z: nz, modelId, slot: i, minDistance });
+                        entry.slots[i] = { x: nx, z: nz, cellKey, biomeId: chosenBiome };
+                        const mCounts = nearbyCountsByModelAndBiome.get(modelId);
+                        mCounts.set(chosenBiome, (mCounts.get(chosenBiome) || 0) + 1);
+                        entry.activeCount = (entry.activeCount || 0) + 1;
+                        if (i > (entry.maxActiveSlot || -1)) entry.maxActiveSlot = i;
 
-                            // getMeshHeight already gives the drawn terrain surface. Sinking
-                            // trees by their slope caused visibly buried trunks on hillsides.
-                            dummy.position.set(nx, h - 0.1, nz);
-                            dummy.rotation.set(0, Math.random() * Math.PI * 2.0, 0);
+                        dummy.position.set(nx, h - 0.1, nz);
+                        dummy.rotation.set(0, Math.random() * Math.PI * 2.0, 0);
 
-                            const baseScale = (bConfig.scale || 1.0) * (params.treeScale ? (params.treeScale / 3.75) : 1.0);
-                            const scaleRand = baseScale * (0.85 + Math.random() * 0.35);
-                            dummy.scale.set(scaleRand, scaleRand, scaleRand);
-                            dummy.updateMatrix();
+                        const baseScale = (bConfig.scale || 1.0) * (params.treeScale ? (params.treeScale / 3.75) : 1.0);
+                        const scaleRand = baseScale * (0.85 + Math.random() * 0.35);
+                        dummy.scale.set(scaleRand, scaleRand, scaleRand);
+                        dummy.updateMatrix();
 
-                            const folColor = applyColorVariation(bConfig.foliageColor, bConfig.hueVariation, bConfig.tintVariation);
-                            const trkColor = applyColorVariation(bConfig.trunkColor, bConfig.hueVariation * 0.5, bConfig.tintVariation);
+                        const folColor = applyColorVariation(bConfig.foliageColor, bConfig.hueVariation, bConfig.tintVariation);
+                        const trkColor = applyColorVariation(bConfig.trunkColor, bConfig.hueVariation * 0.5, bConfig.tintVariation);
 
-                            if (entry.instTrunk) {
-                                entry.instTrunk.setMatrixAt(i, dummy.matrix);
-                                entry.instTrunk.setColorAt(i, trkColor);
-                            }
-                            if (entry.instLeaves) {
-                                entry.instLeaves.setMatrixAt(i, dummy.matrix);
-                                entry.instLeaves.setColorAt(i, folColor);
-                            }
-                            if (entry.instSingle) {
-                                entry.instSingle.setMatrixAt(i, dummy.matrix);
+                        if (entry.instTrunk) {
+                            entry.instTrunk.setMatrixAt(i, dummy.matrix);
+                            entry.instTrunk.setColorAt(i, trkColor);
+                        }
+                        if (entry.instLeaves) {
+                            entry.instLeaves.setMatrixAt(i, dummy.matrix);
+                            entry.instLeaves.setColorAt(i, folColor);
+                        }
+                        if (entry.instSingle) {
+                            entry.instSingle.setMatrixAt(i, dummy.matrix);
+                            if (entry.isProp) {
+                                entry.instSingle.setColorAt(i, propWhiteColor);
+                            } else {
                                 entry.instSingle.setColorAt(i, folColor);
                             }
-
-                            modelUpdated = true;
-                        } else {
-                            if (entry.slots[i] !== null) {
-                                if (entry.instTrunk) entry.instTrunk.setMatrixAt(i, dummyMatrix);
-                                if (entry.instLeaves) entry.instLeaves.setMatrixAt(i, dummyMatrix);
-                                if (entry.instSingle) entry.instSingle.setMatrixAt(i, dummyMatrix);
-                                entry.slots[i] = null;
-                                modelUpdated = true;
-                            }
                         }
+
+                        modelUpdatedMap.set(modelId, true);
                     }
                 }
+            }
 
-                if (modelUpdated) {
+            loadedModels.forEach((entry, modelId) => {
+                if (modelUpdatedMap.get(modelId)) {
                     if (entry.instTrunk) {
                         entry.instTrunk.instanceMatrix.needsUpdate = true;
                         if (entry.instTrunk.instanceColor) entry.instTrunk.instanceColor.needsUpdate = true;
@@ -1276,6 +1502,7 @@ varying vec3 vBlendedNormal;
                     }
                 }
             });
+
             forceFullTreeUpdate = false;
 
             // Rocks

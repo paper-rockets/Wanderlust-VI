@@ -66,9 +66,14 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
             dithering: true
         });
 
-        // Hand-painted grass texture for flight terrain
+        // Hand-painted grass and cliff rock textures for flight terrain
         const texLoader = new THREE.TextureLoader();
-        const paintedGrassTex = texLoader.load('./assets/greek_grass_seamless.png', (tex) => {
+        const paintedGrassTex = texLoader.load('./assets/textures/Grass/seamless_grass_01.png', (tex) => {
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.colorSpace = THREE.SRGBColorSpace;
+        });
+        const cliffRockTex = texLoader.load('./assets/textures/Stones_and_Rocks/CaveWallGrey.png', (tex) => {
             tex.wrapS = THREE.RepeatWrapping;
             tex.wrapT = THREE.RepeatWrapping;
             tex.colorSpace = THREE.SRGBColorSpace;
@@ -76,48 +81,118 @@ export function initTerrain(scene, params, TERRAIN_SIZE, gradientMap, worldLayou
 
         const terrainGrassUniforms = {
             uPaintedGrassTex: { value: paintedGrassTex },
-            uGrassScale: { value: 0.015625 }, // 1.0 / 64m (1x scale from sandbox)
+            uCliffRockTex: { value: cliffRockTex },
+            uGrassScale: { value: 0.015625 }, // 1.0 / 64m
             uGrassTextureStrength: { value: 0.85 },
-            uGrassEnabled: { value: 1.0 }
+            uGrassEnabled: { value: 1.0 },
+            uRockScale: { value: 0.025 },     // 1.0 / 40m for crisp stone details
+            uRockStrength: { value: 0.90 },
+            uRockEnabled: { value: 1.0 },
+            uSlopeThreshold: { value: 0.74 }, // Flatness threshold for cliff (slopes > ~42 deg)
+            uSlopeFalloff: { value: 0.16 }    // Smooth transition width
         };
         window.terrainGrassUniforms = terrainGrassUniforms;
 
         smoothTerrainMat.onBeforeCompile = (shader) => {
             smoothTerrainMat.userData.shader = shader;
             shader.uniforms.uPaintedGrassTex = terrainGrassUniforms.uPaintedGrassTex;
+            shader.uniforms.uCliffRockTex = terrainGrassUniforms.uCliffRockTex;
             shader.uniforms.uGrassScale = terrainGrassUniforms.uGrassScale;
             shader.uniforms.uGrassTextureStrength = terrainGrassUniforms.uGrassTextureStrength;
             shader.uniforms.uGrassEnabled = terrainGrassUniforms.uGrassEnabled;
+            shader.uniforms.uRockScale = terrainGrassUniforms.uRockScale;
+            shader.uniforms.uRockStrength = terrainGrassUniforms.uRockStrength;
+            shader.uniforms.uRockEnabled = terrainGrassUniforms.uRockEnabled;
+            shader.uniforms.uSlopeThreshold = terrainGrassUniforms.uSlopeThreshold;
+            shader.uniforms.uSlopeFalloff = terrainGrassUniforms.uSlopeFalloff;
 
             shader.vertexShader = `
                 varying vec3 vWorldGrassPos;
+                varying vec3 vWorldNormal;
             ` + shader.vertexShader;
             shader.vertexShader = shader.vertexShader.replace(
                 `#include <worldpos_vertex>`,
                 `#include <worldpos_vertex>
-                 vWorldGrassPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+                 vWorldGrassPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+                 vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);`
             );
 
             shader.fragmentShader = `
                 uniform sampler2D uPaintedGrassTex;
+                uniform sampler2D uCliffRockTex;
                 uniform float uGrassScale;
                 uniform float uGrassTextureStrength;
                 uniform float uGrassEnabled;
+                uniform float uRockScale;
+                uniform float uRockStrength;
+                uniform float uRockEnabled;
+                uniform float uSlopeThreshold;
+                uniform float uSlopeFalloff;
                 varying vec3 vWorldGrassPos;
+                varying vec3 vWorldNormal;
             ` + shader.fragmentShader;
 
             shader.fragmentShader = shader.fragmentShader.replace(
                 `#include <color_fragment>`,
                 `#include <color_fragment>
+                 vec3 wNorm = normalize(vWorldNormal);
+                 float flatness = clamp(wNorm.y, 0.0, 1.0);
+
+                 // Triplanar blend weights (avoids any vertical texture stretching on steep cliffs)
+                 vec3 blendWeights = pow(abs(wNorm), vec3(4.0));
+                 blendWeights /= max(0.0001, blendWeights.x + blendWeights.y + blendWeights.z);
+
+                 vec2 uvX = vWorldGrassPos.zy * uRockScale;
+                 vec2 uvY = vWorldGrassPos.xz * uRockScale;
+                 vec2 uvZ = vWorldGrassPos.xy * uRockScale;
+
+                 vec3 rockTexX = texture2D(uCliffRockTex, uvX).rgb;
+                 vec3 rockTexY = texture2D(uCliffRockTex, uvY).rgb;
+                 vec3 rockTexZ = texture2D(uCliffRockTex, uvZ).rgb;
+                 vec3 rockTex = rockTexX * blendWeights.x + rockTexY * blendWeights.y + rockTexZ * blendWeights.z;
+
+                 // Cliff factor: 0.0 = flat ground / shelves, 1.0 = steep cliffs
+                 float cliffFactor = 1.0 - smoothstep(uSlopeThreshold - uSlopeFalloff, uSlopeThreshold, flatness);
+
+                 // Mountain snow detection from vertex colors
+                 float isSnowVertex = smoothstep(0.70, 0.92, min(diffuseColor.r, min(diffuseColor.g, diffuseColor.b)));
+
+                 // Realistic snow physics: snow only clings to gentle slopes / shelves (sheds off vertical cliffs)
+                 float rockRoughness = (rockTex.r + rockTex.g + rockTex.b) * 0.3333;
+                 float snowCling = smoothstep(0.48, 0.72, flatness + (rockRoughness - 0.5) * 0.22);
+                 float effectiveSnow = isSnowVertex * snowCling;
+
+                 // Where steep cliffs shed their snow, reveal craggy mountain rock
+                 vec3 mountainRockTone = vec3(0.38, 0.40, 0.45);
+                 vec3 terrainBase = mix(diffuseColor.rgb, mountainRockTone, isSnowVertex * (1.0 - effectiveSnow));
+
+                 // Apply non-stretching triplanar rock texture on steep cliffs & shed-snow zones
+                 if (uRockEnabled > 0.5) {
+                     float rockFactor = max(cliffFactor, isSnowVertex * (1.0 - effectiveSnow));
+                     float rockInfluence = (1.0 - effectiveSnow) * rockFactor * uRockStrength;
+                     if (rockInfluence > 0.01) {
+                         vec3 rockShaded = terrainBase * (rockTex * 1.55);
+                         vec3 slateCliff = vec3(0.42, 0.44, 0.48) * (rockTex * 1.65);
+                         vec3 finalRock = mix(rockShaded, slateCliff, cliffFactor * 0.75);
+                         terrainBase = mix(terrainBase, finalRock, rockInfluence);
+                     }
+                 }
+
+                 // Apply painted grass ONLY on flat ground/meadows (never on steep cliff walls or snow)
                  if (uGrassEnabled > 0.5) {
-                     vec2 gUv = vWorldGrassPos.xz * uGrassScale;
-                     vec4 gTex = texture2D(uPaintedGrassTex, gUv);
-                     vec3 paintedCol = diffuseColor.rgb * (gTex.rgb * 1.65);
-                     diffuseColor.rgb = mix(diffuseColor.rgb, paintedCol, uGrassTextureStrength);
-                 }`
+                     float grassInfluence = (1.0 - effectiveSnow) * (1.0 - cliffFactor) * uGrassTextureStrength;
+                     if (grassInfluence > 0.01) {
+                         vec2 gUv = vWorldGrassPos.xz * uGrassScale;
+                         vec4 gTex = texture2D(uPaintedGrassTex, gUv);
+                         vec3 paintedCol = terrainBase * (gTex.rgb * 1.65);
+                         terrainBase = mix(terrainBase, paintedCol, grassInfluence);
+                     }
+                 }
+
+                 diffuseColor.rgb = terrainBase;`
             );
         };
-        smoothTerrainMat.customProgramCacheKey = () => 'smooth-terrain-painted-grass';
+        smoothTerrainMat.customProgramCacheKey = () => 'smooth-terrain-painted-grass-and-rock';
 
         // Shader injection for perfect pixel-smooth shorelines + Crystal Land MatCap replacement
         terrainMat.onBeforeCompile = (shader) => {
@@ -879,24 +954,46 @@ export function initWater(scene, LOW_GFX) {
             // Dynamic shore wave surge & shallow water damping
             vec2 tUV = (wPos.xz - uTerrainCenter) / uTerrainSize + 0.5;
             float wDepth = 50.0;
+            float grndHCenter = 0.0;
             if (tUV.x >= 0.005 && tUV.x <= 0.995 && tUV.y >= 0.005 && tUV.y <= 0.995) {
-                float grndH = texture2D(uTerrainHeightMap, tUV).r;
-                wDepth = uWaterLevel - grndH;
+                grndHCenter = texture2D(uTerrainHeightMap, tUV).r;
+                wDepth = uWaterLevel - grndHCenter;
             }
+
+            // Inland lake detection: sample terrain in 4 directions at a radius.
+            // If all neighbours are also above the water-plane level (i.e. this water
+            // is enclosed by hills on all sides) → suppress waves entirely.
+            float sampleRadius = 80.0 / uTerrainSize; // 80 world-unit radius in UV space
+            vec2 offN = tUV + vec2( 0.0,  sampleRadius);
+            vec2 offS = tUV + vec2( 0.0, -sampleRadius);
+            vec2 offE = tUV + vec2( sampleRadius, 0.0);
+            vec2 offW = tUV + vec2(-sampleRadius, 0.0);
+            float hN = texture2D(uTerrainHeightMap, clamp(offN, 0.005, 0.995)).r;
+            float hS = texture2D(uTerrainHeightMap, clamp(offS, 0.005, 0.995)).r;
+            float hE = texture2D(uTerrainHeightMap, clamp(offE, 0.005, 0.995)).r;
+            float hW = texture2D(uTerrainHeightMap, clamp(offW, 0.005, 0.995)).r;
+            // Count how many neighbours have terrain above the water level threshold
+            // (heightmap is 0–1 normalised; ocean edges sit near 0, inland hills are higher)
+            float waterThresh = max(grndHCenter, 0.005); // use local ground as reference
+            float enclosedCount = step(waterThresh, hN) + step(waterThresh, hS)
+                                + step(waterThresh, hE) + step(waterThresh, hW);
+            // If 3 or more surrounding points are above ground → inland pond → flat water
+            float inlandFactor = 1.0 - smoothstep(2.5, 3.5, enclosedCount);
+
             float shoreFactor = clamp(1.0 - max(0.0, wDepth) / 8.0, 0.0, 1.0);
             float shoreSwell = sin(max(0.0, wDepth) * uShoreWaveFreq - time * uShoreWaveSpeed * 1.35);
             float deepDamping = smoothstep(0.0, 8.0, max(0.0, wDepth));
 
-            objectNormal = normalize(mix(vec3(0.0, 1.0, 0.0), dispNorm, samplingDamping));
+            objectNormal = normalize(mix(vec3(0.0, 1.0, 0.0), dispNorm, samplingDamping * inlandFactor));
             float oceanDispY = (dispPos.y - pScaled.y) * deepDamping;
             float closeGeometryBoost = mix(1.0, 1.9, closeWaveDetail);
             float visibleOceanDispY = oceanDispY * closeGeometryBoost;
             vec2 oceanDispXZ = (dispPos.xz - pScaled.xz) * deepDamping;
             float shoreDispY = shoreSwell * uShoreSurge * 0.35 * shoreFactor;
-            float totalDispY = (visibleOceanDispY + shoreDispY) * samplingDamping;
-            transformed.xz += oceanDispXZ * closeWaveDetail * samplingDamping * 0.65;
+            float totalDispY = (visibleOceanDispY + shoreDispY) * samplingDamping * inlandFactor;
+            transformed.xz += oceanDispXZ * closeWaveDetail * samplingDamping * 0.65 * inlandFactor;
             transformed.y = position.y + totalDispY;
-            vOceanHeight = visibleOceanDispY * samplingDamping; // displayed crest/trough relative to mean sea level
+            vOceanHeight = visibleOceanDispY * samplingDamping * inlandFactor; // displayed crest/trough relative to mean sea level
             vOceanWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
             `
         );

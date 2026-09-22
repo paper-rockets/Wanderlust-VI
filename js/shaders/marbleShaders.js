@@ -120,7 +120,7 @@ export const MARBLE_PRESETS = [
   {
     id: 'marble_carrara_white',
     name: 'Carrara White Marble',
-    category: '🏛️ Marble & Natural Stone',
+    category: 'Marble & Natural Stone',
     type: 'shader',
     description: 'Crisp milky white Italian alabaster stone threaded with organic dark charcoal and smoky slate branching veins.',
     generate: (ctx, w, h) => {
@@ -175,7 +175,7 @@ void main() {
   {
     id: 'marble_calacatta_gold',
     name: 'Calacatta Gold Marble',
-    category: '🏛️ Marble & Natural Stone',
+    category: 'Marble & Natural Stone',
     type: 'shader',
     description: 'Warm creamy ivory marble laced with bold honey-gold veining, pale amber halos, and high-gloss polish.',
     generate: (ctx, w, h) => {
@@ -233,7 +233,7 @@ void main() {
   {
     id: 'marble_nero_gold',
     name: 'Royal Nero & Gold Marble',
-    category: '🏛️ Marble & Natural Stone',
+    category: 'Marble & Natural Stone',
     type: 'shader',
     description: 'Obsidian black polished stone base sliced through by crackled metallic gold and warm bronze veins.',
     generate: (ctx, w, h) => {
@@ -295,7 +295,7 @@ void main() {
   {
     id: 'marble_verde_alpi',
     name: 'Verde Alpi Emerald Marble',
-    category: '🏛️ Marble & Natural Stone',
+    category: 'Marble & Natural Stone',
     type: 'shader',
     description: 'Deep Italian alpine forest green and malachite banded waves with crystalline pale sage and white veins.',
     generate: (ctx, w, h) => {
@@ -352,7 +352,7 @@ void main() {
   {
     id: 'marble_rose_onyx',
     name: 'Rose Quartz & Pink Onyx',
-    category: '🏛️ Marble & Natural Stone',
+    category: 'Marble & Natural Stone',
     type: 'shader',
     description: 'Translucent blush pink and peach quartz stone accented by delicate burgundy and crystal white veins.',
     generate: (ctx, w, h) => {
@@ -410,7 +410,7 @@ void main() {
   {
     id: 'marble_lapis_lazuli',
     name: 'Royal Blue Lapis Lazuli',
-    category: '🏛️ Marble & Natural Stone',
+    category: 'Marble & Natural Stone',
     type: 'shader',
     description: 'Vibrant cobalt and ultramarine blue gemstone stone with glittering gold pyrite flecks and pale calcite swirls.',
     generate: (ctx, w, h) => {
@@ -473,7 +473,7 @@ void main() {
   {
     id: 'marble_rosso_levanto',
     name: 'Rosso Levanto Crimson Marble',
-    category: '🏛️ Marble & Natural Stone',
+    category: 'Marble & Natural Stone',
     type: 'shader',
     description: 'Dramatic Italian wine-red and dark cherry stone covered with intricate white and silver spiderweb fractures.',
     generate: (ctx, w, h) => {
@@ -533,7 +533,7 @@ void main() {
   {
     id: 'marble_travertine_romano',
     name: 'Roman Travertine Stone',
-    category: '🏛️ Marble & Natural Stone',
+    category: 'Marble & Natural Stone',
     type: 'shader',
     description: 'Warm sandy ivory and beige limestone with horizontal stratified mineral waves and natural honed texture.',
     generate: (ctx, w, h) => {
@@ -586,7 +586,7 @@ void main() {
   {
     id: 'marble_venetian_terrazzo',
     name: 'Venetian Terrazzo Stone',
-    category: '🏛️ Marble & Natural Stone',
+    category: 'Marble & Natural Stone',
     type: 'shader',
     description: 'White polished marble cement matrix studded with scattered geometric chips of terracotta, jade, black basalt, and amber.',
     generate: (ctx, w, h) => {
@@ -661,7 +661,7 @@ void main() {
   {
     id: 'marble_liquid_ebru',
     name: 'Living Liquid Ebru Marble',
-    category: '🏛️ Marble & Natural Stone',
+    category: 'Marble & Natural Stone',
     type: 'shader',
     description: 'Animated fluid marbling art with ribbons of deep royal navy, molten gold, white pearl, and violet drifting smoothly in real time.',
     generate: (ctx, w, h) => {

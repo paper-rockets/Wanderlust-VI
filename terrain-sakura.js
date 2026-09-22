@@ -10,7 +10,7 @@ const colorRoseRock = new THREE.Color(0x9f1239);
 const colorDeepLoam = new THREE.Color(0x4c0519);
 
 export default {
-    name: "🌸 Sakura Realm",
+    name: "Sakura Realm",
     shoreName: "░ Blossom Shore",
     getHeight(x, z, snoise) {
         // Gentle terraced rolling hills and soft cherry mounds

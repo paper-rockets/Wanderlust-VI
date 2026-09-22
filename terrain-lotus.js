@@ -9,7 +9,7 @@ const colorAquaRock = new THREE.Color(0x115e59);
 const colorPeatMud = new THREE.Color(0x022c22);
 
 export default {
-    name: "🪷 Lotus Grove",
+    name: "Lotus Grove",
     shoreName: "░ Tranquil Waterway",
     getHeight(x, z, snoise) {
         // Low-profile aquatic wetlands, shallow lagoons, and stepping mounds

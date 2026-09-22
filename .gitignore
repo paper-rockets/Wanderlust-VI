@@ -8,3 +8,9 @@ coverage/
 !.env.example
 *.before_revert
 *.saved_state
+
+__pycache__/
+scratch_*
+*screenshot*.png
+in_game_*.png
+verified_*.png

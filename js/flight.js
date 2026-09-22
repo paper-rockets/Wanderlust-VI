@@ -26,6 +26,8 @@ export function initFlight(scene, camera, renderer, playerGrp, playerVisuals, st
     let previousPointerPos = { x: 0, y: 0 };
 
     const onPointerDown = (event) => {
+        // Prevent camera drag on left click if placing or interacting with models
+        if ((window.isModelPlacing || window.selectedModel) && event.button === 0) return;
         isDragging = true;
         previousPointerPos = { x: event.clientX, y: event.clientY };
     };
@@ -80,14 +82,25 @@ export function initFlight(scene, camera, renderer, playerGrp, playerVisuals, st
 
     // Pause toggle UI hook
     const pauseToggleBtn = document.getElementById('pause-toggle');
-    if (pauseToggleBtn) {
-        pauseToggleBtn.addEventListener('click', () => {
-            isFlightPaused = !isFlightPaused;
+    function updatePauseUI() {
+        if (pauseToggleBtn) {
             pauseToggleBtn.innerHTML = isFlightPaused
                 ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>'
                 : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>';
+        }
+    }
+
+    if (pauseToggleBtn) {
+        pauseToggleBtn.addEventListener('click', () => {
+            isFlightPaused = !isFlightPaused;
+            updatePauseUI();
         });
     }
+
+    window.setFlightPaused = (p) => {
+        isFlightPaused = !!p;
+        updatePauseUI();
+    };
 
     // Wheel zoom
     window.addEventListener('wheel', (e) => {

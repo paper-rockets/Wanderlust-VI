@@ -10,12 +10,12 @@ import terrainMagical from './terrain-magical.js';
 // BIOME COLOR & VISUAL CONTROLS (Excluding Crystal Land)
 // ==========================================
 export const biomeColorConfigs = {
-    ghibli_land: { name: '🌳 Ghibli Land', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
-    archipelago: { name: '🌊 Archipelago', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
-    ghibli_isles: { name: '🌳 Ghibli Isles', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
-    misty_mountains: { name: '🏔️ Misty Mountains I', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
-    misty_mountains_2: { name: '🏔️ Misty Mountains II', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
-    magical_sanctuary: { name: '✨ Magical Sanctuary', brightness: 1.0, variation: 1.0, tint: '#ffffff' }
+    ghibli_land: { name: 'Ghibli Land', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
+    archipelago: { name: 'Archipelago', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
+    ghibli_isles: { name: 'Ghibli Isles', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
+    misty_mountains: { name: 'Misty Mountains I', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
+    misty_mountains_2: { name: 'Misty Mountains II', brightness: 1.0, variation: 1.0, tint: '#ffffff' },
+    magical_sanctuary: { name: 'Magical Sanctuary', brightness: 1.0, variation: 1.0, tint: '#ffffff' }
 };
 
 const _tempBiomeTint = new THREE.Color();
@@ -94,7 +94,7 @@ export const rng = new SeededRandom(482731);
 export const BIOME_CATALOG = [
     {
         id: 'archipelago',
-        name: '🌊 Archipelago',
+        name: 'Archipelago',
         module: terrainArch,
         treesOk: true,
         mapColor: '#2dd4bf',
@@ -105,7 +105,7 @@ export const BIOME_CATALOG = [
     },
     {
         id: 'ghibli_land',
-        name: '🌳 Ghibli Land',
+        name: 'Ghibli Land',
         module: terrainGhibli,
         treesOk: true,
         mapColor: '#4ade80',
@@ -116,7 +116,7 @@ export const BIOME_CATALOG = [
     },
     {
         id: 'misty_mountains',
-        name: '🏔️ Misty Mountains I',
+        name: 'Misty Mountains I',
         module: terrainMtn,
         treesOk: false,
         mapColor: '#94a3b8',
@@ -127,7 +127,7 @@ export const BIOME_CATALOG = [
     },
     {
         id: 'crystal_land',
-        name: '💎 Crystal Land',
+        name: 'Crystal Land',
         module: terrainCrystal,
         treesOk: false,
         mapColor: '#38bdf8',
@@ -138,7 +138,7 @@ export const BIOME_CATALOG = [
     },
     {
         id: 'magical_sanctuary',
-        name: '✨ Magical Sanctuary',
+        name: 'Magical Sanctuary',
         module: terrainMagical,
         treesOk: false,
         mapColor: '#c084fc',
@@ -149,7 +149,7 @@ export const BIOME_CATALOG = [
     },
     {
         id: 'misty_mountains_2',
-        name: '🏔️ Misty Mountains II',
+        name: 'Misty Mountains II',
         module: terrainMtn2,
         treesOk: false,
         mapColor: '#64748b',
@@ -160,7 +160,7 @@ export const BIOME_CATALOG = [
     },
     {
         id: 'ghibli_isles',
-        name: '🌳 Ghibli Isles',
+        name: 'Ghibli Isles',
         module: terrainGhibli,
         treesOk: true,
         mapColor: '#22c55e',
@@ -174,7 +174,7 @@ export const BIOME_CATALOG = [
 // Open Ocean fallback biome
 export const OCEAN_BIOME = {
     id: 'open_ocean',
-    name: '🌊 Open Ocean',
+    name: 'Open Ocean',
     module: terrainArch,
     treesOk: false,
     mapColor: '#0f3a68',

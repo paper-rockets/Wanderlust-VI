@@ -138,8 +138,80 @@ export function initSettingsPanels(context) {
                 setTimeout(updateAtmoParamsFromPhase, 50);
             });
 
+            // ==========================================
+            // WORLD & BUILDING PLACEMENT (Moved from top bar)
+            // ==========================================
+            const worldToolsFolder = gui.addFolder('Building Placement & World Tools');
+            window.worldToolsFolder = worldToolsFolder;
+
+            const seasonDisplayMap = {
+                'spring': 'Spring',
+                'autumn': 'Fall',
+                'fall': 'Fall',
+                'winter': 'Winter'
+            };
+            const seasonKeyMap = {
+                'Spring': 'spring',
+                'Fall': 'autumn',
+                'Winter': 'winter'
+            };
+
+            const currentSeasonKey = (typeof window !== 'undefined' && window.currentTreeSeason) ? window.currentTreeSeason : 'spring';
+            const worldToolsState = {
+                season: seasonDisplayMap[currentSeasonKey] || 'Spring',
+                openPlaceCatalog: () => {
+                    if (window.modelPlacer && window.modelPlacer.openPickerModal) {
+                        window.modelPlacer.openPickerModal();
+                    } else {
+                        const btn = document.getElementById('top-place-btn');
+                        if (btn) btn.click();
+                    }
+                },
+                startFlyTo: () => {
+                    if (window.modelPlacer && window.modelPlacer.startFlyToMode) {
+                        window.modelPlacer.startFlyToMode();
+                    } else {
+                        const btn = document.getElementById('top-flyto-btn');
+                        if (btn) btn.click();
+                    }
+                },
+                saveVillage: () => {
+                    if (window.modelPlacer && window.modelPlacer.saveToStorage) {
+                        window.modelPlacer.saveToStorage();
+                    }
+                },
+                clearVillage: () => {
+                    if (window.modelPlacer && window.modelPlacer.clearAll) {
+                        if (confirm('Clear all placed models from this world?')) {
+                            window.modelPlacer.clearAll();
+                        }
+                    }
+                }
+            };
+
+            const seasonController = worldToolsFolder.add(worldToolsState, 'season', ['Spring', 'Fall', 'Winter'])
+                .name('Season')
+                .onChange(v => {
+                    const key = seasonKeyMap[v] || 'spring';
+                    setTreeSeasonPreset(key, true);
+                    if (typeof syncSeasonUI === 'function') {
+                        syncSeasonUI(key);
+                    }
+                });
+
+            worldToolsFolder.add(worldToolsState, 'openPlaceCatalog').name('Place 3D Buildings');
+            worldToolsFolder.add(worldToolsState, 'startFlyTo').name('Fly To (Click Terrain)');
+            worldToolsFolder.add(worldToolsState, 'saveVillage').name('Save Placed Buildings');
+            worldToolsFolder.add(worldToolsState, 'clearVillage').name('Clear Placed Buildings');
+            worldToolsFolder.close();
+
+            window.syncSeasonDropdown = function(seasonKey) {
+                worldToolsState.season = seasonDisplayMap[seasonKey] || 'Spring';
+                seasonController.updateDisplay();
+            };
+
             // Flight Feel & World Life Folder
-            const lifeFolder = gui.addFolder('✈️ Flight Feel & Life');
+            const lifeFolder = gui.addFolder('Flight Feel & Life');
             lifeFolder.add(params, 'enableFlightBob').name('Floating Bob & Sway').listen();
             lifeFolder.add(params, 'enableGlidePhysics').name('Dive & Glide Physics').listen();
             lifeFolder.add(params, 'enableVaporTrails').name('Wingtip Vapor Trails').listen();
@@ -238,9 +310,9 @@ export function initSettingsPanels(context) {
             glowFolder.add(modelLightingParams, 'nightBoost', 0.5, 2.5, 0.05).name('Night Clarity');
 
             // ==========================================
-            // 🌊 CARTOON OCEAN & SHORES EDITOR
+            // CARTOON OCEAN & SHORES EDITOR
             // ==========================================
-            const oceanFolder = gui.addFolder('🌊 Cartoon Ocean & Shores');
+            const oceanFolder = gui.addFolder('Cartoon Ocean & Shores');
             oceanFolder.close();
 
             if (typeof waterUniforms !== 'undefined' && waterUniforms.waveHeight) {
@@ -383,13 +455,29 @@ export function initSettingsPanels(context) {
             }
     
             // ==========================================
-            // 🌱 PAINTED GRASS & BIOME COLORS (lil-gui)
+            // PAINTED GRASS & BIOME COLORS (lil-gui)
             // ==========================================
-            const paintedFolder = gui.addFolder('🌱 Painted Grass & Biome Colors');
+            const paintedFolder = gui.addFolder('Painted Grass & Biome Colors');
             paintedFolder.close();
+
+            const grassOptions = {
+                'seamless_grass_01.png': './assets/textures/Grass/seamless_grass_01.png',
+                'grass.png': './assets/textures/Grass/grass.png',
+                'grass2.png': './assets/textures/Grass/grass2.png',
+                'grass_01_color_2k.png': './assets/textures/Grass/grass_01_color_2k.png',
+                'grass_02_base_2k.png': './assets/textures/Grass/grass_02_base_2k.png',
+                'grass_03.png': './assets/textures/Grass/grass_03.png',
+                'grass_04_basecolor_1k.png': './assets/textures/Grass/grass_04_basecolor_1k.png',
+                'grass_05_basecolor_1k.png': './assets/textures/Grass/grass_05_basecolor_1k.png',
+                'Stylized_Grass_01_4K': './assets/textures/Grass/Stylized_HandpaintedGrass_01_basecolor.jpg',
+                'Stylized_Grass_02_4K': './assets/textures/Grass/Stylized_HandpaintedGrass_02_basecolor.jpg',
+                'Stylized_Grass_Dirt_4K': './assets/textures/Grass/Stylized_HandpaintedGrassAndDirt_01_basecolor.jpg',
+                'greek_grass_seamless.png': './assets/greek_grass_seamless.png'
+            };
 
             const grassParams = {
                 enabled: true,
+                texture: 'seamless_grass_01.png',
                 scaleMultiplier: 1.0,
                 strength: 0.85
             };
@@ -400,6 +488,17 @@ export function initSettingsPanels(context) {
                     window.terrainGrassUniforms.uGrassEnabled.value = v ? 1.0 : 0.0;
                 }
             });
+            masterGrassSub.add(grassParams, 'texture', Object.keys(grassOptions)).name('Grass Texture').onChange(name => {
+                if (window.terrainGrassUniforms && grassOptions[name]) {
+                    const loader = new THREE.TextureLoader();
+                    loader.load(grassOptions[name], (tex) => {
+                        tex.wrapS = THREE.RepeatWrapping;
+                        tex.wrapT = THREE.RepeatWrapping;
+                        tex.colorSpace = THREE.SRGBColorSpace;
+                        window.terrainGrassUniforms.uPaintedGrassTex.value = tex;
+                    });
+                }
+            });
             masterGrassSub.add(grassParams, 'scaleMultiplier', 0.1, 5.0, 0.05).name('Scale Multiplier').onChange(v => {
                 if (window.terrainGrassUniforms) {
                     window.terrainGrassUniforms.uGrassScale.value = (1.0 / 64.0) * v;
@@ -408,6 +507,36 @@ export function initSettingsPanels(context) {
             masterGrassSub.add(grassParams, 'strength', 0.0, 1.0, 0.05).name('Texture Strength').onChange(v => {
                 if (window.terrainGrassUniforms) {
                     window.terrainGrassUniforms.uGrassTextureStrength.value = v;
+                }
+            });
+
+            // Master Cliff Rock controls
+            const rockParams = {
+                enabled: true,
+                scaleMultiplier: 1.0,
+                strength: 0.90,
+                steepness: 0.74
+            };
+
+            const rockSub = paintedFolder.addFolder('Cliff Rock & Steep Slopes');
+            rockSub.add(rockParams, 'enabled').name('Cliff Rock Enabled').onChange(v => {
+                if (window.terrainGrassUniforms) {
+                    window.terrainGrassUniforms.uRockEnabled.value = v ? 1.0 : 0.0;
+                }
+            });
+            rockSub.add(rockParams, 'scaleMultiplier', 0.2, 4.0, 0.05).name('Rock Scale').onChange(v => {
+                if (window.terrainGrassUniforms) {
+                    window.terrainGrassUniforms.uRockScale.value = 0.025 * v;
+                }
+            });
+            rockSub.add(rockParams, 'strength', 0.0, 1.0, 0.05).name('Rock Strength').onChange(v => {
+                if (window.terrainGrassUniforms) {
+                    window.terrainGrassUniforms.uRockStrength.value = v;
+                }
+            });
+            rockSub.add(rockParams, 'steepness', 0.50, 0.90, 0.02).name('Cliff Threshold').onChange(v => {
+                if (window.terrainGrassUniforms) {
+                    window.terrainGrassUniforms.uSlopeThreshold.value = v;
                 }
             });
 
@@ -438,7 +567,7 @@ export function initSettingsPanels(context) {
             });
 
             // Zelda / Roystan Toon Shading (Optional Mode)
-            const toonFolder = gui.addFolder('🎨 Zelda / Roystan Toon');
+            const toonFolder = gui.addFolder('Zelda / Roystan Toon');
             toonFolder.close();
 
             // Store baseline settings to revert back to when Toon Mode is turned off
@@ -1112,27 +1241,27 @@ export function initSettingsPanels(context) {
             // ==========================================
             // TREE & VEGETATION LOADER (PER-BIOME INDEPENDENT)
             // ==========================================
-            const treeFolder = gui.addFolder('🌿 Tree & Vegetation Loader');
+            const treeFolder = gui.addFolder('Tree & Vegetation Loader');
             window.treeFolder = treeFolder;
 
             const biomeLabels = {
-                'ghibli_land': '🌳 Ghibli Land',
-                'archipelago': '🌊 Archipelago',
-                'ghibli_isles': '🌳 Ghibli Isles',
-                'misty_mountains': '🏔️ Misty Mountains I',
-                'misty_mountains_2': '🏔️ Misty Mountains II',
-                'crystal_land': '💎 Crystal Land',
-                'magical_sanctuary': '✨ Magical Sanctuary'
+                'ghibli_land': 'Ghibli Land',
+                'archipelago': 'Archipelago',
+                'ghibli_isles': 'Ghibli Isles',
+                'misty_mountains': 'Misty Mountains I',
+                'misty_mountains_2': 'Misty Mountains II',
+                'crystal_land': 'Crystal Land',
+                'magical_sanctuary': 'Magical Sanctuary'
             };
 
             const biomeOptions = {
-                '🌳 Ghibli Land': 'ghibli_land',
-                '🌊 Archipelago': 'archipelago',
-                '🌳 Ghibli Isles': 'ghibli_isles',
-                '🏔️ Misty Mountains I': 'misty_mountains',
-                '🏔️ Misty Mountains II': 'misty_mountains_2',
-                '💎 Crystal Land': 'crystal_land',
-                '✨ Magical Sanctuary': 'magical_sanctuary'
+                'Ghibli Land': 'ghibli_land',
+                'Archipelago': 'archipelago',
+                'Ghibli Isles': 'ghibli_isles',
+                'Misty Mountains I': 'misty_mountains',
+                'Misty Mountains II': 'misty_mountains_2',
+                'Crystal Land': 'crystal_land',
+                'Magical Sanctuary': 'magical_sanctuary'
             };
 
             let selectedBiomeId = (typeof worldLayout !== 'undefined' && worldLayout.spawnIsland && biomeLabels[worldLayout.spawnIsland.biomeId])
@@ -1314,9 +1443,9 @@ export function initSettingsPanels(context) {
                     syncSeasonUI('winter');
                 }
             };
-            colorFolder.add(seasonActions, 'applySpring').name('🌸 Spring Season');
-            colorFolder.add(seasonActions, 'applyAutumn').name('🍁 Fall / Autumn Season');
-            colorFolder.add(seasonActions, 'applyWinter').name('❄️ Winter Season');
+            colorFolder.add(seasonActions, 'applySpring').name('Spring Season');
+            colorFolder.add(seasonActions, 'applyAutumn').name('Fall / Autumn Season');
+            colorFolder.add(seasonActions, 'applyWinter').name('Winter Season');
 
             // 4. Model Picker with Toggles and Submenus
             const pickerFolder = treeFolder.addFolder('Model Picker (Active Models)');
@@ -1330,7 +1459,7 @@ export function initSettingsPanels(context) {
                     syncControlsForBiome(selectedBiomeId);
                     refreshAllTrees();
                 }
-            }, 'clearAllBiome').name('🚫 Clear All Trees (This Biome)');
+            }, 'clearAllBiome').name('Clear All Trees (This Biome)');
 
             pickerFolder.add({
                 applyToAll: () => {
@@ -1344,7 +1473,7 @@ export function initSettingsPanels(context) {
                     syncControlsForBiome(selectedBiomeId);
                     refreshAllTrees();
                 }
-            }, 'applyToAll').name('📋 Apply Active Trees to ALL Biomes');
+            }, 'applyToAll').name('Apply Active Trees to ALL Biomes');
 
             pickerFolder.add({
                 clearEverywhere: () => {
@@ -1357,7 +1486,7 @@ export function initSettingsPanels(context) {
                     syncControlsForBiome(selectedBiomeId);
                     refreshAllTrees();
                 }
-            }, 'clearEverywhere').name('🧹 Clear Trees Across ALL Biomes');
+            }, 'clearEverywhere').name('Clear Trees Across ALL Biomes');
 
             Object.keys(TREE_CATEGORIES).forEach(categoryName => {
                 const catFolder = pickerFolder.addFolder(categoryName);
@@ -1433,9 +1562,17 @@ export function initSettingsPanels(context) {
                 openBank: () => {
                     if (window.openMatcapBank) window.openMatcapBank();
                 }
-            }, 'openBank').name('🎨 MatCap Shader Bank');
+            }, 'openBank').name('MatCap Shader Bank');
 
             treeFolder.close();
+
+            // Procedural Rocks & Boulders Folder
+            const rocksFolder = gui.addFolder('Procedural Rocks & Boulders');
+            rocksFolder.add({ enabled: true }, 'enabled').name('Show Rocks & Boulders').onChange((val) => {
+                if (window.setRocksVisible) window.setRocksVisible(val);
+                else if (window.rocksGroup) window.rocksGroup.visible = val;
+            });
+            rocksFolder.close();
 
 // ==========================================
             const sysFolder = gui.addFolder('Dev & System');

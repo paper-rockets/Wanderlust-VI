@@ -2,9 +2,10 @@ import * as THREE from 'three';
 
 const colorDeepWater    = new THREE.Color(0x1a4a8c);
 const colorSand         = new THREE.Color(0xf2e1b8);
-const colorMountainGrass= new THREE.Color(0x4b7043);
-const colorMountainRock = new THREE.Color(0x5a5e6b);
-const colorSnow         = new THREE.Color(0xf5f6fa);
+const colorMountainGrass= new THREE.Color(0x52913e);     // Lush alpine meadow green
+const colorMountainGrassWarm = new THREE.Color(0x6ba848); // Warm sunlit grass for low meadows
+const colorMountainRock = new THREE.Color(0x5a5e6b);      // Slate grey rock
+const colorSnow         = new THREE.Color(0xf5f6fa);      // Crisp snow white
 
 // Centered in this app's playable world so the existing mountain chain reaches its island.
 const CHAIN_CENTER_Z = 0;
@@ -18,7 +19,7 @@ const sinR = 0.5;       // sin(30 deg)
 const ELEVATION_MULTIPLIER = 1.35;
 
 export default {
-    name: "🏔️ Misty Mountains II",
+    name: "Misty Mountains II",
     shoreName: "░ Mountain Shore II",
     getHeight(x, z, snoise) {
         const perpDist   = x * _cosA - (z - CHAIN_CENTER_Z) * _sinA;
@@ -45,9 +46,11 @@ export default {
         return Math.max(6.0, (foothills + peaks) * ELEVATION_MULTIPLIER);
     },
     getColor(h, x, z, snoise, tempColor, smoothstep) {
-        const nNoise = snoise(x * 0.01 + 50, z * 0.01 + 50) * 6.0;
-        const snowStart = 55.0 + nNoise;
-        const snowFull = 110.0 + nNoise;
+        // Natural organic variation and craggy chutes on grass, rock, and snow lines
+        const nNoise = snoise(x * 0.008 + 50, z * 0.008 + 50) * 14.0 + snoise(x * 0.024 + 50, z * 0.024 + 50) * 7.0;
+        const grassUpper = 50.0 + nNoise * 0.6;  // Foothills and valleys stay green
+        const rockUpper = 100.0 + nNoise * 1.1;  // Slate rock dominates middle mountain crags
+        const snowFull = 132.0 + nNoise * 0.8;   // Pure snowcaps on tall peaks
 
         if (h < 1.0) {
             tempColor.copy(colorDeepWater);
@@ -55,12 +58,22 @@ export default {
             tempColor.lerpColors(colorDeepWater, colorSand, smoothstep(1.0, 2.35, h));
         } else if (h < 4.2) {
             tempColor.copy(colorSand);
-        } else if (h < 15.0) {
-            tempColor.lerpColors(colorSand, colorMountainGrass, smoothstep(4.2, 15.0, h));
-        } else if (h < snowStart) {
-            tempColor.lerpColors(colorMountainGrass, colorMountainRock, smoothstep(15.0, snowStart, h));
+        } else if (h < 9.0) {
+            // Shore sand fading into lush valley grass
+            tempColor.lerpColors(colorSand, colorMountainGrassWarm, smoothstep(4.2, 9.0, h));
+        } else if (h < grassUpper) {
+            // Broad alpine green grass meadows across the mountain base and foothills
+            const meadowVariation = snoise(x * 0.004 + 50.0, z * 0.004 + 50.0);
+            tempColor.copy(colorMountainGrass);
+            if (meadowVariation > 0.08) {
+                tempColor.lerp(colorMountainGrassWarm, Math.min(1.0, (meadowVariation - 0.08) * 2.2));
+            }
+        } else if (h < rockUpper) {
+            // Mid-mountain transition: alpine grass climbing into slate rock cliffs
+            tempColor.lerpColors(colorMountainGrass, colorMountainRock, smoothstep(grassUpper, rockUpper, h));
         } else {
-            tempColor.lerpColors(colorMountainRock, colorSnow, smoothstep(snowStart, snowFull, h));
+            // High-altitude transition: slate rock cliffs climbing into majestic snowcaps
+            tempColor.lerpColors(colorMountainRock, colorSnow, smoothstep(rockUpper, snowFull, h));
         }
     }
 };

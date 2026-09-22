@@ -230,7 +230,7 @@
     #world-map.map-no-compass #fps-counter {
       color: rgba(255,255,255,0.9); text-shadow: 0 1px 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.4);
     }
-    #top-model-select, #top-biome-select {
+    #top-model-select, #top-biome-select, #top-season-select {
       background: transparent; border: none;
       padding: 2px 4px; color: rgba(255,255,255,0.92);
       font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
@@ -240,8 +240,8 @@
       background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.5)' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 2px center; padding-right: 16px;
     }
-    #top-model-select:hover, #top-biome-select:hover { color: #38bdf8; }
-    #top-model-select option, #top-biome-select option { background: #0f141c; color: #fff; font-size: 12px; }
+    #top-model-select:hover, #top-biome-select:hover, #top-season-select:hover { color: #38bdf8; }
+    #top-model-select option, #top-biome-select option, #top-season-select option { background: #0f141c; color: #fff; font-size: 12px; }
     .top-bar-divider {
       width: 1px; height: 18px; background: rgba(255,255,255,0.15); flex-shrink: 0;
     }
@@ -312,6 +312,270 @@
       #bottom-left-hud { left: 88px; bottom: 12px; gap: 1px; }
       #bottom-location { font-size: 22px !important; }
       #fps-counter { font-size: 11px !important; }
-      #top-model-select, #top-biome-select { font-size:10px !important; padding:2px 14px 2px 2px !important; max-width:90px; }
+      #top-model-select, #top-biome-select, #top-season-select { font-size:10px !important; padding:2px 14px 2px 2px !important; max-width:90px; }
       #top-bar button { padding:2px !important; }
     }
+
+    /* ===================================================
+       3D MODEL PICKER & IN-GAME PLACEMENT SYSTEM STYLES
+       =================================================== */
+    .placer-btn {
+      background: #ffffff;
+      border: 1px solid #000000;
+      color: #000000;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-family: monospace;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      user-select: none;
+      border-radius: 4px;
+    }
+    .placer-btn:hover {
+      background: #000000;
+      color: #ffffff;
+    }
+    .placer-btn:active {
+      transform: scale(0.96);
+    }
+
+    /* Pop-Up Modal */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .modal-box {
+      background: #ffffff;
+      border: 2px solid #000000;
+      border-radius: 8px;
+      width: 92vw;
+      max-width: 960px;
+      height: 82vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 2px solid #000;
+      background: #f8f9fa;
+      color: #000;
+    }
+    .modal-title {
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      font-family: monospace;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .modal-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 18px;
+      border-bottom: 1px solid #ddd;
+      background: #fff;
+      align-items: center;
+    }
+    .modal-search {
+      flex: 1;
+      min-width: 200px;
+      padding: 7px 12px;
+      border: 1px solid #000;
+      border-radius: 4px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      outline: none;
+      background: #fff;
+      color: #000;
+    }
+    .modal-split-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+    .modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+      background: #f8fafc;
+    }
+    .modal-preview-pane {
+      width: 320px;
+      min-width: 280px;
+      background: #f8fafc;
+      border-left: 2px solid #e2e8f0;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow-y: auto;
+    }
+    .preview-header {
+      margin-bottom: 10px;
+    }
+    .preview-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: #059669;
+      background: #d1fae5;
+      border: 1px solid #10b981;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-bottom: 6px;
+      font-family: monospace;
+    }
+    .preview-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
+      word-break: break-word;
+      margin-bottom: 4px;
+    }
+    .preview-tag {
+      font-size: 11px;
+      color: #64748b;
+      font-family: monospace;
+    }
+    .preview-viewport {
+      width: 100%;
+      height: 240px;
+      background: radial-gradient(circle at center, #ffffff 0%, #e2e8f0 100%);
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 8px 0 12px 0;
+      position: relative;
+    }
+    .preview-viewport canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+    .picker-card {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: #000000;
+    }
+    .picker-card.active-selected {
+      border: 2px solid #10b981;
+      background: #ecfdf5;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    }
+    .picker-card:hover {
+      background: #f0fdf4;
+      border-color: #10b981;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.18);
+    }
+    .picker-card-title {
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 6px;
+      word-break: break-word;
+      color: #0f172a;
+    }
+    .picker-card-tag {
+      font-size: 11px;
+      color: #475569;
+      background: #e2e8f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      align-self: flex-start;
+      margin-bottom: 10px;
+      font-family: monospace;
+    }
+    .picker-card-btn {
+      background: #0f172a;
+      color: #ffffff;
+      border: 1px solid #0f172a;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      transition: background 0.15s ease;
+    }
+    .picker-card:hover .picker-card-btn {
+      background: #10b981;
+      border-color: #059669;
+    }
+
+    /* Floating In-App Placement Toolbar */
+    .placement-bar {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(8px);
+      border: 2px solid #10b981;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      padding: 8px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      max-width: 94vw;
+      color: #000;
+    }
+
+    /* Floating In-App Selected Model Inspector */
+    .selected-bar {
+      position: fixed;
+      bottom: 35px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(8px);
+      border: 2px solid #000000;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      padding: 8px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      max-width: 94vw;
+      color: #000;
+    }
+

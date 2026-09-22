@@ -30,7 +30,11 @@ import { snoise } from './noise.js';
             : '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>';
     }
 
+    let _mapInitialized = false;
     function initMapUI() {
+        if (_mapInitialized) return;
+        _mapInitialized = true;
+
         _mapEl = document.getElementById('world-map');
         _mapCanvas = document.getElementById('map-canvas');
         _mapTooltip = document.getElementById('map-tooltip');
@@ -74,10 +78,11 @@ import { snoise } from './noise.js';
 
                 const b = getBiomeAt(targetX, targetZ);
                 const isNearCapyHaven = Math.hypot(targetX - (-1200), targetZ - (-800)) < 400;
-                let distKm = 0;
-                if ((typeof playerGrp !== 'undefined' ? playerGrp : window.playerGrp)) {
-                    const dx = targetX - playerGrp.position.x;
-                    const dz = targetZ - playerGrp.position.z;
+                let distKm = '0.0';
+                const player = (typeof playerGrp !== 'undefined' ? playerGrp : window.playerGrp);
+                if (player) {
+                    const dx = targetX - player.position.x;
+                    const dz = targetZ - player.position.z;
                     distKm = (Math.sqrt(dx * dx + dz * dz) / 1000).toFixed(1);
                 }
 
@@ -106,18 +111,19 @@ import { snoise } from './noise.js';
                 const targetX = view.cx + ((mouseX / rect.width) - 0.5) * 2.0 * view.half;
                 const targetZ = view.cz + ((mouseY / rect.height) - 0.5) * 2.0 * view.half;
 
-                if ((typeof playerGrp !== 'undefined' ? playerGrp : window.playerGrp)) {
+                const player = (typeof playerGrp !== 'undefined' ? playerGrp : window.playerGrp);
+                if (player) {
                     const targetGroundY = getWorldHeight(targetX, targetZ);
                     const targetAlt = Math.max(90, targetGroundY + 55);
-                    playerGrp.position.set(targetX, targetAlt, targetZ);
+                    player.position.set(targetX, targetAlt, targetZ);
 
-                    if (typeof lastTerrainGridX !== 'undefined') lastTerrainGridX = -9999;
-                    if (typeof lastTerrainGridZ !== 'undefined') lastTerrainGridZ = -9999;
+                    if (typeof window.lastTerrainGridX !== 'undefined') window.lastTerrainGridX = -9999;
+                    if (typeof window.lastTerrainGridZ !== 'undefined') window.lastTerrainGridZ = -9999;
 
                     const curB = getBiomeAt(targetX, targetZ);
-                    if (typeof navParams !== 'undefined' && typeof navFolder !== 'undefined' && curB) {
-                        navParams.biome = curB.name;
-                        navFolder.controllersRecursive().forEach(c => c.updateDisplay());
+                    if (typeof window.navParams !== 'undefined' && typeof window.navFolder !== 'undefined' && curB) {
+                        window.navParams.biome = curB.name;
+                        window.navFolder.controllersRecursive().forEach(c => c.updateDisplay());
                     }
                 }
                 _setMapOpen(false);
@@ -133,7 +139,6 @@ import { snoise } from './noise.js';
             if (_mapOpen && _mapEl && !_mapEl.contains(e.target)) _setMapOpen(false);
         });
     }
-    initMapUI();
 
     // Procedural Island Contour Generator (evaluates noise warping along polar perimeter)
     function _getIslandContourPoints(isl, toMapX, toMapY, scaleRatio = 1.0, numPoints = 48) {
@@ -379,10 +384,11 @@ import { snoise } from './noise.js';
             _mapCtx.stroke();
         }
 
-        if ((typeof playerGrp !== 'undefined' ? playerGrp : window.playerGrp)) {
+        const player = (typeof playerGrp !== 'undefined' ? playerGrp : window.playerGrp);
+        if (player) {
             const view = _mapView();
-            const px = ((playerGrp.position.x - view.cx) / (view.half * 2.0) + 0.5) * W;
-            const pz = ((playerGrp.position.z - view.cz) / (view.half * 2.0) + 0.5) * H;
+            const px = ((player.position.x - view.cx) / (view.half * 2.0) + 0.5) * W;
+            const pz = ((player.position.z - view.cz) / (view.half * 2.0) + 0.5) * H;
             const yaw = (typeof currentYaw !== 'undefined' ? currentYaw : (window.currentYaw || 0));
             const size = Math.max(4 * dpr, 3.2 * k);
 
@@ -405,7 +411,7 @@ import { snoise } from './noise.js';
 
             const badgeEl = document.getElementById('map-biome-badge');
             if (badgeEl) {
-                const curB = getBiomeAt(playerGrp.position.x, playerGrp.position.z);
+                const curB = getBiomeAt(player.position.x, player.position.z);
                 const text = curB && !curB.isOcean ? _mapName(curB) : 'Open sea';
                 if (badgeEl.textContent !== text) badgeEl.textContent = text;
             }

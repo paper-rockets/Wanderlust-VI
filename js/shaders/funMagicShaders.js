@@ -4,7 +4,7 @@ export const FUN_MAGIC_SHADERS = [
   {
     id: 'magic_rainbow_pulse',
     name: 'Rainbow Pulse',
-    category: '✨ Fun & Magic',
+    category: 'Fun & Magic',
     type: 'shader',
     generate: (ctx, w, h) => {
       // Thumbnail: spinning rainbow gradient
@@ -51,7 +51,7 @@ void main() {
   {
     id: 'magic_electric_arc',
     name: 'Electric Arc',
-    category: '✨ Fun & Magic',
+    category: 'Fun & Magic',
     type: 'shader',
     generate: (ctx, w, h) => {
       ctx.fillStyle = '#050518';
@@ -118,7 +118,7 @@ void main() {
   {
     id: 'magic_lava_flow',
     name: 'Lava Flow',
-    category: '✨ Fun & Magic',
+    category: 'Fun & Magic',
     type: 'shader',
     generate: (ctx, w, h) => {
       const grad = ctx.createRadialGradient(w*0.6, h*0.4, 5, w*0.5, h*0.5, w*0.5);
@@ -178,7 +178,7 @@ void main() {
   {
     id: 'magic_soap_bubble',
     name: 'Soap Bubble',
-    category: '✨ Fun & Magic',
+    category: 'Fun & Magic',
     type: 'shader',
     generate: (ctx, w, h) => {
       ctx.fillStyle = 'rgba(10,12,20,0.95)';
@@ -237,7 +237,7 @@ void main() {
   {
     id: 'magic_sparkle_glitter',
     name: 'Magic Glitter',
-    category: '✨ Fun & Magic',
+    category: 'Fun & Magic',
     type: 'shader',
     generate: (ctx, w, h) => {
       const grad = ctx.createRadialGradient(w*0.65, h*0.35, 5, w*0.5, h*0.5, w*0.5);
@@ -306,7 +306,7 @@ void main() {
   {
     id: 'magic_hologram_scan',
     name: 'Hologram Scan',
-    category: '✨ Fun & Magic',
+    category: 'Fun & Magic',
     type: 'shader',
     generate: (ctx, w, h) => {
       ctx.fillStyle = '#010a0a';
@@ -368,7 +368,7 @@ void main() {
   {
     id: 'magic_candy_chrome',
     name: 'Candy Chrome',
-    category: '✨ Fun & Magic',
+    category: 'Fun & Magic',
     type: 'shader',
     generate: (ctx, w, h) => {
       // Pastel chrome gradient
@@ -426,7 +426,7 @@ void main() {
   {
     id: 'magic_xray',
     name: 'X-Ray',
-    category: '✨ Fun & Magic',
+    category: 'Fun & Magic',
     type: 'shader',
     generate: (ctx, w, h) => {
       ctx.fillStyle = '#000508';
@@ -462,4 +462,4 @@ void main() {
 ];
 
 
-// 🌍 WONDERLUST WEBGPU ANIMATED LIVE SHADERS
+// 🌍 WONDERLUST WEBGPU ANIMATED LIVE SHADERS

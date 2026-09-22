@@ -104,6 +104,13 @@ console.error = function(...args) {
       <button id="track-toggle">Track: Valley Wind</button>
       <button id="wind-toggle">Wind: ON</button>
       <button id="fullscreen-toggle">Fullscreen</button>
+      <select id="top-season-select" title="Season (Spring / Fall / Winter)" aria-label="Season">
+        <option value="spring">Spring</option>
+        <option value="autumn">Fall</option>
+        <option value="winter">Winter</option>
+      </select>
+      <button id="top-place-btn" title="Place 3D Models & Buildings" aria-label="Place 3D Models">Place</button>
+      <button id="top-flyto-btn" title="Fly To - Click anywhere on terrain to fly Kiki there" aria-label="Fly To">Fly To</button>
   </div>
 
 
@@ -161,9 +168,134 @@ console.error = function(...args) {
     <div id="boost-btn">BOOST</div>
   </div>
 
-  <div id="pc-controls-hint" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.5); color: white; padding: 10px 20px; border-radius: 8px; font-family: sans-serif; pointer-events: none; z-index: 100;">
-    Controls: WASD/Arrows to move, Shift to Boost, Space to Brake, Scroll Wheel to Zoom
+  <!-- Model Picker Pop-Up Modal -->
+  <div id="model-picker-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title">3D BUILDINGS CATALOG &amp; PLACEMENT PICKER</span>
+        <button class="placer-btn" id="close-picker-btn" style="background:#000; color:#fff; font-weight:bold;">[ ✕ Close ]</button>
+      </div>
+      <div class="modal-controls">
+        <select id="picker-pack-select" class="placer-btn" style="padding: 7px 12px; font-size: 12px;">
+          <option value="favorites">64 Favorite Buildings</option>
+          <option value="all">All Available Buildings (87)</option>
+          <option value="winter_castle">Winter Castle &amp; Town (16)</option>
+          <option value="4_houses_fantasy">Fantasy Houses (4)</option>
+          <option value="castle_town">Castle Town (11)</option>
+          <option value="german_village">German Village (7)</option>
+          <option value="little_village">Little Village (3)</option>
+          <option value="village_pack">Village Houses (4)</option>
+          <option value="village_town">Village Town Buildings (8)</option>
+          <option value="greek_sculptor">Greek Sculptor (1)</option>
+          <option value="free_medieval">Medieval Buildings (4)</option>
+          <option value="simple_low_poly">Simple Low Poly Buildings (28)</option>
+          <option value="terrains">Issum Island (1)</option>
+        </select>
+        <input type="text" id="picker-search-input" class="modal-search" placeholder="Type to filter buildings (e.g. castle, house, tower, mill)...">
+        <span id="picker-count-badge" style="font-size: 12px; color: #555; font-weight: bold;">64 buildings</span>
+        <div style="display:flex; gap:6px; margin-left:auto; align-items:center; flex-wrap:wrap;">
+          <button class="placer-btn" id="picker-save-btn" style="background:#059669; color:#fff; font-weight:bold; border-color:#047857;" title="Save your village layout">[ Save Village ]</button>
+          <button class="placer-btn" id="picker-export-btn" style="background:#f1f5f9; color:#0f172a;" title="Download village layout as a file">[ Export File ]</button>
+          <button class="placer-btn" id="picker-import-btn" style="background:#f1f5f9; color:#0f172a;" title="Load a saved village layout file">[ Import File ]</button>
+          <input type="file" id="picker-import-input" accept=".json" style="display:none;">
+          <button class="placer-btn" id="picker-clear-all-btn" style="background:#fee2e2; color:#991b1b; border-color:#ef4444;" title="Clear all placed models from this world">[ Reset All ]</button>
+        </div>
+      </div>
+      <div class="modal-split-container">
+        <div id="picker-grid" class="modal-body"></div>
+        <div id="picker-preview-panel" class="modal-preview-pane">
+          <div class="preview-header">
+            <span class="preview-badge">LIVE 3D PREVIEW</span>
+            <div id="preview-model-name" class="preview-name">Select any building to preview</div>
+            <div id="preview-model-tag" class="preview-tag">64 Curated Favorite Buildings</div>
+          </div>
+          <div id="preview-canvas-container" class="preview-viewport"></div>
+          <button class="placer-btn" id="preview-place-btn" style="background:#10b981; color:#fff; font-weight:bold; border-color:#059669; width:100%; padding:10px; font-size:13px; cursor:pointer;">[ Pick &amp; Place This Building ]</button>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <!-- Floating In-App Placement Toolbar (Active when placing) -->
+  <div id="placement-toolbar" class="placement-bar" style="display: none;">
+    <span style="font-weight: bold; color: #065f46;">PLACING: <span id="placement-model-name" style="text-decoration: underline;">Model</span></span>
+    <span style="color:#aaa;">|</span>
+    <span>Rotate:</span>
+    <button class="placer-btn" id="place-rot-left-btn" title="Rotate Left 45°">[ ⟲ -45° ]</button>
+    <button class="placer-btn" id="place-rot-right-btn" title="Rotate Right 45°">[ ⟳ +45° ]</button>
+    <span style="color:#aaa;">|</span>
+    <span>Scale:</span>
+    <button class="placer-btn" id="place-scale-down-btn" title="Scale Down">[ - Smaller ]</button>
+    <span id="place-scale-label" style="font-weight:bold; padding: 2px 6px; background:#eef; border:1px solid #ccd;">1.0x</span>
+    <button class="placer-btn" id="place-scale-up-btn" title="Scale Up">[ + Bigger ]</button>
+    <span style="color:#aaa;">|</span>
+    <span>Elevation:</span>
+    <button class="placer-btn" id="place-elev-down-btn" title="Lower elevation into ground">[ ⬇ -1m ]</button>
+    <span id="place-elev-label" style="font-weight:bold; padding: 2px 6px; background:#eef; border:1px solid #ccd;">0m</span>
+    <button class="placer-btn" id="place-elev-up-btn" title="Raise elevation above slope">[ ⬆ +1m ]</button>
+    <span style="color:#aaa;">|</span>
+    <span>View:</span>
+    <button class="placer-btn" id="place-cam-sat-btn" style="background:#0284c7; color:#fff; font-weight:bold; border-color:#0369a1;" title="Switch between Satellite Top-Down and 3D View">[ Satellite View ]</button>
+    <button class="placer-btn" id="place-cam-zoom-in" title="Zoom Camera In">[ + ]</button>
+    <button class="placer-btn" id="place-cam-zoom-out" title="Zoom Camera Out">[ - ]</button>
+    <button class="placer-btn" id="place-cam-spin-left" title="Orbit Camera Left 45°">[ ↺ Orbit ]</button>
+    <button class="placer-btn" id="place-cam-spin-right" title="Orbit Camera Right 45°">[ ↻ Orbit ]</button>
+    <span style="color:#aaa;">|</span>
+    <span style="color:#059669; font-weight:bold;">Click terrain to place!</span>
+    <span id="placement-slope-status" style="font-weight:bold; font-size:12px; padding: 2px 8px; border-radius: 4px; background: #ecfdf5; color: #065f46; border: 1px solid #10b981;">✓ Suitable Ground</span>
+    <button class="placer-btn" id="place-flyhere-btn" style="background:#0284c7; color:#fff; font-weight:bold; border-color:#0369a1;" title="Fly Kiki to this location immediately">[ Fly Here ]</button>
+    <button class="placer-btn" id="place-save-btn" style="background:#059669; color:#fff; font-weight:bold; border-color:#047857;" title="Save your village layout">[ Save ]</button>
+    <button class="placer-btn" id="cancel-placement-btn" style="background: #fee2e2; color: #991b1b; border-color: #ef4444; font-weight: bold;">[ ✕ Exit Placement ]</button>
+  </div>
+
+  <!-- Floating In-App Selected Model Toolbar (Active when a placed model is clicked) -->
+  <div id="selected-model-toolbar" class="selected-bar" style="display: none;">
+    <span style="font-weight: bold; color: #1e293b;">SELECTED: <span id="sel-toolbar-name" style="color:#059669;">None</span></span>
+    <span style="color:#aaa;">|</span>
+    <span>Rotate:</span>
+    <button class="placer-btn" id="sel-rot-left-btn" title="Rotate Left 45°">[ ⟲ -45° ]</button>
+    <button class="placer-btn" id="sel-rot-right-btn" title="Rotate Right 45°">[ ⟳ +45° ]</button>
+    <span style="color:#aaa;">|</span>
+    <span>Scale:</span>
+    <button class="placer-btn" id="sel-scale-down-btn" title="Decrease Scale">[ - Smaller ]</button>
+    <span id="sel-scale-label" style="font-weight:bold; padding: 2px 6px; background:#eef; border:1px solid #ccd;">1.0x</span>
+    <button class="placer-btn" id="sel-scale-up-btn" title="Increase Scale">[ + Bigger ]</button>
+    <span style="color:#aaa;">|</span>
+    <span>Elevation:</span>
+    <button class="placer-btn" id="sel-elev-down-btn" title="Lower elevation into ground">[ ⬇ -1m ]</button>
+    <span id="sel-elev-label" style="font-weight:bold; padding: 2px 6px; background:#eef; border:1px solid #ccd;">0m</span>
+    <button class="placer-btn" id="sel-elev-up-btn" title="Raise elevation above slope">[ ⬆ +1m ]</button>
+    <span style="color:#aaa;">|</span>
+    <span>View:</span>
+    <button class="placer-btn" id="sel-cam-sat-btn" style="background:#0284c7; color:#fff; font-weight:bold; border-color:#0369a1;" title="Switch between Satellite Top-Down and 3D View">[ Satellite View ]</button>
+    <button class="placer-btn" id="sel-cam-zoom-in" title="Zoom Camera In">[ + ]</button>
+    <button class="placer-btn" id="sel-cam-zoom-out" title="Zoom Camera Out">[ - ]</button>
+    <button class="placer-btn" id="sel-cam-focus-btn" style="background:#f0fdf4; color:#166534; font-weight:bold; border-color:#22c55e;" title="Focus camera directly on this building">[ Focus Building ]</button>
+    <span style="color:#aaa;">|</span>
+    <span style="color:#059669; font-weight:bold;">Drag building to move!</span>
+    <button class="placer-btn" id="sel-flyhere-btn" style="background:#0284c7; color:#fff; font-weight:bold; border-color:#0369a1;" title="Fly Kiki to this building immediately">[ Fly Here ]</button>
+    <button class="placer-btn" id="sel-place-more-btn" style="background:#10b981; color:#fff; font-weight:bold; border-color:#059669;" title="Open catalog to place more buildings">[ Place More ]</button>
+    <button class="placer-btn" id="sel-duplicate-btn" style="background:#f0fdf4; color:#166534; border-color:#22c55e; font-weight:bold;" title="Duplicate this model and place more">[ Duplicate ]</button>
+    <button class="placer-btn" id="sel-delete-btn" style="background:#fee2e2; color:#991b1b; border-color:#ef4444; font-weight:bold;" title="Delete this model from scene">[ Delete ]</button>
+    <button class="placer-btn" id="sel-save-btn" style="background:#059669; color:#fff; font-weight:bold; border-color:#047857;" title="Save your village layout">[ Save Village ]</button>
+    <button class="placer-btn" id="sel-close-btn" title="Deselect model">[ ✕ Done ]</button>
+  </div>
+
+  <!-- Floating In-App Fly-To Toolbar (Active when clicking terrain to fly) -->
+  <div id="flyto-toolbar" class="placement-bar" style="display: none; background: rgba(15, 23, 42, 0.95); border: 2px solid #0284c7;">
+    <span style="font-weight: bold; color: #38bdf8;">FLY TO: Click anywhere on terrain to fly Kiki there!</span>
+    <span style="color:#aaa;">|</span>
+    <span>View:</span>
+    <button class="placer-btn" id="flyto-cam-sat-btn" style="background:#0284c7; color:#fff; font-weight:bold; border-color:#0369a1;" title="Switch between Satellite Top-Down and 3D View">[ Satellite View ]</button>
+    <button class="placer-btn" id="flyto-cam-zoom-in" title="Zoom Camera In">[ + ]</button>
+    <button class="placer-btn" id="flyto-cam-zoom-out" title="Zoom Camera Out">[ - ]</button>
+    <button class="placer-btn" id="flyto-cam-spin-left" title="Orbit Camera Left 45°">[ ↺ Orbit ]</button>
+    <button class="placer-btn" id="flyto-cam-spin-right" title="Orbit Camera Right 45°">[ ↻ Orbit ]</button>
+    <span style="color:#aaa;">|</span>
+    <button class="placer-btn" id="cancel-flyto-btn" style="background: #fee2e2; color: #991b1b; border-color: #ef4444; font-weight: bold;">[ ✕ Cancel ]</button>
+  </div>
+
+  <div id="save-toast" style="display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:9999; background:#059669; color:#ffffff; font-family:monospace; font-size:14px; font-weight:bold; padding:10px 22px; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.45); pointer-events:none; border:2px solid #34d399;">✓ Village Saved!</div>
 
   <script type="importmap">
   {
@@ -173,6 +305,6 @@ console.error = function(...args) {
     }
   }
   </script>
-  <script type="module" src="./js/main.js?v=2.2"></script>
+  <script type="module" src="./js/main.js?v=3.9"></script>
 </body>
 </html>

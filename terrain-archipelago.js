@@ -12,8 +12,8 @@ const colorDirt = new THREE.Color(0xd2aa7d);
 const scratchPatchColor = new THREE.Color();
 
 export default {
-    name: "🌊 Water Archipelago",
-    shoreName: "🌊 Water Archipelago",
+    name: "Water Archipelago",
+    shoreName: "Water Archipelago",
     getHeight(x, z, snoise) {
         // Multi-scale tropical island terrain: sandy shores, lush palm hills, and gentle ridges
         const wx = x + snoise(x * 0.0009 + 25.0, z * 0.0009 + 25.0) * 300.0;
